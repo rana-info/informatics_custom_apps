@@ -1,0 +1,366 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "WIM.########",
+ "creation": "2025-04-01 13:45:35.253244",
+ "default_view": "List",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "gate_entry",
+  "status",
+  "column_break_qpom",
+  "reason",
+  "section_break_vlmu",
+  "vehicle_number",
+  "transporter",
+  "date",
+  "entry_type",
+  "supplier_name",
+  "column_break_vsfb",
+  "item_group_g",
+  "is_weighment_required",
+  "is_completed",
+  "is_assigned",
+  "is_in_progress",
+  "is_manual_weighment",
+  "stock_transfer",
+  "vehicle_owner",
+  "weighment_details_section",
+  "weighment",
+  "custom_tare_weight",
+  "custom_gross_weight",
+  "custom_net_weight",
+  "column_break_ybms",
+  "custom_vehicle_number1",
+  "custom_is_manual_weighment1",
+  "custom_is_in_progress1",
+  "custom_is_completed1",
+  "custom_w_item_group",
+  "section_break_nixw",
+  "issue",
+  "update_field",
+  "vehicle",
+  "value_to_update",
+  "amended_from",
+  "column_break_ajqv",
+  "item_group1",
+  "custom_delivery_note",
+  "bill_quantity",
+  "new_card",
+  "error_log_section",
+  "error_message"
+ ],
+ "fields": [
+  {
+   "fieldname": "gate_entry",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Gate Entry",
+   "options": "Gate Entry",
+   "reqd": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Status",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_qpom",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "reason",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Reason",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_vlmu",
+   "fieldtype": "Section Break",
+   "label": "Gate Entry Values"
+  },
+  {
+   "fieldname": "vehicle_number",
+   "fieldtype": "Data",
+   "label": "Vehicle Number",
+   "read_only": 1
+  },
+  {
+   "fieldname": "transporter",
+   "fieldtype": "Data",
+   "label": "Transporter",
+   "read_only": 1
+  },
+  {
+   "fieldname": "date",
+   "fieldtype": "Date",
+   "label": "Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "entry_type",
+   "fieldtype": "Data",
+   "label": "Entry Type",
+   "read_only": 1
+  },
+  {
+   "fieldname": "supplier_name",
+   "fieldtype": "Data",
+   "label": "Supplier Name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_vsfb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "is_weighment_required",
+   "fieldtype": "Data",
+   "label": "Is Weighment Required",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "is_completed",
+   "fieldtype": "Check",
+   "label": " Is Completed",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "is_in_progress",
+   "fieldtype": "Check",
+   "label": "Is In Progress",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "is_manual_weighment",
+   "fieldtype": "Check",
+   "label": " Is Manual Weighment",
+   "read_only": 1
+  },
+  {
+   "fieldname": "weighment_details_section",
+   "fieldtype": "Section Break",
+   "label": "Weighment Details",
+   "read_only": 1
+  },
+  {
+   "fieldname": "weighment",
+   "fieldtype": "Data",
+   "label": "Weighment",
+   "read_only": 1
+  },
+  {
+   "fieldname": "custom_tare_weight",
+   "fieldtype": "Float",
+   "label": "Tare Weight",
+   "read_only": 1
+  },
+  {
+   "fieldname": "custom_gross_weight",
+   "fieldtype": "Float",
+   "label": "Gross Weight",
+   "read_only": 1
+  },
+  {
+   "fieldname": "custom_net_weight",
+   "fieldtype": "Float",
+   "label": "Net Weight",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_ybms",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "custom_vehicle_number1",
+   "fieldtype": "Data",
+   "label": "Vehicle Number",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "custom_is_manual_weighment1",
+   "fieldtype": "Check",
+   "label": "Is Manual Weighment",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "custom_is_in_progress1",
+   "fieldtype": "Check",
+   "label": "Is In Progress",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "custom_is_completed1",
+   "fieldtype": "Check",
+   "label": "Is Completed",
+   "read_only": 1
+  },
+  {
+   "fieldname": "custom_w_item_group",
+   "fieldtype": "Data",
+   "label": "Item Group",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_nixw",
+   "fieldtype": "Section Break",
+   "label": "Update Field"
+  },
+  {
+   "depends_on": "eval:doc.gate_entry;",
+   "fieldname": "issue",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Issue",
+   "options": "\nVehicle Number Issue\nReset Second Weight(Manual)\nOutward Manual Issue\nReset Second Weight(Not Manual)\nUnlink Old & Link New Delivery Note(Weighment Completed)\nInward/Outward Wrong Entry(Manual)\nWrong Item Group Selected(Outward)",
+   "reqd": 1
+  },
+  {
+   "fieldname": "update_field",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Update Field",
+   "options": "\nvehicle_number",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.issue=='Vehicle Number Issue' && doc.vehicle_owner!=\"Company Owned\";",
+   "fieldname": "value_to_update",
+   "fieldtype": "Data",
+   "label": "Value To Update",
+   "mandatory_depends_on": "eval:doc.issue=='Vehicle Number Issue' && doc.vehicle_owner!=\"Company Owned\";"
+  },
+  {
+   "depends_on": "eval:doc.issue=='Outward Manual Issue' || doc.issue == \"Wrong Item Group Selected(Outward)\";",
+   "fieldname": "item_group1",
+   "fieldtype": "Link",
+   "label": "Item Group",
+   "mandatory_depends_on": "eval:doc.issue=='Outward Manual Issue' || doc.issue == \"Wrong Item Group Selected(Outward)\";",
+   "options": "Item Group"
+  },
+  {
+   "depends_on": "eval:doc.issue==\"Unlink Old & Link New Delivery Note(Weighment Completed)\";",
+   "fieldname": "custom_delivery_note",
+   "fieldtype": "Link",
+   "label": "Delivery Note",
+   "mandatory_depends_on": "eval:doc.issue==\"Unlink Old & Link New Delivery Note(Weighment Completed)\";",
+   "options": "Delivery Note"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Weighment Issue Management",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "column_break_ajqv",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:doc.issue==\"Wrong Card Weighment(Not Manual)\" && doc.entry_type==\"Inward\" && !doc.stock_transfer;",
+   "fieldname": "bill_quantity",
+   "fieldtype": "Int",
+   "label": "Bill Quantity",
+   "mandatory_depends_on": "eval:doc.issue==\"Wrong Card Weighment(Not Manual)\" && doc.entry_type==\"Inward\" && !doc.stock_transfer;",
+   "read_only_depends_on": "eval:doc.issue!=\"Wrong Card Weighment(Not Manual)\";"
+  },
+  {
+   "fieldname": "item_group_g",
+   "fieldtype": "Data",
+   "label": "Item Group",
+   "read_only": 1
+  },
+  {
+   "fieldname": "vehicle_owner",
+   "fieldtype": "Data",
+   "label": "Vehicle Owner",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.vehicle_owner!=\"Third Party\" && doc.issue==\"Vehicle Number Issue\";",
+   "fieldname": "vehicle",
+   "fieldtype": "Link",
+   "label": "Vehicle",
+   "mandatory_depends_on": "eval:doc.vehicle_owner!=\"Third Party\" && doc.issue==\"Vehicle Number Issue\";",
+   "options": "Vehicle"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_assigned",
+   "fieldtype": "Check",
+   "label": "Is Assigned",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.issue && doc.issue!=\"Vehicle Number Issue\" && doc.issue!=\"Unlink Old & Link New Delivery Note(Weighment Completed)\" && doc.is_assigned && !doc.is_in_progress;",
+   "fieldname": "new_card",
+   "fieldtype": "Link",
+   "label": "New Card",
+   "mandatory_depends_on": "eval:doc.issue && doc.issue!=\"Vehicle Number Issue\" && doc.issue!=\"Unlink Old & Link New Delivery Note(Weighment Completed)\" && doc.is_assigned && !doc.is_in_progress;",
+   "options": "Card Details"
+  },
+  {
+   "fieldname": "error_log_section",
+   "fieldtype": "Section Break",
+   "label": "Error Log"
+  },
+  {
+   "fieldname": "error_message",
+   "fieldtype": "Small Text",
+   "label": "Error Message",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "stock_transfer",
+   "fieldtype": "Check",
+   "label": "Stock Transfer",
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2025-06-24 11:11:41.952799",
+ "modified_by": "Administrator",
+ "module": "RIPL Customized Apps",
+ "name": "Weighment Issue Management",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "select": 1,
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
