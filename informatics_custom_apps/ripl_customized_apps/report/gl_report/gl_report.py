@@ -85,6 +85,9 @@ def get_data(filters):
     for key, items in voucher_items_map.items():
         voucher_type, voucher_no = key
         for item in items:
+            rate = "base_rate"
+            if voucher_type=="Stock Entry":
+                rate = "basic_rate"    
             output.append({
                 "posting_date": "",  # or could use voucher date if needed
                 "voucher_type": voucher_type,
@@ -98,10 +101,9 @@ def get_data(filters):
                 "item_code": item.get("item_code"),
                 "item_name": item.get("item_name"),
                 "qty": item.get("qty"),
-                "rate": item.get("base_rate"),
+                "rate": item.get(rate),
                 "amount": item.get("amount")
             })
-
     return output
 
 # def get_data(filters):
