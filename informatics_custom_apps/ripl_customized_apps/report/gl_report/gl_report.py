@@ -98,7 +98,7 @@ def get_data(filters):
                 "item_code": item.get("item_code"),
                 "item_name": item.get("item_name"),
                 "qty": item.get("qty"),
-                "rate": item.get("basic_rate"),
+                "rate": item.get("base_rate"),
                 "amount": item.get("amount")
             })
 
