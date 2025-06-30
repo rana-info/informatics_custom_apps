@@ -271,12 +271,12 @@
    "fieldtype": "Column Break"
   },
   {
-   "depends_on": "eval:doc.issue==\"Wrong Card Weighment(Not Manual)\" && doc.entry_type==\"Inward\" && !doc.stock_transfer;",
+   "depends_on": "eval:doc.issue==\"Reset Second Weight(Not Manual)\" && doc.entry_type==\"Inward\" && !doc.stock_transfer;",
    "fieldname": "bill_quantity",
    "fieldtype": "Int",
    "label": "Bill Quantity",
-   "mandatory_depends_on": "eval:doc.issue==\"Wrong Card Weighment(Not Manual)\" && doc.entry_type==\"Inward\" && !doc.stock_transfer;",
-   "read_only_depends_on": "eval:doc.issue!=\"Wrong Card Weighment(Not Manual)\";"
+   "mandatory_depends_on": "eval:doc.issue==\"Reset Second Weight(Not Manual)\" && doc.entry_type==\"Inward\" && !doc.stock_transfer;",
+   "read_only_depends_on": "eval:doc.issue!=\"Reset Second Weight(Not Manual)\";"
   },
   {
    "fieldname": "item_group_g",

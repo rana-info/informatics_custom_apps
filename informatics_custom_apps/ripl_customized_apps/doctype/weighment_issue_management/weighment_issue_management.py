@@ -7,7 +7,7 @@ from frappe.model.workflow import apply_workflow
 
 class WeighmentIssueManagement(Document):
     def validate(self):
-        if self.issue == "Wrong Card Weighment(Not Manual)" and self.custom_is_completed1 == 1 and self.stock_transfer==0:
+        if self.issue == "Reset Second Weight(Not Manual)" and self.custom_is_completed1 == 1 and self.stock_transfer==0:
             if self.gate_entry and self.entry_type=="Inward":
                 doc2 = frappe.get_doc("Gate Entry", {"name": self.gate_entry})
                 doc3 = frappe.get_doc("Weighment", {"gate_entry_number": self.gate_entry})
