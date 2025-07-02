@@ -1,6 +1,3 @@
-// Copyright (c) 2025, Monil Kamboj and contributors
-// For license information, please see license.txt
-
 frappe.query_reports["GL Report"] = {
     "filters": [
         {
@@ -26,12 +23,17 @@ frappe.query_reports["GL Report"] = {
             fieldname: "account",
             label: __("Account"),
             fieldtype: "Link",
-            options: "Account"
+            options: "Account",
+            get_query: function (report) {
+                let company = frappe.query_report.get_filter_value('company');
+                if (company) {
+                    return {
+                        filters: {
+                            company: company
+                        }
+                    };
+                }
+            }
         }
-        // ,{
-        //     fieldname: "group_by_voucher",
-        //     label: __("Group by Voucher"),
-        //     fieldtype: "Check"
-        // }
     ]
 };
