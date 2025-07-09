@@ -169,6 +169,7 @@ class WeighmentIssueManagement(Document):
                 if len(si)==1:    
                     # Check if the parent Sales Invoice has docstatus = 1 (Submitted)
                     docstatus = frappe.db.get_value("Sales Invoice", si, "docstatus")
+                    is_return = frappe.db.get_value("Sales Invoice", si, "is_return")
                     if docstatus != 2 and not is_return:
                         print("------------------------>si", si)
                         doc_si = frappe.get_doc("Sales Invoice", si)
