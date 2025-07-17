@@ -3,7 +3,7 @@
 
 function clear_fields(frm) {
     let fields_to_clear = [
-        "vehicle_number","location","is_manual_weighment", "date", "transporter", "issue", "is_assigned","stock_transfer",
+        "vehicle_number","location","card_number","is_manual_weighment", "date", "transporter", "issue", "is_assigned","stock_transfer",
         "is_weighment_required","is_in_progress","custom_w_item_group", "weighment","custom_is_completed1","custom_is_in_progress1","custom_is_manual_weighment1",
         "is_completed","custom_vehicle_number1","vehicle_owner","supplier_name","entry_type","custom_tare_weight","custom_gross_weight","custom_net_weight"
     ];
@@ -240,6 +240,9 @@ frappe.ui.form.on("Weighment Issue Management", {
             }
             else if (issue === "Reset Second Weight(Manual)") {
                 frappe.show_alert({ message: __("Fields Updated Successfully, Kindly Check Details And Proceed For Weighment!"), indicator: "orange" }, 8);
+            }
+            else if (issue === "Unlink/Free Card Inward(Not Manual)") {
+                frappe.show_alert({ message: __("Card Unlinked Successfully"), indicator: "orange" }, 8);
             }
             else if (issue === "Outward Manual Issue") {
                 frappe.show_alert({ message: __("Data Updated Successfully, Add/Check Delivery Note To Continue!"), indicator: "green" }, 7);
@@ -495,6 +498,7 @@ frappe.ui.form.on("Weighment Issue Management", {
                     frm.set_value("custom_gross_weight", response.message.custom_gross_weight);
                     frm.set_value("custom_net_weight", response.message.custom_net_weight);
                     frm.set_value("location", response.message.loc);
+                    frm.set_value("card_number", response.message.cn);
                     frm.set_value("custom_is_completed1", response.message.custom_is_completed1);
                     frm.set_value("custom_is_in_progress1", response.message.custom_is_in_progress1);
                     frm.set_value("custom_is_manual_weighment1", response.message.custom_is_manual_weighment1);
@@ -519,12 +523,13 @@ frappe.ui.form.on("Weighment Issue Management", {
         // Unlink Old & Link New Delivery Note(Weighment Completed)
         // Inward/Outward Wrong Entry(Manual)
         // Wrong Item Group Selected(Outward)
+        // Working On-> Unlink/Free Card Inward(Not Manual)
 
         let options = [];
         if (frm.doc.entry_type === "Outward" && frm.doc.custom_is_manual_weighment1 ==1 && frm.doc.is_completed == 0) {
             options = ["Outward Manual Issue", "Vehicle Number Issue","Inward/Outward Wrong Entry(Manual)"];
         } 
-        else if(frm.doc.custom_is_manual_weighment1 ==1 && frm.doc.custom_is_completed1 == 1){
+        else if(frm.doc.entry_type === "Outward" && frm.doc.custom_is_manual_weighment1 ==1 && frm.doc.custom_is_completed1 == 1){
             options = ["Outward Manual Issue", "Vehicle Number Issue","Reset Second Weight(Manual)"];
         }
         else if(frm.doc.entry_type === "Outward" && frm.doc.custom_is_manual_weighment1 ==0 && frm.doc.is_completed == 0){
@@ -542,9 +547,12 @@ frappe.ui.form.on("Weighment Issue Management", {
         else if(frm.doc.entry_type === "Inward" && frm.doc.custom_is_in_progress1==1 && frm.doc.custom_is_manual_weighment1 ==1) {
             options = ["Vehicle Number Issue","Inward/Outward Wrong Entry(Manual)"];
         }
-        else if(frm.doc.entry_type === "Inward" && frm.doc.custom_is_in_progress1==1) {
-            options = ["Vehicle Number Issue"];
+        else if(frm.doc.entry_type == "Inward" && frm.doc.is_weighment_required=="Yes" && frm.doc.stock_transfer==0 && frm.doc.is_manual_weighment==0 && frm.doc.is_assigned==1 && frm.doc.custom_is_completed1 == 0) {
+            options = ["Vehicle Number Issue","Unlink/Free Card Inward(Not Manual)"];
         }
+        // else if(frm.doc.entry_type === "Inward" && frm.doc.custom_is_in_progress1==1) {
+        //     options = ["Vehicle Number Issue"];
+        // }
         else if(frm.doc.entry_type === "Outward" && frm.doc.custom_is_completed1==0) {
             options = ["Vehicle Number Issue"];
         }

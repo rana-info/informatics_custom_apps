@@ -28,6 +28,7 @@
   "is_manual_weighment",
   "stock_transfer",
   "vehicle_owner",
+  "card_number",
   "weighment_details_section",
   "weighment",
   "custom_tare_weight",
@@ -223,7 +224,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Issue",
-   "options": "\nVehicle Number Issue\nReset Second Weight(Manual)\nOutward Manual Issue\nReset Second Weight(Not Manual)\nUnlink Old & Link New Delivery Note(Weighment Completed)\nInward/Outward Wrong Entry(Manual)\nWrong Item Group Selected(Outward)",
+   "options": "\nVehicle Number Issue\nReset Second Weight(Manual)\nOutward Manual Issue\nReset Second Weight(Not Manual)\nUnlink/Free Card Inward(Not Manual)\nUnlink Old & Link New Delivery Note(Weighment Completed)\nInward/Outward Wrong Entry(Manual)\nWrong Item Group Selected(Outward)",
    "read_only_depends_on": "eval:!doc.gate_entry && !doc.location;;",
    "reqd": 1
   },
@@ -347,13 +348,19 @@
    "fieldtype": "Data",
    "label": "Location",
    "read_only": 1
+  },
+  {
+   "fieldname": "card_number",
+   "fieldtype": "Data",
+   "label": "Card Number",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2025-07-04 18:37:10.633456",
+ "modified": "2025-07-15 09:59:58.367437",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "Weighment Issue Management",
