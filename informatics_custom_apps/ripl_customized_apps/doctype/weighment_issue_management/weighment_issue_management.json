@@ -19,6 +19,7 @@
   "entry_type",
   "supplier_name",
   "location",
+  "weighment_manually_checked",
   "column_break_vsfb",
   "item_group_g",
   "is_weighment_required",
@@ -59,6 +60,7 @@
    "in_list_view": 1,
    "label": "Gate Entry",
    "options": "Gate Entry",
+   "read_only_depends_on": "eval:doc.workflow_state!=\"Draft\"",
    "reqd": 1
   },
   {
@@ -310,11 +312,11 @@
    "read_only": 1
   },
   {
-   "depends_on": "eval:doc.issue && doc.issue!=\"Vehicle Number Issue\" && doc.issue!=\"Unlink Old & Link New Delivery Note(Weighment Completed)\" && doc.is_assigned && !doc.is_in_progress;",
+   "depends_on": "eval:doc.issue && doc.issue!=\"Vehicle Number Issue\" && doc.issue!=\"Unlink/Free Card Inward(Not Manual)\" && doc.issue!=\"Unlink Old & Link New Delivery Note(Weighment Completed)\" && doc.is_assigned && !doc.is_in_progress;",
    "fieldname": "new_card",
    "fieldtype": "Link",
    "label": "New Card",
-   "mandatory_depends_on": "eval:doc.issue && doc.issue!=\"Vehicle Number Issue\" && doc.issue!=\"Unlink Old & Link New Delivery Note(Weighment Completed)\" && doc.is_assigned && !doc.is_in_progress;",
+   "mandatory_depends_on": "eval:doc.issue && doc.issue!=\"Vehicle Number Issue\" && doc.issue!=\"Unlink/Free Card Inward(Not Manual)\" && doc.issue!=\"Unlink Old & Link New Delivery Note(Weighment Completed)\" && doc.is_assigned && !doc.is_in_progress;",
    "options": "Card Details"
   },
   {
@@ -354,13 +356,20 @@
    "fieldtype": "Data",
    "label": "Card Number",
    "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "weighment_manually_checked",
+   "fieldtype": "Check",
+   "label": "Weighment Manually Checked",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2025-07-15 09:59:58.367437",
+ "modified": "2025-07-29 15:46:21.047708",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "Weighment Issue Management",

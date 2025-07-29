@@ -3,7 +3,7 @@
 
 function clear_fields(frm) {
     let fields_to_clear = [
-        "vehicle_number","location","card_number","is_manual_weighment", "date", "transporter", "issue", "is_assigned","stock_transfer",
+        "vehicle_number","location","card_number","weighment_manually_checked","is_manual_weighment", "date", "transporter", "issue", "is_assigned","stock_transfer",
         "is_weighment_required","is_in_progress","custom_w_item_group", "weighment","custom_is_completed1","custom_is_in_progress1","custom_is_manual_weighment1",
         "is_completed","custom_vehicle_number1","vehicle_owner","supplier_name","entry_type","custom_tare_weight","custom_gross_weight","custom_net_weight"
     ];
@@ -15,7 +15,7 @@ function clear_fields(frm) {
 function load(frm) {
     if (frm.doc.docstatus === 0 && frm.is_new()) {
         let fields_to_clear = [
-            "is_manual_weighment", "is_completed", "custom_is_completed1", "custom_is_in_progress1", "custom_is_manual_weighment1",
+            "is_manual_weighment","weighment_manually_checked","is_completed", "custom_is_completed1", "custom_is_in_progress1", "custom_is_manual_weighment1",
             "is_weighment_required", "is_in_progress", "updated","stock_transfer", "is_assigned"
         ];
         
@@ -499,6 +499,7 @@ frappe.ui.form.on("Weighment Issue Management", {
                     frm.set_value("custom_net_weight", response.message.custom_net_weight);
                     frm.set_value("location", response.message.loc);
                     frm.set_value("card_number", response.message.cn);
+                    frm.set_value("weighment_manually_checked", response.message.weighment_manually_checked);
                     frm.set_value("custom_is_completed1", response.message.custom_is_completed1);
                     frm.set_value("custom_is_in_progress1", response.message.custom_is_in_progress1);
                     frm.set_value("custom_is_manual_weighment1", response.message.custom_is_manual_weighment1);
@@ -529,6 +530,9 @@ frappe.ui.form.on("Weighment Issue Management", {
         if (frm.doc.entry_type === "Outward" && frm.doc.custom_is_manual_weighment1 ==1 && frm.doc.is_completed == 0) {
             options = ["Outward Manual Issue", "Vehicle Number Issue","Inward/Outward Wrong Entry(Manual)"];
         } 
+        else if(frm.doc.entry_type == "Inward" && frm.doc.weighment_manually_checked == 1 && frm.doc.is_assigned==1) {
+            options = ["Vehicle Number Issue","Unlink/Free Card Inward(Not Manual)"];
+        }
         else if(frm.doc.entry_type === "Outward" && frm.doc.custom_is_manual_weighment1 ==1 && frm.doc.custom_is_completed1 == 1){
             options = ["Outward Manual Issue", "Vehicle Number Issue","Reset Second Weight(Manual)"];
         }
@@ -547,7 +551,7 @@ frappe.ui.form.on("Weighment Issue Management", {
         else if(frm.doc.entry_type === "Inward" && frm.doc.custom_is_in_progress1==1 && frm.doc.custom_is_manual_weighment1 ==1) {
             options = ["Vehicle Number Issue","Inward/Outward Wrong Entry(Manual)"];
         }
-        else if(frm.doc.entry_type == "Inward" && frm.doc.is_weighment_required=="Yes" && frm.doc.stock_transfer==0 && frm.doc.is_manual_weighment==0 && frm.doc.is_assigned==1 && frm.doc.custom_is_completed1 == 0) {
+        else if(frm.doc.entry_type == "Inward" && frm.doc.is_weighment_required=="Yes" && frm.doc.stock_transfer==0 && frm.doc.is_manual_weighment==0 && frm.doc.custom_is_completed1 == 0) {
             options = ["Vehicle Number Issue","Unlink/Free Card Inward(Not Manual)"];
         }
         // else if(frm.doc.entry_type === "Inward" && frm.doc.custom_is_in_progress1==1) {

@@ -72,7 +72,21 @@ class WeighmentIssueManagement(Document):
         doc2 = None  
         if doc1.is_weighment_required == "Yes":
             try:
-                doc2 = frappe.get_doc("Weighment", {"gate_entry_number": self.gate_entry})
+                if doc1.is_in_progress==1 or doc1.is_completed==1:
+                    doc2 = frappe.get_doc("Weighment", {"gate_entry_number": self.gate_entry})
+                # if doc1.is_in_progress==0 and doc1.is_completed==0 and doc1.items:
+                if doc1.entry_type == "Inward":
+                    weighment_manually_checked_flag = 0
+                    for i in doc1.items:
+                        try:
+                            item = frappe.get_doc("Item", i.item_code)
+                            if item.custom_is_weighment_mandatory == 0:
+                                # frappe.msgprint("Setting weighment_manually_checked = True")
+                                weighment_manually_checked_flag = 1
+                                break
+                        except Exception as item_err:
+                            frappe.log_error(f"Item fetch failed: {item_err}")
+
                 doc3 = frappe.get_doc("Card Details", {"name": doc1.card_number})
             except Exception as e:
                 print(f"Error fetching Weighment from Gate Entry: {e}")
@@ -91,19 +105,18 @@ class WeighmentIssueManagement(Document):
                 "loc":doc1.location
             }  
         
-        if doc1.is_weighment_required == "Yes" and doc3:
+        if doc1.is_weighment_required == "Yes" and doc2:
             return {
                 "vehicle_number": doc1.vehicle_number,
                 "date": doc1.date,
                 "loc":doc1.location,
                 "is_assigned":doc3.is_assigned,
                 "vehicle_owner": doc1.vehicle_owner,
-                "custom_w_item_group":doc2.item_group,  
+                "custom_w_item_group":doc1.item_group,  
                 "custom_tare_weight": doc2.tare_weight,
                 "custom_gross_weight": doc2.gross_weight,
                 "custom_is_completed1": doc2.is_completed,
                 "custom_is_in_progress1": doc2.is_in_progress,   
-                "custom_vehicle_number1": doc2.vehicle_number,
                 "custom_is_manual_weighment1": doc2.is_manual_weighment,
                 "custom_net_weight": doc2.net_weight,
                 "transporter_name": doc1.transporter_name,
@@ -114,12 +127,14 @@ class WeighmentIssueManagement(Document):
                 "entry_type": doc1.entry_type,
                 "is_manual_weighment": doc1.is_manual_weighment, 
                 "weighment": doc2.name,   
-                "stock_transfer":doc1.is_stock_transfer       
+                "stock_transfer":doc1.is_stock_transfer,
+                "weighment_manually_checked": weighment_manually_checked_flag       
             }
         else:
             return {
                 "vehicle_number": doc1.vehicle_number,
                 "date": doc1.date,
+                "is_assigned":doc3.is_assigned,
                 "transporter_name": doc1.transporter_name,
                 "item_group": doc1.item_group,
                 "is_weighment_required": doc1.is_weighment_required,
@@ -128,14 +143,31 @@ class WeighmentIssueManagement(Document):
                 "vehicle_owner": doc1.vehicle_owner,  
                 "entry_type": doc1.entry_type,
                 "is_manual_weighment": doc1.is_manual_weighment, 
-                "loc":doc1.location
+                "loc":doc1.location,
+                "weighment_manually_checked": weighment_manually_checked_flag
             }  
     def free_card(self):
         doc2 = frappe.get_doc("Gate Entry", self.gate_entry)
         c = frappe.get_doc("Card Details",{"name":doc2.card_number})
         if doc2.is_weighment_required=="Yes" and (doc2.is_in_progress==1 or doc2.is_completed==1) :
             doc3 = frappe.get_doc("Weighment", {"gate_entry_number": self.gate_entry})
-        if doc2.entry_type == "Inward" and doc2.is_manual_weighment == 0 and doc2.is_weighment_required=="Yes" and doc2.is_stock_transfer==0:
+        if doc2.entry_type == "Inward" and doc2.is_manual_weighment == 0 and doc2.is_weighment_required=="Yes" and doc2.is_stock_transfer==0 and doc2.is_in_progress==0 and doc2.is_completed==0:
+            doc_pr=None
+            try:
+                prg=None
+                prg = frappe.get_value("Purchase Receipt Item", {"custom_gate_entry": doc2.name}, 'parent')
+                print("------------------------>prg", prg)
+                if prg!=None:
+                    doc_pr = frappe.get_doc("Purchase Receipt", prg)
+                print("-----------------------doc_pr-->",doc_pr)                
+            except Exception as e:
+                print(f"Error fetching Purchase Receipt from Gate Entry: {e}")
+            if doc_pr==None:
+                frappe.throw("Kindly Cancel Concerned Gate Entry To Free Card!")
+            elif doc_pr!=None:
+                doc2.db_set("card_number","")
+                c.db_set("is_assigned",False)
+        if doc2.entry_type == "Inward" and doc2.is_manual_weighment == 0 and doc2.is_weighment_required=="Yes" and doc2.is_stock_transfer==0 and doc2.is_in_progress==1:
             doc_pr=None
             try:
                 prg=None
@@ -151,25 +183,7 @@ class WeighmentIssueManagement(Document):
             elif doc_pr!=None:
                 doc2.db_set("card_number","")
                 c.db_set("is_assigned",False)
-        if doc2.entry_type == "Inward" and doc2.is_manual_weighment == 0 and doc2.is_weighment_required=="Yes" and doc2.is_stock_transfer==0 and doc3.is_in_progress==1:
-            doc_pr=None
-            try:
-                prg=None
-                prg = frappe.get_value("Purchase Receipt Item", {"custom_gate_entry": doc2.name}, 'parent')
-                print("------------------------>prg", prg)
-                if prg!=None:
-                    doc_pr = frappe.get_doc("Purchase Receipt", prg)
-                                
-            except Exception as e:
-                print(f"Error fetching Purchase Receipt from Gate Entry: {e}")
-            if doc_pr==None:
-                frappe.throw("Kindly Cancel Concerned Gate Entry To Free Card!")
-            elif doc_pr!=None:
-                doc2.db_set("card_number","")
-                c.db_set("is_assigned",False)
-        else:
-            frappe.throw("Kindly Cancel Concerned Gate Entry To Free Card!")           
-            return True
+
 
     @frappe.whitelist()
     def inward_outward(self):
