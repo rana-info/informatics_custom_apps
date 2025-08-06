@@ -530,7 +530,7 @@ frappe.ui.form.on("Weighment Issue Management", {
         if (frm.doc.entry_type === "Outward" && frm.doc.custom_is_manual_weighment1 ==1 && frm.doc.is_completed == 0) {
             options = ["Outward Manual Issue", "Vehicle Number Issue","Inward/Outward Wrong Entry(Manual)"];
         } 
-        else if(frm.doc.entry_type == "Inward" && frm.doc.weighment_manually_checked == 1 && frm.doc.is_assigned==1) {
+        else if(frm.doc.entry_type == "Inward" && frm.doc.weighment_manually_checked == 1 && frm.doc.stock_transfer==0 && frm.doc.is_assigned==1 && frm.doc.custom_is_completed1 == 0) {
             options = ["Vehicle Number Issue","Unlink/Free Card Inward(Not Manual)"];
         }
         else if(frm.doc.entry_type === "Outward" && frm.doc.custom_is_manual_weighment1 ==1 && frm.doc.custom_is_completed1 == 1){
