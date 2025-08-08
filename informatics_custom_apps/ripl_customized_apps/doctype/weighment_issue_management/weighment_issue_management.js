@@ -5,7 +5,7 @@ function clear_fields(frm) {
     let fields_to_clear = [
         "vehicle_number","location","card_number","weighment_manually_checked","is_manual_weighment", "date", "transporter", "issue", "is_assigned","stock_transfer",
         "is_weighment_required","is_in_progress","custom_w_item_group", "weighment","custom_is_completed1","custom_is_in_progress1","custom_is_manual_weighment1",
-        "is_completed","custom_vehicle_number1","vehicle_owner","supplier_name","entry_type","custom_tare_weight","custom_gross_weight","custom_net_weight"
+        "is_completed","custom_vehicle_number1","item_group_g","vehicle_owner","supplier_name","entry_type","custom_tare_weight","custom_gross_weight","custom_net_weight"
     ];
     
     fields_to_clear.forEach(field => {
