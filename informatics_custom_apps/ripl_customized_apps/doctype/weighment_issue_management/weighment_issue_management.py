@@ -70,6 +70,7 @@ class WeighmentIssueManagement(Document):
     def fetch_record(self, docname):   
         doc1 = frappe.get_doc("Gate Entry", self.gate_entry)
         doc2 = None  
+        weighment_manually_checked_flag = False
         if doc1.is_weighment_required == "Yes":
             try:
                 if doc1.is_in_progress==1 or doc1.is_completed==1:
