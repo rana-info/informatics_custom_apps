@@ -130,7 +130,7 @@ def get_data(filters):
                 "credit": 0,
                 "cost_center": "",
                 "plant": item.get("branch") or (doc.branch if (doc and hasattr(doc, "branch")) else ""),
-                "segment": item.get("segment") or "",   # ✅ segment directly from item child row
+                "segment": item.get("segment") or "", 
                 "gl_entry": "",
                 "party_type": "",
                 "party": "",
