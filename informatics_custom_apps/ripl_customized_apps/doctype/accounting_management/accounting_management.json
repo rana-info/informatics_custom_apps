@@ -1,0 +1,177 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-08-29 12:08:50.536114",
+ "default_view": "List",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "section_break_gvfu",
+  "doctype_name",
+  "plant",
+  "cost_center",
+  "segment",
+  "section",
+  "expense_account",
+  "wrong_expense_account",
+  "amended_from",
+  "column_break_zzsj",
+  "plant_update",
+  "cost_center_update",
+  "segment_update",
+  "section_update",
+  "expense_account_update",
+  "voucher_numbers"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_break_gvfu",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "doctype_name",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Doctype Name",
+   "options": "\nStock Entry\nPurchase Receipt\nPurchase Invoice\nDelivery Note\nSales Invoice",
+   "reqd": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Accounting Management",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Accounting Management",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "column_break_zzsj",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "plant_update",
+   "fieldtype": "Check",
+   "label": "Plant Update "
+  },
+  {
+   "default": "0",
+   "fieldname": "cost_center_update",
+   "fieldtype": "Check",
+   "label": "Cost Center Update"
+  },
+  {
+   "default": "0",
+   "fieldname": "segment_update",
+   "fieldtype": "Check",
+   "label": "Segment Update"
+  },
+  {
+   "default": "0",
+   "fieldname": "section_update",
+   "fieldtype": "Check",
+   "label": "Section Update"
+  },
+  {
+   "depends_on": "eval:doc.plant_update",
+   "fieldname": "plant",
+   "fieldtype": "Link",
+   "label": "Plant",
+   "mandatory_depends_on": "eval:doc.plant_update",
+   "options": "Branch"
+  },
+  {
+   "depends_on": "eval:doc.cost_center_update",
+   "fieldname": "cost_center",
+   "fieldtype": "Link",
+   "label": "Cost Center",
+   "mandatory_depends_on": "eval:doc.cost_center_update",
+   "options": "Cost Center"
+  },
+  {
+   "depends_on": "eval:doc.segment_update",
+   "fieldname": "segment",
+   "fieldtype": "Link",
+   "label": "Segment",
+   "options": "Segment"
+  },
+  {
+   "depends_on": "eval:doc.section_update",
+   "fieldname": "section",
+   "fieldtype": "Link",
+   "label": "Section",
+   "mandatory_depends_on": "eval:doc.section_update",
+   "options": "Section"
+  },
+  {
+   "description": "(Separeted by comma, eg: ab001,ab002)",
+   "fieldname": "voucher_numbers",
+   "fieldtype": "Long Text",
+   "label": "Voucher Numbers",
+   "reqd": 1
+  },
+  {
+   "depends_on": "eval:doc.expense_account_update",
+   "fieldname": "expense_account",
+   "fieldtype": "Link",
+   "label": "Correct Expense Account",
+   "mandatory_depends_on": "eval:doc.expense_account_update",
+   "options": "Account"
+  },
+  {
+   "default": "0",
+   "fieldname": "expense_account_update",
+   "fieldtype": "Check",
+   "label": "Expense Account Update"
+  },
+  {
+   "depends_on": "eval:doc.expense_account_update",
+   "fieldname": "wrong_expense_account",
+   "fieldtype": "Link",
+   "label": "Wrong Expense Account",
+   "mandatory_depends_on": "eval:doc.expense_account_update",
+   "options": "Account"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2025-09-01 13:18:43.566865",
+ "modified_by": "Administrator",
+ "module": "RIPL Customized Apps",
+ "name": "Accounting Management",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
