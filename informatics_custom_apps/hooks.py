@@ -55,6 +55,9 @@ app_license = "mit"
 
 # Home Pages
 # ----------
+doctype_js = {
+    "Loan": "public/js/loan_custom.js"
+}
 
 # application home page (will override Website Settings)
 # home_page = "login"
