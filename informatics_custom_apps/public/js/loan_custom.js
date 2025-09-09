@@ -20,7 +20,11 @@ frappe.ui.form.on('Loan', {
                             },
                             callback: function(r) {
                                 if (!r.exc) {
-                                    frappe.msgprint(__('Loan reopened successfully'));
+                                    frappe.show_alert({
+                                        message: __('Loan Reopened Successfully'),
+                                        indicator: 'green'
+                                    }, 7); // alert timeout (in seconds)
+
                                     frm.reload_doc();
                                 }
                             }
