@@ -17,8 +17,8 @@ def get_columns():
         {"label": "GL Entry", "fieldname": "gl_entry", "fieldtype": "Link", "options": "GL Entry"},
         {"label": "Account", "fieldname": "account", "fieldtype": "Link", "options": "Account"},
         {"label": "Cost Center", "fieldname": "cost_center", "fieldtype": "Data"},
-        {"label": "Plant", "fieldname": "plant", "fieldtype": "Data"},
-        {"label": "Segment", "fieldname": "segment", "fieldtype": "Data"},
+        {"label": "Plant", "fieldname": "plant", "fieldtype": "Link", "options": "Branch"},
+        {"label": "Segment", "fieldname": "segment", "fieldtype": "Link", "options": "Segment"},
         {"label": "Party Type", "fieldname": "party_type", "fieldtype": "Data"},
         {"label": "Party", "fieldname": "party", "fieldtype": "Dynamic Link", "options": "party_type"},
         {"label": "Party Name", "fieldname": "party_name", "fieldtype": "Data"},
@@ -32,14 +32,21 @@ def get_columns():
     ]
 
 def get_data(filters):
+    # Build base filters for GL Entry
+    gl_filters = {
+        "docstatus": 1,
+        "company": filters.get("company"),
+        "posting_date": ["between", [filters.get("from_date"), filters.get("to_date")]],
+        "account": filters.get("account") if filters.get("account") else ["!=", ""]
+    }
+
+    # Segment can be filtered directly on GL Entry
+    if filters.get("segment"):
+        gl_filters["segment"] = filters.get("segment")
+
     entries = frappe.get_all(
         "GL Entry",
-        filters={
-            "docstatus": 1,
-            "company": filters.get("company"),
-            "posting_date": ["between", [filters.get("from_date"), filters.get("to_date")]],
-            "account": filters.get("account") if filters.get("account") else ["!=", ""]
-        },
+        filters=gl_filters,
         fields=[
             "name", "posting_date", "voucher_type", "voucher_no",
             "voucher_subtype", "account", "debit", "credit",
@@ -57,20 +64,15 @@ def get_data(filters):
     for entry in entries:
         key = (entry.voucher_type, entry.voucher_no)
 
-        # Save subtype from GL Entry
         if key not in voucher_subtype_map:
             voucher_subtype_map[key] = entry.voucher_subtype or ""
 
-        # Save voucher doc and items
         if key not in voucher_doc_map:
             try:
                 doc = frappe.get_doc(entry.voucher_type, entry.voucher_no)
                 if doc.docstatus == 1:
                     voucher_doc_map[key] = doc
-                    if hasattr(doc, "items"):
-                        voucher_items_map[key] = doc.items
-                    else:
-                        voucher_items_map[key] = []
+                    voucher_items_map[key] = getattr(doc, "items", [])
                 else:
                     voucher_doc_map[key] = None
                     voucher_items_map[key] = []
@@ -79,11 +81,20 @@ def get_data(filters):
                 voucher_doc_map[key] = None
                 voucher_items_map[key] = []
 
-    # Step 2: Add GL Entry rows
+    # Step 2: Add GL Entry rows (voucher docstatus must be 1)
     for entry in entries:
         key = (entry.voucher_type, entry.voucher_no)
         doc = voucher_doc_map.get(key)
-        plant = doc.branch if (doc and hasattr(doc, "branch")) else ""
+
+        if not doc or doc.docstatus != 1:
+            continue
+
+        plant = getattr(doc, "branch", "")
+        cost_center = entry.cost_center or getattr(doc, "cost_center", "")
+
+        # Apply Plant filter (since not in GL Entry table)
+        if filters.get("plant") and plant != filters.get("plant"):
+            continue
 
         output.append({
             "posting_date": entry.posting_date,
@@ -93,7 +104,7 @@ def get_data(filters):
             "account": entry.account,
             "debit": entry.debit,
             "credit": entry.credit,
-            "cost_center": entry.cost_center,
+            "cost_center": cost_center,
             "plant": plant,
             "segment": entry.segment,
             "gl_entry": entry.name,
@@ -107,18 +118,28 @@ def get_data(filters):
             "amount": 0
         })
 
-    # Step 3: Add item rows
+    # Step 3: Add item rows (voucher docstatus must be 1)
     for key, items in voucher_items_map.items():
-        voucher_type, voucher_no = key
         doc = voucher_doc_map.get(key)
+        if not doc or doc.docstatus != 1:
+            continue
 
-        posting_date = doc.posting_date if (doc and hasattr(doc, "posting_date")) else ""
+        voucher_type, voucher_no = key
+        posting_date = getattr(doc, "posting_date", "")
         voucher_subtype = voucher_subtype_map.get(key, "")
 
         for item in items:
-            rate_field = "base_rate"
-            if voucher_type == "Stock Entry":
-                rate_field = "basic_rate"
+            rate_field = "base_rate" if voucher_type != "Stock Entry" else "basic_rate"
+            plant = item.get("branch") or getattr(doc, "branch", "")
+            cost_center = item.get("cost_center") or getattr(doc, "cost_center", "")
+
+            # Apply Plant filter
+            if filters.get("plant") and plant != filters.get("plant"):
+                continue
+
+            # Apply Segment filter (for item-level data if available)
+            if filters.get("segment") and item.get("segment") and item.get("segment") != filters.get("segment"):
+                continue
 
             output.append({
                 "posting_date": posting_date,
@@ -128,9 +149,9 @@ def get_data(filters):
                 "account": "",
                 "debit": 0,
                 "credit": 0,
-                "cost_center": "",
-                "plant": item.get("branch") or (doc.branch if (doc and hasattr(doc, "branch")) else ""),
-                "segment": item.get("segment") or "", 
+                "cost_center": cost_center,
+                "plant": plant,
+                "segment": item.get("segment") or "",
                 "gl_entry": "",
                 "party_type": "",
                 "party": "",
@@ -141,8 +162,6 @@ def get_data(filters):
                 "rate": item.get(rate_field),
                 "amount": item.get("amount")
             })
-
-    
 
     return output
 

@@ -34,6 +34,18 @@ frappe.query_reports["GL Report"] = {
                     };
                 }
             }
+        },
+        {
+            fieldname: "plant",
+            label: __("Plant"),
+            fieldtype: "Link",
+            options: "Branch"  
+        },
+        {
+            fieldname: "segment",
+            label: __("Segment"),
+            fieldtype: "Link",
+            options: "Segment"  
         }
     ]
 };
