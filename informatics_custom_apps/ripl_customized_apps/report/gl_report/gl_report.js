@@ -39,7 +39,17 @@ frappe.query_reports["GL Report"] = {
             fieldname: "plant",
             label: __("Plant"),
             fieldtype: "Link",
-            options: "Branch"  
+            options: "Branch" ,
+            get_query: function (report) {
+                let company = frappe.query_report.get_filter_value('company');
+                if (company) {
+                    return {
+                        filters: {
+                            company: company
+                        }
+                    };
+                }
+            }
         },
         {
             fieldname: "segment",
