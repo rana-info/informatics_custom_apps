@@ -525,24 +525,30 @@ frappe.ui.form.on("Weighment Issue Management", {
         // Inward/Outward Wrong Entry(Manual)
         // Wrong Item Group Selected(Outward)
         // Working On-> Unlink/Free Card Inward(Not Manual)
+        console.log("entry_type", frm.doc.entry_type);
+        console.log("weighment_manually_checked", frm.doc.weighment_manually_checked);
+        console.log("stock_transfer", frm.doc.stock_transfer);
+        console.log("is_assigned", frm.doc.is_assigned);
+        console.log("custom_is_completed1", frm.doc.custom_is_completed1);
+
 
         let options = [];
-        if (frm.doc.entry_type === "Outward" && frm.doc.custom_is_manual_weighment1 ==1 && frm.doc.is_completed == 0) {
+        if (frm.doc.entry_type === "Outward" && frm.doc.custom_is_manual_weighment1 ==1 && frm.doc.is_completed !=1) {
             options = ["Outward Manual Issue", "Vehicle Number Issue","Inward/Outward Wrong Entry(Manual)"];
         } 
-        else if(frm.doc.entry_type == "Inward" && frm.doc.weighment_manually_checked == 1 && frm.doc.stock_transfer==0 && frm.doc.is_assigned==1 && frm.doc.custom_is_completed1 == 0) {
+        else if(frm.doc.entry_type == "Inward" && frm.doc.weighment_manually_checked == 1 && frm.doc.stock_transfer!=1 && frm.doc.is_assigned==1 && frm.doc.custom_is_completed1 != 1) {
             options = ["Vehicle Number Issue","Unlink/Free Card Inward(Not Manual)"];
         }
         else if(frm.doc.entry_type === "Outward" && frm.doc.custom_is_manual_weighment1 ==1 && frm.doc.custom_is_completed1 == 1){
             options = ["Outward Manual Issue", "Vehicle Number Issue","Reset Second Weight(Manual)"];
         }
-        else if(frm.doc.entry_type === "Outward" && frm.doc.custom_is_manual_weighment1 ==0 && frm.doc.is_completed == 0){
+        else if(frm.doc.entry_type === "Outward" && frm.doc.custom_is_manual_weighment1 !=1 && frm.doc.is_completed != 1){
             options = ["Vehicle Number Issue","Wrong Item Group Selected(Outward)"];
         }
-        else if(frm.doc.entry_type === "Outward" && frm.doc.custom_is_completed1 == 1 && frm.doc.custom_is_manual_weighment1==0){
+        else if(frm.doc.entry_type === "Outward" && frm.doc.custom_is_completed1 == 1 && frm.doc.custom_is_manual_weighment1!=1){
             options = ["Vehicle Number Issue","Reset Second Weight(Not Manual)","Unlink Old & Link New Delivery Note(Weighment Completed)"];
         }
-        else if(frm.doc.entry_type === "Inward" && frm.doc.custom_is_completed1==1 && frm.doc.custom_is_manual_weighment1==0) {
+        else if(frm.doc.entry_type === "Inward" && frm.doc.custom_is_completed1==1 && frm.doc.custom_is_manual_weighment1!=1) {
             options = ["Vehicle Number Issue","Reset Second Weight(Not Manual)"];
         }
         else if(frm.doc.entry_type === "Inward" && frm.doc.custom_is_completed1==1 && frm.doc.custom_is_manual_weighment1==1) {
@@ -551,13 +557,13 @@ frappe.ui.form.on("Weighment Issue Management", {
         else if(frm.doc.entry_type === "Inward" && frm.doc.custom_is_in_progress1==1 && frm.doc.custom_is_manual_weighment1 ==1) {
             options = ["Vehicle Number Issue","Inward/Outward Wrong Entry(Manual)"];
         }
-        else if(frm.doc.entry_type == "Inward" && frm.doc.is_weighment_required=="Yes" && frm.doc.stock_transfer==0 && frm.doc.is_manual_weighment==0 && frm.doc.custom_is_completed1 == 0) {
+        else if(frm.doc.entry_type == "Inward" && frm.doc.is_weighment_required=="Yes" && frm.doc.stock_transfer!=1 && frm.doc.is_manual_weighment!=1 && frm.doc.custom_is_completed1 !=1) {
             options = ["Vehicle Number Issue","Unlink/Free Card Inward(Not Manual)"];
         }
         // else if(frm.doc.entry_type === "Inward" && frm.doc.custom_is_in_progress1==1) {
         //     options = ["Vehicle Number Issue"];
         // }
-        else if(frm.doc.entry_type === "Outward" && frm.doc.custom_is_completed1==0) {
+        else if(frm.doc.entry_type === "Outward" && frm.doc.custom_is_completed1!=1) {
             options = ["Vehicle Number Issue"];
         }
         
