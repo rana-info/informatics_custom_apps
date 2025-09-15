@@ -15,14 +15,17 @@
   "section",
   "expense_account",
   "wrong_expense_account",
-  "amended_from",
+  "correct_payable_account",
+  "wrong_payable_account",
   "column_break_zzsj",
   "plant_update",
   "cost_center_update",
   "segment_update",
   "section_update",
   "expense_account_update",
-  "voucher_numbers"
+  "payable_account_update",
+  "voucher_numbers",
+  "amended_from"
  ],
  "fields": [
   {
@@ -34,7 +37,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Doctype Name",
-   "options": "\nStock Entry\nPurchase Receipt\nPurchase Invoice\nDelivery Note\nSales Invoice",
+   "options": "\nStock Entry\nPurchase Receipt\nPurchase Invoice\nPayment Entry\nDelivery Note\nSales Invoice",
    "reqd": 1
   },
   {
@@ -133,9 +136,11 @@
   },
   {
    "default": "0",
+   "depends_on": "eval:doc.doctype_name!=\"Payment Entry\"",
    "fieldname": "expense_account_update",
    "fieldtype": "Check",
-   "label": "Expense Account Update"
+   "label": "Expense Account Update",
+   "read_only_depends_on": "eval:doc.doctype_name==\"Payment Entry\""
   },
   {
    "depends_on": "eval:doc.expense_account_update",
@@ -144,13 +149,35 @@
    "label": "Wrong Expense Account",
    "mandatory_depends_on": "eval:doc.expense_account_update",
    "options": "Account"
+  },
+  {
+   "default": "0",
+   "fieldname": "payable_account_update",
+   "fieldtype": "Check",
+   "label": "Payable Account Update"
+  },
+  {
+   "depends_on": "eval:doc.payable_account_update",
+   "fieldname": "correct_payable_account",
+   "fieldtype": "Link",
+   "label": "Correct Payable Account",
+   "mandatory_depends_on": "eval:doc.payable_account_update",
+   "options": "Account"
+  },
+  {
+   "depends_on": "eval:doc.payable_account_update",
+   "fieldname": "wrong_payable_account",
+   "fieldtype": "Link",
+   "label": "Wrong Payable Account",
+   "mandatory_depends_on": "eval:doc.payable_account_update",
+   "options": "Account"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2025-09-02 10:27:44.284458",
+ "modified": "2025-09-15 16:03:56.492078",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "Accounting Management",
