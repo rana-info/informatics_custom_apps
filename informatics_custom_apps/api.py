@@ -47,7 +47,7 @@ def make_purchase_receipt_paddy(master,Items):
 		purchase_receipt.tax_category = "In-State"
 		tax_charge = frappe.get_value("Branch", {"name": master.get("plant")}, "custom_cane_purchase_tax")
 		purchase_receipt.taxes_and_charges = tax_charge
-		taxes = get_taxes_and_charges("Purchase Taxes and Charges Template",purchase_receipt)
+		taxes = get_taxes_and_charges("Purchase Taxes and Charges Template",purchase_receipt.taxes_and_charges)
 		tax_sum = 0
 		for tax in taxes:
 			tax.cost_center = master.get("cost_center")
