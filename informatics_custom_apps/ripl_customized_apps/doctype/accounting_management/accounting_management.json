@@ -177,7 +177,7 @@
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2025-09-15 16:03:56.492078",
+ "modified": "2025-09-16 19:13:45.097829",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "Accounting Management",
@@ -201,6 +201,7 @@
    "write": 1
   }
  ],
+ "queue_in_background": 1,
  "row_format": "Dynamic",
  "sort_field": "modified",
  "sort_order": "DESC",
