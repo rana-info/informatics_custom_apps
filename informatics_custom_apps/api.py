@@ -31,7 +31,7 @@ def make_purchase_receipt_paddy(master,Items):
 		purchase_receipt.supplier_warehouse = master.get("warehouse")
 		purchase_receipt.custom_transport = master.get("custom_transport")
 		purchase_receipt.custom_loading_unloading = master.get("custom_loading_unloading")
-		purchase_receipt.db_set("custom_overall_qc_status","Completed")
+		# purchase_receipt.db_set("custom_overall_qc_status","Completed")
 		purchase_receipt.cost_center = master.get("cost_center")
 		purchase_receipt.custom_commission = master.get("custom_commission")
 		for item in Items:
