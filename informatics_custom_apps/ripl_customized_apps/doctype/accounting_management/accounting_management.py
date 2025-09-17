@@ -5,6 +5,15 @@ import frappe
 from frappe.model.document import Document
 
 class AccountingManagement(Document):
+    def before_save(self):
+        if self.voucher_numbers:
+            # Split by comma, strip spaces, and ignore empties
+            items = [i.strip() for i in self.voucher_numbers.split(",") if i.strip()]
+            self.total_vouchers = len(items)
+        else:
+            self.total_vouchers = 0
+
+    
     def before_submit(self):
         self.update_vouchers()
 
