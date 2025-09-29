@@ -24,6 +24,7 @@ def make_purchase_receipt_paddy(master,Items):
 		purchase_receipt.set_posting_time = 1
 		purchase_receipt.posting_date = master.get("posting_date")
 		purchase_receipt.company = master.get("company")
+		purchase_receipt.vehicle_no = master.get("vehicle_no")
 		purchase_receipt.supplier = master.get("supplier")
 		purchase_receipt.branch = master.get("plant")
 		purchase_receipt.bill_no = master.get("bill_no")
@@ -37,6 +38,7 @@ def make_purchase_receipt_paddy(master,Items):
 		for item in Items:
 			purchase_receipt.append("items",{
 				"item_code":item.get("name"),
+				"purchase_order":item.get("purchase_order"),
 				"warehouse":master.get("warehouse"),
 				"uom": frappe.get_value("Item", {"item_code": item.get("name")}, "stock_uom"),
 				"qty":item.get('qty'),
