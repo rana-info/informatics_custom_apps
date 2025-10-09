@@ -42,6 +42,13 @@ class AccountingManagement(Document):
                 self.update_purchase_invoice_payables(
                     v, self.correct_payable_account, self.wrong_payable_account
                 )
+            if (
+                self.payable_account_update
+                and self.doctype_name == "Sales Invoice"
+            ):
+                self.update_sales_invoice_payables(
+                    v, self.correct_payable_account, self.wrong_payable_account
+                )
 
     def update_document(self, doctype, voucher_no):
         if not frappe.db.exists(doctype, voucher_no):
@@ -142,6 +149,17 @@ class AccountingManagement(Document):
 
         self.update_payment_ledger_entry(voucher_no, correct_account, wrong_account)
 
+    def update_sales_invoice_payables(self, voucher_no, correct_account, wrong_account):
+        if not frappe.db.exists("Sales Invoice", voucher_no):
+            return
+
+        doc = frappe.get_doc("Sales Invoice", voucher_no)
+
+        # Update header field
+        if doc.debit_to == wrong_account:
+            doc.db_set("debit_to", correct_account, update_modified=False)
+
+        self.update_payment_ledger_entry(voucher_no, correct_account, wrong_account)
     def update_payment_ledger_entry(self,voucher_no,correct_account,wrong_account):
         # Update Payment Ledger Entry separately
         ple_list = frappe.get_all(
