@@ -27,7 +27,7 @@ def get_columns():
         {"fieldname": "pf_salary", "label": "PF Salary", "fieldtype": "Currency", "width": 120},
         {"fieldname": "pension_salary", "label": "Pension Salary", "fieldtype": "Currency", "width": 120},
         {"fieldname": "edli", "label": "EDLI", "fieldtype": "Currency", "width": 100},
-        {"fieldname": "pf_12_per", "label": "PF (12%)", "fieldtype": "Currency", "width": 120},
+        {"fieldname": "pf_12_per", "label": "PF", "fieldtype": "Currency", "width": 120},
         {"fieldname": "employee_pension_amount", "label": "EPS", "fieldtype": "Currency", "width": 120},
         {"fieldname": "employee_pf", "label": "EPF", "fieldtype": "Currency", "width": 120},
         {"fieldname": "payment_absent_days", "label": "NCP Days", "fieldtype": "Float", "width": 100}
