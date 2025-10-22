@@ -52,7 +52,8 @@ function download_text() {
                 var text = convert_to_text(data);
                 var from_date = new Date(filters.from_date);
                 var to_date = new Date(filters.to_date);
-                var filename = 'PF ECR ' + get_month_name(from_date) + '-' + get_month_name(to_date) + '.txt';
+                var branch_name = filters.branch 
+                var filename = 'PF ECR ' + branch_name + get_month_name(from_date) + '-' + get_month_name(to_date) + '.txt';
                 download_file(text, filename);
             }
         }
