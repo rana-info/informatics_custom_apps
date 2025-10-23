@@ -73,41 +73,42 @@ def make_purchase_receipt_paddy(master, Items):
         )
 
         tax_sum = 0
-        for tax in taxes:
-            tax.cost_center = master.get("cost_center")
+        if taxes:
+            for tax in taxes:
+                tax.cost_center = master.get("cost_center")
 
-            if tax.custom_formula == "custom_insurance_expenses":
-                tax.tax_amount = purchase_receipt.custom_insurance_expenses or 0
-            elif tax.custom_formula == "custom_transport":
-                tax.tax_amount = purchase_receipt.custom_transport or 0
-            elif tax.custom_formula == "custom_loading_unloading":
-                tax.tax_amount = purchase_receipt.custom_loading_unloading or 0
-            elif tax.custom_formula == "custom_packing_handling":
-                tax.tax_amount = purchase_receipt.custom_packing_handling or 0
-            elif tax.custom_formula == "custom_short_excess":
-                tax.tax_amount = purchase_receipt.custom_short_excess or 0
-            elif tax.custom_formula == "custom_freight_on_bill":
-                tax.tax_amount = purchase_receipt.custom_freight_on_bill or 0
-            elif tax.custom_formula == "custom_tcs":
-                tax.tax_amount = purchase_receipt.custom_tcs or 0
-            elif tax.custom_formula == "custom_commission":
-                tax.tax_amount = purchase_receipt.custom_commission or 0
-            else:
-                tax.tax_amount = 0
+                if tax.custom_formula == "custom_insurance_expenses":
+                    tax.tax_amount = purchase_receipt.custom_insurance_expenses or 0
+                elif tax.custom_formula == "custom_transport":
+                    tax.tax_amount = purchase_receipt.custom_transport or 0
+                elif tax.custom_formula == "custom_loading_unloading":
+                    tax.tax_amount = purchase_receipt.custom_loading_unloading or 0
+                elif tax.custom_formula == "custom_packing_handling":
+                    tax.tax_amount = purchase_receipt.custom_packing_handling or 0
+                elif tax.custom_formula == "custom_short_excess":
+                    tax.tax_amount = purchase_receipt.custom_short_excess or 0
+                elif tax.custom_formula == "custom_freight_on_bill":
+                    tax.tax_amount = purchase_receipt.custom_freight_on_bill or 0
+                elif tax.custom_formula == "custom_tcs":
+                    tax.tax_amount = purchase_receipt.custom_tcs or 0
+                elif tax.custom_formula == "custom_commission":
+                    tax.tax_amount = purchase_receipt.custom_commission or 0
+                else:
+                    tax.tax_amount = 0
 
-            tax_sum += float(tax.get("tax_amount") or 0)
-            purchase_receipt.append("taxes", tax)
+                tax_sum += float(tax.get("tax_amount") or 0)
+                purchase_receipt.append("taxes", tax)
 
-        purchase_receipt.save(ignore_permissions=True)
+            purchase_receipt.save(ignore_permissions=True)
 
-        if purchase_receipt.custom_overall_qc_status is None:
-            purchase_receipt.db_set("custom_overall_qc_status", "Completed")
+            if purchase_receipt.custom_overall_qc_status is None:
+                purchase_receipt.db_set("custom_overall_qc_status", "Completed")
 
-        return {
-            "status": "success",
-            "message": "Purchase Receipt Created",
-            "purchase_receipt": purchase_receipt.name
-        }
+            return {
+                "status": "success",
+                "message": "Purchase Receipt Created",
+                "purchase_receipt": purchase_receipt.name
+            }
 
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "Purchase Receipt Creation Error")
