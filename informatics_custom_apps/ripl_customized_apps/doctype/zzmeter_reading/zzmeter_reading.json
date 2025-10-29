@@ -1,0 +1,194 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-10-29 10:32:09.101257",
+ "default_view": "List",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "quarter_no",
+  "opening_reading",
+  "closing_reading",
+  "consumed_units",
+  "employee",
+  "employee_name",
+  "plant",
+  "designation",
+  "company",
+  "column_break_kxgv4",
+  "grade",
+  "grade_category",
+  "allowed_units",
+  "chargeable_units",
+  "unit_rate",
+  "amount",
+  "expense_type",
+  "cost_center",
+  "salary_component",
+  "new_meter"
+ ],
+ "fields": [
+  {
+   "fieldname": "quarter_no",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Quarter No",
+   "options": "zzQuarter Master",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "depends_on": "eval:doc.new_meter==0",
+   "fieldname": "opening_reading",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Opening Reading"
+  },
+  {
+   "fieldname": "closing_reading",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Closing Reading",
+   "reqd": 1
+  },
+  {
+   "fieldname": "consumed_units",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Consumed Units",
+   "read_only": 1
+  },
+  {
+   "fieldname": "employee",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Employee",
+   "options": "Employee",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "employee.employee_name",
+   "fieldname": "employee_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Employee Name",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "employee.branch",
+   "fieldname": "plant",
+   "fieldtype": "Link",
+   "ignore_user_permissions": 1,
+   "label": "Plant",
+   "options": "Branch",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "employee.designation",
+   "fieldname": "designation",
+   "fieldtype": "Link",
+   "label": "Designation",
+   "options": "Designation",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "plant.company",
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "ignore_user_permissions": 1,
+   "label": "Company",
+   "options": "Company",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_kxgv4",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fetch_from": "employee.grade",
+   "fieldname": "grade",
+   "fieldtype": "Link",
+   "ignore_user_permissions": 1,
+   "label": "Grade",
+   "options": "Employee Grade",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "employee.grade_category",
+   "fieldname": "grade_category",
+   "fieldtype": "Data",
+   "label": "Grade Category",
+   "read_only": 1
+  },
+  {
+   "fieldname": "allowed_units",
+   "fieldtype": "Float",
+   "label": "Allowed Units",
+   "read_only": 1
+  },
+  {
+   "fieldname": "chargeable_units",
+   "fieldtype": "Float",
+   "label": "Chargeable Units",
+   "read_only": 1
+  },
+  {
+   "fieldname": "unit_rate",
+   "fieldtype": "Currency",
+   "label": "Unit Rate",
+   "read_only": 1
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "label": "Amount",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "quarter_no.expense_type",
+   "fieldname": "expense_type",
+   "fieldtype": "Data",
+   "label": "Expense Type",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "quarter_no.cost_center",
+   "fieldname": "cost_center",
+   "fieldtype": "Link",
+   "ignore_user_permissions": 1,
+   "label": "Cost Center",
+   "options": "Cost Center",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "quarter_no.salary_component",
+   "fieldname": "salary_component",
+   "fieldtype": "Link",
+   "ignore_user_permissions": 1,
+   "label": "Salary Component",
+   "options": "Salary Component",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "new_meter",
+   "fieldtype": "Check",
+   "label": "New Meter"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2025-10-29 10:34:12.401736",
+ "modified_by": "Administrator",
+ "module": "RIPL Customized Apps",
+ "name": "zzMeter Reading",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
