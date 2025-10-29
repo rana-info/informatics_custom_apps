@@ -1,0 +1,259 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "PRO-OVR-.####",
+ "creation": "2025-10-29 17:19:54.111106",
+ "default_view": "List",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "section_break_usmr",
+  "inputs_column",
+  "date",
+  "plant",
+  "ethanol",
+  "ena",
+  "target_production",
+  "alcohol_percentage",
+  "spent_wash_availablein_lakhs",
+  "average_starch_from_fcidfgmaize",
+  "fci",
+  "dfg",
+  "maize",
+  "steam_through_prdston",
+  "steam_through_turbineton",
+  "steam_fuel_rationcombine",
+  "steam_cost_per_ton",
+  "opening_entry",
+  "column_break_htli",
+  "total_production",
+  "capacity_achieved",
+  "total_capacity_till_date",
+  "total_actual_production_till_date",
+  "capacity_utilization",
+  "loss_in_month",
+  "avg_per_day_loss",
+  "avg_bolier_load_per_hour",
+  "steam_cost_per_bl",
+  "stream_details_section",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_break_usmr",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "inputs_column",
+   "fieldtype": "Column Break",
+   "label": "Inputs"
+  },
+  {
+   "default": "Today",
+   "fieldname": "date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Production Date",
+   "reqd": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "plant",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Plant ",
+   "options": "Branch",
+   "reqd": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "ethanol",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Production Ethanol",
+   "reqd": 1
+  },
+  {
+   "fieldname": "ena",
+   "fieldtype": "Float",
+   "label": "Production ENA",
+   "reqd": 1
+  },
+  {
+   "fieldname": "target_production",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Target Production",
+   "reqd": 1
+  },
+  {
+   "fieldname": "alcohol_percentage",
+   "fieldtype": "Percent",
+   "label": "Alcohol Percentage"
+  },
+  {
+   "fieldname": "spent_wash_availablein_lakhs",
+   "fieldtype": "Int",
+   "label": "Spent Wash Available(In Lakhs)"
+  },
+  {
+   "fieldname": "average_starch_from_fcidfgmaize",
+   "fieldtype": "Data",
+   "label": "Average Starch from FCI/DFG/Maize"
+  },
+  {
+   "fieldname": "fci",
+   "fieldtype": "Float",
+   "label": "Ethanol Recovery FCI"
+  },
+  {
+   "fieldname": "dfg",
+   "fieldtype": "Float",
+   "label": "Ethanol Recovery DFG"
+  },
+  {
+   "fieldname": "maize",
+   "fieldtype": "Float",
+   "label": "Ethanol Recovery Maize"
+  },
+  {
+   "fieldname": "steam_through_prdston",
+   "fieldtype": "Float",
+   "label": "Steam Through PRDS(Ton)"
+  },
+  {
+   "fieldname": "steam_through_turbineton",
+   "fieldtype": "Float",
+   "label": "Steam Through Turbine(Ton)"
+  },
+  {
+   "fieldname": "steam_fuel_rationcombine",
+   "fieldtype": "Float",
+   "label": "Steam Fuel Ration(Combine)"
+  },
+  {
+   "fieldname": "steam_cost_per_ton",
+   "fieldtype": "Float",
+   "label": "Steam Cost per Ton"
+  },
+  {
+   "default": "0",
+   "fieldname": "opening_entry",
+   "fieldtype": "Check",
+   "label": "Opening Entry"
+  },
+  {
+   "fieldname": "column_break_htli",
+   "fieldtype": "Column Break",
+   "label": "Calculations"
+  },
+  {
+   "fieldname": "total_production",
+   "fieldtype": "Float",
+   "label": "Total Production",
+   "read_only": 1
+  },
+  {
+   "fieldname": "capacity_achieved",
+   "fieldtype": "Float",
+   "label": "Capacity Achieved %",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "total_capacity_till_date",
+   "fieldtype": "Float",
+   "label": "Total Capacity Month Till Date",
+   "non_negative": 1,
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "total_actual_production_till_date",
+   "fieldtype": "Float",
+   "label": "Total Production Month Till Date",
+   "non_negative": 1,
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "capacity_utilization",
+   "fieldtype": "Float",
+   "label": "Capacity Utilization",
+   "non_negative": 1,
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "loss_in_month",
+   "fieldtype": "Float",
+   "label": "Loss in month",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "avg_per_day_loss",
+   "fieldtype": "Int",
+   "label": "Avg Per Day Loss In Month",
+   "read_only": 1
+  },
+  {
+   "fieldname": "avg_bolier_load_per_hour",
+   "fieldtype": "Float",
+   "label": "Steam Avg Bolier Load per Hour",
+   "read_only": 1
+  },
+  {
+   "fieldname": "steam_cost_per_bl",
+   "fieldtype": "Float",
+   "label": "Steam Cost Per BL",
+   "read_only": 1
+  },
+  {
+   "fieldname": "stream_details_section",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "zzProduction Overview",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2025-10-29 19:46:48.880993",
+ "modified_by": "Administrator",
+ "module": "RIPL Customized Apps",
+ "name": "zzProduction Overview",
+ "naming_rule": "Expression (old style)",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
