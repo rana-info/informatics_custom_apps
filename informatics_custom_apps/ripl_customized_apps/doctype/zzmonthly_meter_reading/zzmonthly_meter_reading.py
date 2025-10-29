@@ -8,7 +8,7 @@ from frappe.utils.data import flt, getdate
 import calendar
 from datetime import date, datetime, timedelta
 
-class MonthlyMeterReading(Document):
+class zzMonthlyMeterReading(Document):
 
 	# Get Month last date From Month
 	@frappe.whitelist()
