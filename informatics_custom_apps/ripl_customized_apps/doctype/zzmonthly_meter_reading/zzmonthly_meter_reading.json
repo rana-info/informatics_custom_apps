@@ -1,7 +1,7 @@
 {
  "actions": [],
  "allow_import": 1,
- "autoname": "autoincrement",
+ "autoname": "MMR.####",
  "creation": "2025-10-29 12:27:06.189649",
  "default_view": "List",
  "doctype": "DocType",
@@ -65,11 +65,11 @@
    "link_fieldname": "ref_docname"
   }
  ],
- "modified": "2025-10-29 12:27:15.699077",
+ "modified": "2025-10-29 13:04:42.478378",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "zzMonthly Meter Reading",
- "naming_rule": "Autoincrement",
+ "naming_rule": "By \"Naming Series\" field",
  "owner": "Administrator",
  "permissions": [
   {

@@ -110,7 +110,7 @@ class zzMonthlyMeterReading(Document):
 			current_year = getattr(self, "year", None) or datetime.now().year
 
 			# first day of the current month (used to pick last log before this date)
-			first_day_of_current_month = date(current_year, current_month_number, 1)
+			# first_day_of_current_month = date(current_year, current_month_number, 1)
 
 			for q in quarter_list:
 				# Get active employee linked to this quarter
@@ -129,7 +129,7 @@ class zzMonthlyMeterReading(Document):
 						"employee": emp,
 						"quarter": q.get("name"),
 						"is_cancelled": 0,
-						"posting_date": ("<", first_day_of_current_month)
+						# "posting_date": ("<", first_day_of_current_month)
 					},
 					["employee", "opening", "consumed_units", "quarter", "posting_date"],
 					order_by="posting_date desc"
