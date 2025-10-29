@@ -2,7 +2,7 @@
  "actions": [],
  "allow_import": 1,
  "autoname": "autoincrement",
- "creation": "2025-10-29 11:44:32.379347",
+ "creation": "2025-10-29 12:07:10.057833",
  "default_view": "List",
  "doctype": "DocType",
  "editable_grid": 1,
@@ -13,7 +13,6 @@
   "section_break_ypelm",
   "get_data",
   "meter_reading",
-  "amended_from",
   "amended_from"
  ],
  "fields": [
@@ -43,25 +42,27 @@
    "fieldname": "meter_reading",
    "fieldtype": "Table",
    "label": "Meter Reading",
-   "options": "Meter Reading"
+   "options": "zzMeter Reading"
   },
   {
    "fieldname": "amended_from",
    "fieldtype": "Link",
    "label": "Amended From",
    "no_copy": 1,
-   "options": "Monthly Meter Reading",
+   "options": "zzMonthly Meter Reading",
    "print_hide": 1,
-   "read_only": 1
+   "read_only": 1,
+   "search_index": 1
   },
   {
    "fieldname": "amended_from",
    "fieldtype": "Link",
    "label": "Amended From",
    "no_copy": 1,
-   "options": "Monthly Meter Reading",
+   "options": "zzMonthly Meter Reading",
    "print_hide": 1,
-   "read_only": 1
+   "read_only": 1,
+   "search_index": 1
   }
  ],
  "grid_page_length": 50,
@@ -74,7 +75,7 @@
    "link_fieldname": "ref_docname"
   }
  ],
- "modified": "2025-10-29 11:44:32.379347",
+ "modified": "2025-10-29 12:07:23.662558",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "zzMonthly Meter Reading",
