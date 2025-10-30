@@ -12,7 +12,10 @@ frappe.ui.form.on("zzProduction Overview", {
                     },
                     callback: function(r) {
                         frm.reload_doc();
-                        frappe.msgprint("Values calculated successfully.");
+                        frappe.show_alert({
+                        message: __('Fields Calculated Successfully, Kindly Check Details'),
+                        indicator: 'Green'
+                    },7);
                     }
                 });
             }).addClass("btn-primary");

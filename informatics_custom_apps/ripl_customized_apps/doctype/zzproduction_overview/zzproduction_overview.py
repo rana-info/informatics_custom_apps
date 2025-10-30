@@ -81,50 +81,42 @@ def calculate_values(docname):
         doc.steam_cost_per_bl = 0
 
     # Total Capacity & Total Actual Production Till Date
+    # Find the latest previous entry for same plant (confirmed, submitted)
     if not doc.opening_entry:
-        month_start = get_first_day(doc.date)
-        month_end = get_last_day(doc.date)
-        print("--------------->month_start",month_start)
-        print("--------------->month_end",month_end)
-        # Sum of target capacity for the month for the same plant
-        total_capacity = frappe.db.sql("""
-            SELECT SUM(target_production)
+        prev_total = frappe.db.sql("""
+            SELECT total_capacity_till_date, total_actual_production_till_date
             FROM `tabzzProduction Overview`
             WHERE plant = %s
-              AND date BETWEEN %s AND %s
-              AND name != %s
-              AND docstatus=1
-        """, (doc.plant, month_start, month_end, doc.name))
-        print("--------------->total_capacity",total_capacity)
+            AND date < %s
+            AND docstatus = 1
+            ORDER BY date DESC
+            LIMIT 1
+        """, (doc.plant, doc.date))
 
-        # Sum of total actual production for month
-        total_production1 = frappe.db.sql("""
-            SELECT SUM(total_production)
-            FROM `tabzzProduction Overview`
-            WHERE plant = %s
-              AND date BETWEEN %s AND %s
-              AND name != %s
-              AND docstatus=1
-        """, (doc.plant, month_start, month_end, doc.name))
-        print("--------------->total_production1",total_production1)
+        if prev_total:
+            prev_capacity, prev_actual = prev_total[0]
+            doc.total_capacity_till_date = flt(prev_capacity) + flt(doc.target_production)
+            doc.total_actual_production_till_date = flt(prev_actual) + flt(doc.total_production)
+        else:
+            # In case user forgot to create opening entry, fallback gracefully
+            doc.total_capacity_till_date = flt(doc.target_production)
+            doc.total_actual_production_till_date = flt(doc.total_production)
 
-        total_capacity = flt(total_capacity[0][0]) if total_capacity else 0
-        total_production = flt(total_production1[0][0]) if total_production1 else 0
-        print("--------------->total_capacity",total_capacity)
-
-        doc.total_capacity_till_date = total_capacity + flt(doc.target_production)
-        doc.total_actual_production_till_date = total_production + flt(doc.total_production)
         
 	#Capacity Utilization
-    doc.capacity_utilization=doc.total_actual_production_till_date/doc.total_capacity_till_date
+    if doc.total_capacity_till_date and doc.total_actual_production_till_date:
+        doc.capacity_utilization=(doc.total_actual_production_till_date/doc.total_capacity_till_date)*100
     #Loss Calculation
     doc.loss_in_month=(doc.total_capacity_till_date-doc.total_actual_production_till_date)*5
     #AVG Per day loss
-    total_days_in_month = get_last_day(doc.date).day
-    if total_days_in_month:
-        doc.avg_per_day_loss = doc.loss_in_month / total_days_in_month
+    current_day_of_month = doc.date.day
+    print("---------------------------->current_day_of_month", current_day_of_month)
+
+    if current_day_of_month:
+        doc.avg_per_day_loss = flt(doc.loss_in_month) / current_day_of_month
     else:
         doc.avg_per_day_loss = 0
+
     doc.save(ignore_permissions=True)
-    frappe.msgprint("Values calculated and updated successfully.")
+   
     return doc.as_dict()

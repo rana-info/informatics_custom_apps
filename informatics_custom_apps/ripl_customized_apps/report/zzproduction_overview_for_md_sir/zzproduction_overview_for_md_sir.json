@@ -1,0 +1,29 @@
+{
+ "add_total_row": 0,
+ "add_translate_data": 0,
+ "columns": [],
+ "creation": "2025-10-27 12:04:03.341178",
+ "disabled": 0,
+ "docstatus": 0,
+ "doctype": "Report",
+ "filters": [],
+ "idx": 0,
+ "is_standard": "Yes",
+ "letter_head": "Rana Group",
+ "letterhead": null,
+ "modified": "2025-10-27 12:04:03.341178",
+ "modified_by": "Administrator",
+ "module": "RIPL Customized Apps",
+ "name": "zzProduction Overview For MD Sir",
+ "owner": "Administrator",
+ "prepared_report": 0,
+ "ref_doctype": "Stock Entry",
+ "report_name": "zzProduction Overview For MD Sir",
+ "report_type": "Script Report",
+ "roles": [
+  {
+   "role": "Management"
+  }
+ ],
+ "timeout": 0
+}

@@ -9,6 +9,7 @@
  "field_order": [
   "section_break_usmr",
   "inputs_column",
+  "opening_entry",
   "date",
   "plant",
   "ethanol",
@@ -24,7 +25,6 @@
   "steam_through_turbineton",
   "steam_fuel_rationcombine",
   "steam_cost_per_ton",
-  "opening_entry",
   "column_break_htli",
   "total_production",
   "capacity_achieved",
@@ -155,8 +155,9 @@
   },
   {
    "fieldname": "capacity_achieved",
-   "fieldtype": "Float",
-   "label": "Capacity Achieved %",
+   "fieldtype": "Percent",
+   "label": "Capacity Achieved ",
+   "precision": "0",
    "read_only": 1
   },
   {
@@ -164,23 +165,26 @@
    "fieldname": "total_capacity_till_date",
    "fieldtype": "Float",
    "label": "Total Capacity Month Till Date",
+   "mandatory_depends_on": "eval:doc.opening_entry==1;",
    "non_negative": 1,
-   "read_only": 1
+   "read_only_depends_on": "eval:doc.opening_entry==0;"
   },
   {
    "default": "0",
    "fieldname": "total_actual_production_till_date",
    "fieldtype": "Float",
    "label": "Total Production Month Till Date",
+   "mandatory_depends_on": "eval:doc.opening_entry==1;",
    "non_negative": 1,
-   "read_only": 1
+   "read_only_depends_on": "eval:doc.opening_entry==0;"
   },
   {
    "default": "0",
    "fieldname": "capacity_utilization",
-   "fieldtype": "Float",
+   "fieldtype": "Percent",
    "label": "Capacity Utilization",
    "non_negative": 1,
+   "precision": "2",
    "read_only": 1
   },
   {
@@ -201,6 +205,7 @@
    "fieldname": "avg_bolier_load_per_hour",
    "fieldtype": "Float",
    "label": "Steam Avg Bolier Load per Hour",
+   "precision": "2",
    "read_only": 1
   },
   {
@@ -228,7 +233,7 @@
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2025-10-29 19:46:48.880993",
+ "modified": "2025-10-30 15:25:13.450856",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "zzProduction Overview",
