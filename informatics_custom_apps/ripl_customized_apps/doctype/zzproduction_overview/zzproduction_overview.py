@@ -20,7 +20,8 @@ class zzProductionOverview(Document):
                 {
                     "date": self.date,
                     "plant": self.plant,
-                    "name": ["!=", self.name]
+                    "name": ["!=", self.name],
+                    "docstatus":1
                 }
             )
             if existing:
