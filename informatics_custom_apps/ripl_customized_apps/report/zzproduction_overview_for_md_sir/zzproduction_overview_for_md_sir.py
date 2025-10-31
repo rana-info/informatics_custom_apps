@@ -109,20 +109,22 @@ def execute(filters=None):
     # -------------------------
 
     def calc_special_cost(pair):
-        prds_turbine = 0
-        steam_cost_ton = 0
+        #Require BOTH plants to exist
+        if not all(p in rec_map for p in pair):
+            return 0.00
 
-        for p in pair:
-            if p in rec_map:
-                prds_turbine = flt(rec_map[p].steam_through_prdston) + flt(rec_map[p].steam_through_turbineton)
-                steam_cost_ton = flt(rec_map[p].steam_cost_per_ton)
-                break
+        # Take values from either plant (since cost params are shared for the pair)
+        p = pair[0]
+        prds_turbine = flt(rec_map[p].steam_through_prdston) + flt(rec_map[p].steam_through_turbineton)
+        steam_cost_ton = flt(rec_map[p].steam_cost_per_ton)
 
-        total_prod = sum(flt(rec_map[p].total_production) for p in pair if p in rec_map)
+        total_prod = sum(flt(rec_map[p].total_production) for p in pair)
 
         if total_prod > 0 and prds_turbine > 0 and steam_cost_ton > 0:
             return flt((prds_turbine * steam_cost_ton) / total_prod, 2)
+
         return 0.00
+
 
     # Pair 1: Louhka
     loukha_pair = ["RSL Louhka", "ETH Louhka"]

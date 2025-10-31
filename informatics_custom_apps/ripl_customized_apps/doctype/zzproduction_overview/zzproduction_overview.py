@@ -74,7 +74,7 @@ def calculate_values(docname):
     ) / 24
 
     # Steam Cost Per BL
-    if doc.total_production and doc.plant not in ["RSL Louhka","ETH Louhka"]:
+    if doc.total_production and doc.plant not in ["RSL Louhka","ETH Louhka","Karimganj Biofuels","RSL Belwara"]:
         doc.steam_cost_per_bl = (
             (flt(doc.steam_through_prdston) + flt(doc.steam_through_turbineton)) * flt(doc.steam_cost_per_ton)
         ) / doc.total_production
