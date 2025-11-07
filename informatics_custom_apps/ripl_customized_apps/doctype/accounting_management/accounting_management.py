@@ -64,7 +64,11 @@ class AccountingManagement(Document):
         if items:
             for i in items:
                 self.update_child(i)
-
+        #Taxes child update
+        taxes = getattr(doc, "taxes", None)
+        if taxes:
+            for t in taxes:
+                self.update_child(t)
         # Update GL Entries
         self.update_gl_entries(voucher_no)
 
@@ -79,16 +83,20 @@ class AccountingManagement(Document):
             doc.db_set("cost_center", self.cost_center, update_modified=False)
 
     def update_child(self, child):
-        if self.plant:
+        if self.plant and hasattr(child, "branch"):
             child.db_set("branch", self.plant, update_modified=False)
-        if self.cost_center:
+        if self.cost_center and hasattr(child, "cost_center"):
             child.db_set("cost_center", self.cost_center, update_modified=False)
-        if self.segment:
+        if self.segment and hasattr(child, "segment"):
             child.db_set("segment", self.segment, update_modified=False)
-        if self.section:
+        if self.section and hasattr(child, "section"):
             child.db_set("section", self.section, update_modified=False)
-        if self.expense_account and child.expense_account == self.wrong_expense_account:
-            child.db_set("expense_account", self.expense_account, update_modified=False)
+
+        # Change expense_account only if field exists in child doctype
+        if hasattr(child, "expense_account") and self.expense_account and self.wrong_expense_account:
+            if child.expense_account == self.wrong_expense_account:
+                child.db_set("expense_account", self.expense_account, update_modified=False)
+
 
     def update_gl_entries(self, voucher_no):
         doc_list = frappe.get_all("GL Entry", filters={"voucher_no": voucher_no}, fields=["name"])

@@ -58,6 +58,12 @@ app_license = "mit"
 doctype_js = {
     "Loan": "public/js/loan_custom.js"
 }
+# doc_events = {
+#     "Leave Application": {
+#         "on_submit": "informatics_custom_apps.api.update_attendance_for_half_day"
+#     }
+# }
+
 
 # application home page (will override Website Settings)
 # home_page = "login"
