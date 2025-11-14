@@ -42,13 +42,13 @@ def execute(filters=None):
 			"employee_name": ss.employee_name,
 			"data_of_joining": doj_map.get(ss.employee),
 			"branch": ss.branch,
+			"payment_days": ss.payment_days,
 			"department": ss.department,
 			"designation": ss.designation,
 			"company": ss.company,
 			"start_date": ss.start_date,
 			"end_date": ss.end_date,
 			"leave_without_pay": ss.leave_without_pay,
-			"payment_days": ss.payment_days,
 			"currency": currency or company_currency,
 			"total_loan_repayment": ss.total_loan_repayment,
 		}
@@ -136,6 +136,12 @@ def get_columns(earning_types, ded_types):
 			"width": 80,
 		},
 		{
+			"label": _("Payment Days"),
+			"fieldname": "payment_days",
+			"fieldtype": "Float",
+			"width": 120,
+		},
+		{
 			"label": _("Branch"),
 			"fieldname": "branch",
 			"fieldtype": "Link",
@@ -180,12 +186,6 @@ def get_columns(earning_types, ded_types):
 			"fieldname": "leave_without_pay",
 			"fieldtype": "Float",
 			"width": 50,
-		},
-		{
-			"label": _("Payment Days"),
-			"fieldname": "payment_days",
-			"fieldtype": "Float",
-			"width": 120,
 		},
 	]
 
