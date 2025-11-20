@@ -196,6 +196,7 @@ def get_columns(filters: Filters) -> List[Dict]:
 			]
 		)
 	else:
+		columns.append({"label": _("Date of Joining"), "fieldname": "doj", "fieldtype": "Data", "width": 120})
 		columns.append({"label": _("Shift"), "fieldname": "shift", "fieldtype": "Data", "width": 120})
 		columns.append({"label":_("Total Paid Days"),"fieldname":"total_paid_days","fieldtype":"Float","width":100})
 		columns.extend(get_columns_for_days(filters))
@@ -337,6 +338,7 @@ def get_employee_related_details(filters: Filters) -> Tuple[Dict, List]:
 		.select(
 			Employee.name,
 			Employee.employee_name,
+			Employee.date_of_joining,
 			Employee.designation,
 			Employee.grade,
 			Employee.department,
@@ -491,6 +493,7 @@ def get_rows(
 
             merged_row = {
                 "employee": employee,
+				"doj": details.date_of_joining,
                 "employee_name": details.employee_name,
                 "total_paid_days": tpd.get("total_paid_days"),
                 "shift": ", ".join(
