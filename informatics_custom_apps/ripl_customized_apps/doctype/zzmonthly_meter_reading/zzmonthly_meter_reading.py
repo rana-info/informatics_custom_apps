@@ -114,7 +114,7 @@ class zzMonthlyMeterReading(Document):
 
 			for q in quarter_list:
 				# Get active employee linked to this quarter
-				emp = frappe.db.get_value("Employee", {"quarter": q.get("name"), "status": "Active"}, ["name"])
+				emp = frappe.db.get_value("Employee", {"quarter": q.get("name"), "status": "Active","date_of_joining":("<",self.date)}, ["name"])
 
 				if not emp:
 					# No active employee in this quarter → skip
