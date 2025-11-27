@@ -42,7 +42,7 @@
    "fieldname": "meter_reading",
    "fieldtype": "Table",
    "label": "Meter Reading",
-   "options": "Meter Reading"
+   "options": "zzMeter Reading"
   },
   {
    "fieldname": "amended_from",
@@ -65,7 +65,7 @@
    "link_fieldname": "ref_docname"
   }
  ],
- "modified": "2025-10-29 13:04:42.478378",
+ "modified": "2025-11-27 12:25:18.455859",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "zzMonthly Meter Reading",

@@ -44,7 +44,7 @@
    "fieldname": "quarter",
    "fieldtype": "Link",
    "label": "Quarter",
-   "options": "Quarter Master",
+   "options": "zzQuarter Master",
    "read_only": 1
   },
   {
@@ -99,7 +99,7 @@
  "in_create": 1,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-10-29 13:19:52.994856",
+ "modified": "2025-11-27 12:37:49.784590",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "zzMeter Reading Log",
