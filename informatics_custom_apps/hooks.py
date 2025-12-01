@@ -157,7 +157,10 @@ doctype_js = {
 # Scheduled Tasks
 # ---------------
 
-# scheduler_events = {
+scheduler_events = {
+"daily_long": [
+		"informatics_custom_apps.ripl_customized_apps.doctype.zzdeputation_request.zzdeputation_request.attendance_request_created"
+	]
 # 	"all": [
 # 		"informatics_custom_apps.tasks.all"
 # 	],
@@ -173,7 +176,7 @@ doctype_js = {
 # 	"monthly": [
 # 		"informatics_custom_apps.tasks.monthly"
 # 	],
-# }
+}
 
 # Testing
 # -------

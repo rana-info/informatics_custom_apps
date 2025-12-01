@@ -29,6 +29,12 @@ frappe.ui.form.on('zzDeputation Request', {
         frm.set_value("to_date", "");
     }
     },
+	to_plant: function(frm) {
+		if (frm.doc.to_plant == frm.doc.plant){
+			frappe.msgprint("To Plant cannot be same as From Plant");
+			frm.set_value("to_plant", "");
+		}
+	},
 	plant: function(frm) {
 		frm.set_query("employee", function() {
 			return {
