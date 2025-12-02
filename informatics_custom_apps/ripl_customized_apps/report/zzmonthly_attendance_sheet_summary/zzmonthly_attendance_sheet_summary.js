@@ -53,18 +53,6 @@ frappe.query_reports["zzMonthly Attendance Sheet Summary"] = {
 			reqd: 1,
 		},
 		{
-			fieldname: "group_by",
-			label: __("Group By"),
-			fieldtype: "Select",
-			options: ["", "Branch", "Grade", "Department", "Designation"],
-		},
-		{
-			fieldname: "summarized_view",
-			label: __("Summarized View"),
-			fieldtype: "Check",
-			default: 0,
-		},
-		{
 			fieldname: "branch",
 			label: __("Branch"),
 			fieldtype: "Link",
@@ -78,6 +66,24 @@ frappe.query_reports["zzMonthly Attendance Sheet Summary"] = {
 					},
 				};
 			},
+		},
+		{
+			fieldname: "group_by",
+			label: __("Group By"),
+			fieldtype: "Select",
+			options: ["", "Branch", "Grade", "Department", "Designation"],
+		},
+		{
+			fieldname: "summarized_view",
+			label: __("Summarized View"),
+			fieldtype: "Check",
+			default: 0,
+		},
+		{
+			"fieldname": "only_duplicates",
+			"label": "Show Employees With Duplicate Attendance",
+			"fieldtype": "Check",
+			"default": 0
 		},
 		{
 			fieldname: "view_details_on_leave_type",
@@ -107,20 +113,26 @@ frappe.query_reports["zzMonthly Attendance Sheet Summary"] = {
 		});
 	},
 	formatter: function (value, row, column, data, default_formatter) {
-		value = default_formatter(value, row, column, data);
-		const summarized_view = frappe.query_report.get_filter_value("summarized_view");
-		const group_by = frappe.query_report.get_filter_value("group_by");
+    value = default_formatter(value, row, column, data);
 
-		if (!summarized_view) {
-			if ((group_by && column.colIndex > 3) || (!group_by && column.colIndex > 2)) {
-				if (value == "P" || value == "WFH")
-					value = "<span style='color:green'>" + value + "</span>";
-				else if (value == "A") value = "<span style='color:red'>" + value + "</span>";
-				else if (value == "HD") value = "<span style='color:orange'>" + value + "</span>";
-				else if (value == "L") value = "<span style='color:#318AD8'>" + value + "</span>";
-			}
-		}
+    const summarized_view = frappe.query_report.get_filter_value("summarized_view");
+    const group_by = frappe.query_report.get_filter_value("group_by");
 
-		return value;
+    if (data.is_duplicate) {
+       if (column.fieldname === "employee" || column.fieldname === "employee_name") {
+        return `<span style="color:red; font-weight:bold">${value}</span>`;
+    }
+    }
+    if (!summarized_view) {
+        if ((group_by && column.colIndex > 3) || (!group_by && column.colIndex > 2)) {
+            if (value == "P" || value == "WFH")
+                value = "<span style='color:green'>" + value + "</span>";
+            else if (value == "A") value = "<span style='color:red'>" + value + "</span>";
+            else if (value == "HD") value = "<span style='color:orange'>" + value + "</span>";
+            else if (value == "L") value = "<span style='color:#318AD8'>" + value + "</span>";
+        }
+    }
+
+    return value;
 	},
 }

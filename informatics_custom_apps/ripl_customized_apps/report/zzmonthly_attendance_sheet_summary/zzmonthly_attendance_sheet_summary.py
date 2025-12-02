@@ -50,7 +50,7 @@ def execute(filters: Optional[Filters] = None) -> Tuple:
 		return columns, [], None, None
 	
 	message = get_message() if not filters.summarized_view else ""
-	message2= get_message_for_abbr() if not filters.summarised_view else ""
+	message2= get_message_for_abbr() if not filters.summarized_view else ""
 	combined_message = f"{message}<br>{message2}"
 	chart = get_chart_data(attendance_map, filters) if filters.view_chart_details else None
 	
@@ -80,7 +80,7 @@ def execute(filters: Optional[Filters] = None) -> Tuple:
 # 		return columns, [], None, None
 
 # 	message = get_message() if not filters.summarized_view else ""
-# 	message2= get_message_for_abbr() if not filters.summarised_view else ""
+# 	message2= get_message_for_abbr() if not filters.summarized_view else ""
 # 	combined_message = f"{message}<br>{message2}"
 # 	chart = get_chart_data(attendance_map, filters) if filters.view_chart_details else None
 	
@@ -236,30 +236,71 @@ def get_total_days_in_month(filters: Filters) -> int:
 
 
 def get_data(filters: Filters, attendance_map: Dict) -> List[Dict]:
-	employee_details, group_by_param_values = get_employee_related_details(filters)
-	holiday_map = get_holiday_map(filters)
-	
-	data = []
+    employee_details, group_by_param_values = get_employee_related_details(filters)
+    holiday_map = get_holiday_map(filters)
+    
+    data = []
 
-	if filters.group_by:
-		group_by_column = frappe.scrub(filters.group_by)
+    if filters.group_by:
+        group_by_column = frappe.scrub(filters.group_by)
 
-		for value in group_by_param_values:
-			if not value:
-				continue
+        for value in group_by_param_values:
+            if not value:
+                continue
 
-			records = get_rows(employee_details[value], filters, holiday_map, attendance_map)
-			print("Records:--->",records)
+            records = get_rows(employee_details[value], filters, holiday_map, attendance_map)
 
-			if records:
-				data.append({group_by_column: frappe.bold(value)})
-				data.extend(records)
-	else:
-		data = get_rows(employee_details, filters, holiday_map, attendance_map)
+            if records:
+                data.append({group_by_column: frappe.bold(value)})
+                data.extend(records)
+    else:
+        data = get_rows(employee_details, filters, holiday_map, attendance_map)
 
-		print("data:------>",data)
+    # ------------------------------------------------------------------
+    # MARK EMPLOYEES WHO HAVE MULTIPLE ATTENDANCE FOR SAME DATE
+    # ------------------------------------------------------------------
 
-	return data
+    year = int(filters.year)
+    month = int(filters.month)
+
+    start_date = f"{year}-{month:02d}-01"
+    end_day = monthrange(year, month)[1]
+    end_date = f"{year}-{month:02d}-{end_day:02d}"
+
+    # Find duplicate attendance within date range
+    duplicate_employees = set()
+
+    dup_list = frappe.db.sql("""
+        SELECT employee, attendance_date
+        FROM `tabAttendance`
+        WHERE 
+            docstatus = 1
+            AND attendance_date BETWEEN %(start_date)s AND %(end_date)s
+        GROUP BY employee, attendance_date
+        HAVING COUNT(*) > 1
+    """, {
+        "start_date": start_date,
+        "end_date": end_date
+    }, as_dict=1)
+
+    # Collect employees that have duplicates
+    for d in dup_list:
+        duplicate_employees.add(d.employee)
+
+    # Add is_duplicate flag to rows in this month only
+    for row in data:
+        if row.get("employee") in duplicate_employees:
+            row["is_duplicate"] = 1
+        else:
+            row["is_duplicate"] = 0
+	# If user wants to filter only duplicate attendance employees
+    if filters.get("only_duplicates"):
+        data = [row for row in data if row.get("is_duplicate") == 1]
+
+    # ------------------------------------------------------------------
+
+    return data
+
 
 
 def get_attendance_map(filters: Filters) -> Dict:
@@ -493,7 +534,7 @@ def get_rows(
 
             merged_row = {
                 "employee": employee,
-				"doj": details.date_of_joining,
+				"doj": getdate(details.date_of_joining).strftime("%d-%m-%Y"),
                 "employee_name": details.employee_name,
                 "total_paid_days": tpd.get("total_paid_days"),
                 "shift": ", ".join(
