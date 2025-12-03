@@ -16,7 +16,7 @@
  "module": "RIPL Customized Apps",
  "name": "zzMonthly Attendance Sheet Summary",
  "owner": "Administrator",
- "prepared_report": 0,
+ "prepared_report": 1,
  "ref_doctype": "Attendance",
  "report_name": "zzMonthly Attendance Sheet Summary",
  "report_type": "Script Report",
