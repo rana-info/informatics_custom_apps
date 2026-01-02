@@ -71,6 +71,13 @@ class AccountingManagement(Document):
                 self.update_child(t)
         # Update GL Entries
         self.update_gl_entries(voucher_no)
+        # Update Stock Ledger Entries for Purchase Receipt
+        if doctype == "Purchase Receipt":
+            self.update_stock_ledger_entries(voucher_no)
+        # Update Payment Ledger Entries for Purchase Invoice
+        if doctype == "Purchase Invoice":
+            self.update_purchase_invoice_payment_ledger_entries(voucher_no)
+
 
     def update_header(self, doc, doctype):
         if self.plant:
@@ -96,6 +103,14 @@ class AccountingManagement(Document):
         if hasattr(child, "expense_account") and self.expense_account and self.wrong_expense_account:
             if child.expense_account == self.wrong_expense_account:
                 child.db_set("expense_account", self.expense_account, update_modified=False)
+        # Change income_account only if field exists in child doctype
+        if hasattr(child, "income_account") and self.correct_income_account and self.wrong_income_account:
+            if child.income_account == self.wrong_income_account:
+                child.db_set(
+                    "income_account",
+                    self.correct_income_account,
+                    update_modified=False
+                )
 
 
     def update_gl_entries(self, voucher_no):
@@ -124,6 +139,20 @@ class AccountingManagement(Document):
                     gl_entry.db_set("account", self.correct_payable_account, update_modified=False)
                 if gl_entry.against == self.wrong_payable_account:
                     gl_entry.db_set("against", self.correct_payable_account, update_modified=False)
+            # Income account replacement
+            if self.correct_income_account and self.wrong_income_account:
+                if gl_entry.account == self.wrong_income_account:
+                    gl_entry.db_set(
+                        "account",
+                        self.correct_income_account,
+                        update_modified=False
+                    )
+                if gl_entry.against == self.wrong_income_account:
+                    gl_entry.db_set(
+                        "against",
+                        self.correct_income_account,
+                        update_modified=False
+                    )
 
     # ---------------- Additional payable-account update for Payment Entry ----------------
     def update_payment_entry_payables(self, voucher_no, correct_account, wrong_account):
@@ -144,7 +173,7 @@ class AccountingManagement(Document):
                 ref.db_set("account", correct_account, update_modified=False)
 
         self.update_payment_ledger_entry(voucher_no, correct_account, wrong_account)
-        
+    # ---------------- Additional payable-account update for Purchase Invoice ----------------     
     def update_purchase_invoice_payables(self, voucher_no, correct_account, wrong_account):
         if not frappe.db.exists("Purchase Invoice", voucher_no):
             return
@@ -156,7 +185,7 @@ class AccountingManagement(Document):
             doc.db_set("credit_to", correct_account, update_modified=False)
 
         self.update_payment_ledger_entry(voucher_no, correct_account, wrong_account)
-
+    #Sales Invoice Payable Account Update
     def update_sales_invoice_payables(self, voucher_no, correct_account, wrong_account):
         if not frappe.db.exists("Sales Invoice", voucher_no):
             return
@@ -168,6 +197,7 @@ class AccountingManagement(Document):
             doc.db_set("debit_to", correct_account, update_modified=False)
 
         self.update_payment_ledger_entry(voucher_no, correct_account, wrong_account)
+    # ---------------- Update Payment Ledger Entry ----------------
     def update_payment_ledger_entry(self,voucher_no,correct_account,wrong_account):
         # Update Payment Ledger Entry separately
         ple_list = frappe.get_all(
@@ -177,3 +207,67 @@ class AccountingManagement(Document):
             ple = frappe.get_doc("Payment Ledger Entry", d.name)
             if ple.account == wrong_account:
                 ple.db_set("account", correct_account, update_modified=False)
+    # ---------------- Update Stock Ledger Entry only for Purchase Receipt----------------
+    def update_stock_ledger_entries(self, voucher_no):
+        if not any([self.plant, self.cost_center, self.segment, self.section]):
+            return
+
+        try:
+            sle_list = frappe.get_all(
+                "Stock Ledger Entry",
+                filters={
+                    "voucher_type": "Purchase Receipt",
+                    "voucher_no": voucher_no
+                },
+                fields=["name"]
+            )
+
+            for d in sle_list:
+                sle = frappe.get_doc("Stock Ledger Entry", d.name)
+
+                if self.plant and hasattr(sle, "branch"):
+                    sle.db_set("branch", self.plant, update_modified=False)
+                if self.cost_center and hasattr(sle, "cost_center"):
+                    sle.db_set("cost_center", self.cost_center, update_modified=False)
+                if self.segment and hasattr(sle, "segment"):
+                    sle.db_set("segment", self.segment, update_modified=False)
+                if self.section and hasattr(sle, "section"):
+                    sle.db_set("section", self.section, update_modified=False)
+
+        except Exception as e:
+            frappe.log_error(
+                title="AccountingManagement: SLE Update Failed",
+                message=f"Voucher: {voucher_no}\nError: {frappe.get_traceback()}"
+            )
+    # ---------------- Update Payment Ledger Entry for Purchase Invoice ----------------
+    def update_purchase_invoice_payment_ledger_entries(self, voucher_no):
+        if not any([self.plant, self.cost_center, self.segment, self.section]):
+            return
+
+        try:
+            ple_list = frappe.get_all(
+                "Payment Ledger Entry",
+                filters={
+                    "voucher_type": "Purchase Invoice",
+                    "voucher_no": voucher_no
+                },
+                fields=["name"]
+            )
+
+            for d in ple_list:
+                ple = frappe.get_doc("Payment Ledger Entry", d.name)
+
+                if self.plant and hasattr(ple, "branch"):
+                    ple.db_set("branch", self.plant, update_modified=False)
+                if self.cost_center and hasattr(ple, "cost_center"):
+                    ple.db_set("cost_center", self.cost_center, update_modified=False)
+                if self.segment and hasattr(ple, "segment"):
+                    ple.db_set("segment", self.segment, update_modified=False)
+                if self.section and hasattr(ple, "section"):
+                    ple.db_set("section", self.section, update_modified=False)
+
+        except Exception:
+            frappe.log_error(
+                title="AccountingManagement: PI Payment Ledger Update Failed",
+                message=f"Voucher: {voucher_no}\n{frappe.get_traceback()}"
+            )

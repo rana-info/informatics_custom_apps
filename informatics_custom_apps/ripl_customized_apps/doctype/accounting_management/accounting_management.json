@@ -15,6 +15,8 @@
   "section",
   "expense_account",
   "wrong_expense_account",
+  "wrong_income_account",
+  "correct_income_account",
   "correct_payable_account",
   "wrong_payable_account",
   "total_vouchers",
@@ -24,6 +26,7 @@
   "segment_update",
   "section_update",
   "expense_account_update",
+  "income_account_update",
   "payable_account_update",
   "voucher_numbers",
   "amended_from"
@@ -170,13 +173,36 @@
    "label": "Total Vouchers",
    "non_negative": 1,
    "read_only": 1
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.doctype_name==\"Sales Invoice\";",
+   "fieldname": "income_account_update",
+   "fieldtype": "Check",
+   "label": "Income Account Update"
+  },
+  {
+   "depends_on": "eval:doc.income_account_update;",
+   "fieldname": "wrong_income_account",
+   "fieldtype": "Link",
+   "label": "Wrong Income Account",
+   "mandatory_depends_on": "eval:doc.income_account_update;",
+   "options": "Account"
+  },
+  {
+   "depends_on": "eval:doc.income_account_update;",
+   "fieldname": "correct_income_account",
+   "fieldtype": "Link",
+   "label": "Correct Income Account",
+   "mandatory_depends_on": "eval:doc.income_account_update;",
+   "options": "Account"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2025-10-09 17:02:41.573527",
+ "modified": "2026-01-02 17:30:00.465249",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "Accounting Management",
