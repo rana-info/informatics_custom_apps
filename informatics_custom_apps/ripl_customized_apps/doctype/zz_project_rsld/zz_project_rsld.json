@@ -1,0 +1,175 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "ZPR.#####",
+ "creation": "2026-01-03 15:08:57.383793",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "section_break_cpps",
+  "task_id",
+  "task_short_name",
+  "task_status",
+  "column_break_olwy",
+  "task_start_date",
+  "task_target_date",
+  "task_completion_date",
+  "owner_details_section",
+  "task_owner",
+  "column_break_gcjx",
+  "team_leader",
+  "team_size",
+  "section_break_aiei",
+  "sub_task",
+  "section_break_frjm",
+  "task_percentage",
+  "column_break_cyhw",
+  "target_over_days"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_break_cpps",
+   "fieldtype": "Section Break",
+   "label": "Task Details"
+  },
+  {
+   "fieldname": "task_id",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Task ID",
+   "read_only": 1,
+   "set_only_once": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "task_short_name",
+   "fieldtype": "Data",
+   "label": "Task Short Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "task_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Task Status",
+   "options": "Open\nIn Progress\nCompleted\nPostponed\nHalted",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_olwy",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "task_start_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Task Start Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "task_target_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Task Target Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "task_completion_date",
+   "fieldtype": "Date",
+   "label": "Task Completion Date"
+  },
+  {
+   "fieldname": "owner_details_section",
+   "fieldtype": "Section Break",
+   "label": "Owner Details"
+  },
+  {
+   "fieldname": "task_owner",
+   "fieldtype": "Link",
+   "label": "Task Owner",
+   "options": "Employee",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_gcjx",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "team_leader",
+   "fieldtype": "Link",
+   "label": "Team Leader",
+   "options": "Employee",
+   "reqd": 1
+  },
+  {
+   "fieldname": "team_size",
+   "fieldtype": "Int",
+   "label": "Team Size",
+   "non_negative": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_aiei",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "sub_task",
+   "fieldtype": "Table",
+   "label": "Sub Task",
+   "options": "zz Project RSLD Sub-Task Detail",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_frjm",
+   "fieldtype": "Section Break"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "task_percentage",
+   "fieldtype": "Percent",
+   "in_list_view": 1,
+   "label": "Task Percentage",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_cyhw",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "target_over_days",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Target Over Days",
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-01-03 18:03:30.035504",
+ "modified_by": "Administrator",
+ "module": "RIPL Customized Apps",
+ "name": "zz Project RSLD",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
