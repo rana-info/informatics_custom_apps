@@ -8,6 +8,7 @@
  "field_order": [
   "section_break_cpps",
   "task_id",
+  "department",
   "task_short_name",
   "task_status",
   "column_break_olwy",
@@ -16,8 +17,10 @@
   "task_completion_date",
   "owner_details_section",
   "task_owner",
+  "owner_name",
   "column_break_gcjx",
   "team_leader",
+  "leader_name",
   "team_size",
   "section_break_aiei",
   "sub_task",
@@ -35,7 +38,7 @@
   {
    "fieldname": "task_id",
    "fieldtype": "Data",
-   "in_list_view": 1,
+   "hidden": 1,
    "label": "Task ID",
    "read_only": 1,
    "set_only_once": 1,
@@ -76,7 +79,9 @@
   {
    "fieldname": "task_completion_date",
    "fieldtype": "Date",
-   "label": "Task Completion Date"
+   "label": "Task Completion Date",
+   "mandatory_depends_on": "eval:doc.task_status==\"Completed\";",
+   "read_only_depends_on": "eval:doc.task_percentage!=100;"
   },
   {
    "fieldname": "owner_details_section",
@@ -139,14 +144,36 @@
    "fieldname": "target_over_days",
    "fieldtype": "Int",
    "in_list_view": 1,
-   "label": "Target Over Days",
+   "label": "Target  Days",
    "read_only": 1
+  },
+  {
+   "fetch_from": "task_owner.employee_name",
+   "fieldname": "owner_name",
+   "fieldtype": "Data",
+   "label": "Owner Name",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "team_leader.employee_name",
+   "fieldname": "leader_name",
+   "fieldtype": "Data",
+   "label": "Leader Name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "department",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Department",
+   "options": "\nCivil\nEngineering\nProcess\nOther",
+   "reqd": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-01-03 18:03:30.035504",
+ "modified": "2026-01-06 12:23:52.902531",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "zz Project RSLD",

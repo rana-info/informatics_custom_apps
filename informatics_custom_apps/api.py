@@ -5,9 +5,12 @@ from frappe import _
 @frappe.whitelist()
 def reopen_loan(loan_name, reason):
     loan = frappe.get_doc("Loan", loan_name)
-
+    ld= frappe.db.exists("Loan Disbursement", {"against_loan": loan_name, "docstatus": 1})
     # Update status
-    loan.db_set("status", "Disbursed")
+    if ld:
+        loan.db_set("status", "Disbursed")
+    else:
+        loan.db_set("status", "Sanctioned")
 
     # Add comment with user input
     loan.add_comment(

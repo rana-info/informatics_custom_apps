@@ -38,24 +38,34 @@ class zzProjectRSLD(Document):
 	def validate_completion_date(self):
 		for row in self.sub_task:
 			if row.completion_date:
+				# Cannot be in the future
 				if getdate(row.completion_date) > getdate(today()):
 					frappe.throw(
 						f"Row {row.idx}: Sub-task Completion Date "
 						f"cannot be greater than today's date."
 					)
-				
+
+				# Cannot be before task start date
+				if self.task_start_date and getdate(row.completion_date) < getdate(self.task_start_date):
+					frappe.throw(
+						f"Row {row.idx}: Sub-task Completion Date "
+						f"cannot be before Task Start Date ({format_datetime(self.task_start_date)})."
+					)
+
 
 	def before_save(self):
 		# Assign only if empty (important for edits)
 		if not self.task_id:
 			self.task_id = self.generate_task_id()
 		self.update_target_over_days()
+		if self.task_completion_date:
+			self.db_set("task_status", "Completed")
 
 	def update_target_over_days(self):
 			if self.task_target_date:
 				# Compute difference in days
 				delta = (getdate(self.task_target_date) - getdate(today())).days
-				self.target_over_days = abs(delta)
+				self.target_over_days = (delta)
 				
 	def generate_task_id(self):
 		today = nowdate()  # yyyy-mm-dd
@@ -111,3 +121,9 @@ class zzProjectRSLD(Document):
 			"task_percentage",
 			total_percentage
 		)
+		if self.task_percentage < 100:
+			self.db_set("task_status", "In Progress")
+			self.db_set("task_completion_date", None)
+		else:
+			self.db_set("task_status", "Completed")
+			self.db_set("task_completion_date", nowdate())

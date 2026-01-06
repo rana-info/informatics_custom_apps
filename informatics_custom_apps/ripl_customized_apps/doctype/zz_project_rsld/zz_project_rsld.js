@@ -2,7 +2,33 @@
 // For license information, please see license.txt
 
 frappe.ui.form.on("zz Project RSLD", {
+  onload(frm) {
+    frm.set_query("task_owner", function () {
+        return {
+            filters: {
+                branch: ["in", [
+                    "RSLD Biofuels-Chhattisgarh",
+                    "RSLD Biofuels-Karnal",
+                    "RSLD Karnal"
+                ]]
+            }
+        };
+    });
+
+    frm.set_query("team_leader", function () {
+        return {
+            filters: {
+                branch: ["in", [
+                    "RSLD Biofuels-Chhattisgarh",
+                    "RSLD Biofuels-Karnal",
+                    "RSLD Karnal"
+                ]]
+            }
+        };
+    });
+},   
 	refresh(frm) {
+        
         if(frm.doc.task_id){
              frm.add_custom_button(__('Add Message'), () => {
             show_message_dialog(frm);
