@@ -62,11 +62,11 @@ class zzProjectRSLD(Document):
 			self.db_set("task_status", "Completed")
 
 	def update_target_over_days(self):
-			if self.task_target_date:
+			if self.task_target_date and self.task_status != "Completed":
 				# Compute difference in days
-				delta = (getdate(self.task_target_date) - getdate(today())).days
+				delta = (getdate(self.task_target_date) - max(getdate(today()), getdate(self.task_start_date))).days
 				self.target_over_days = (delta)
-				
+
 	def generate_task_id(self):
 		today = nowdate()  # yyyy-mm-dd
 		month_prefix = datetime.strptime(today, "%Y-%m-%d").strftime("%b")
@@ -98,16 +98,18 @@ class zzProjectRSLD(Document):
 			frappe.throw("Message cannot be empty")
 		timestamp = format_datetime(
             now_datetime(),
-            "dd-MM-yyyy HH:mm"
+            "yyyy-MM-dd HH:mm"
         )
 		user = frappe.session.user
-		content = f"{user} messaged: `{message}` at {timestamp}."
-
-		self.add_comment(
-			text=content
-		)
-
+		self.append("messages", {"message": message, "time": timestamp, "user": user})
+		self.db_set("communication_open",1)
+		self.save()
 		return "Message added successfully"
+	@frappe.whitelist()
+	def close_communication(self):
+		self.db_set("communication_open",0)
+		self.save()
+		return "Communication closed successfully"
 	
 	def update_task_percentage_from_subtasks(self):
 		total_percentage = 0
@@ -127,3 +129,13 @@ class zzProjectRSLD(Document):
 		else:
 			self.db_set("task_status", "Completed")
 			self.db_set("task_completion_date", nowdate())
+#----schedulertask----
+@frappe.whitelist()			
+def update_target_over_days_for_all_tasks():
+		list=frappe.get_all("zz Project RSLD", filters={"task_status": ["!=", "Completed"]}, fields=["name", "task_target_date", "task_start_date", "task_status"])
+		for record in list:
+			doc=frappe.get_doc("zz Project RSLD", record.name)
+			if doc.task_target_date and doc.task_status != "Completed":
+				# Compute difference in days
+				delta = (getdate(doc.task_target_date) - max(getdate(today()), getdate(doc.task_start_date))).days
+				doc.db_set("target_over_days", delta,update_modified=False)

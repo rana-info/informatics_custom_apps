@@ -27,7 +27,10 @@
   "section_break_frjm",
   "task_percentage",
   "column_break_cyhw",
-  "target_over_days"
+  "target_over_days",
+  "messages_section",
+  "messages",
+  "communication_open"
  ],
  "fields": [
   {
@@ -54,6 +57,7 @@
    "fieldname": "task_status",
    "fieldtype": "Select",
    "in_list_view": 1,
+   "in_standard_filter": 1,
    "label": "Task Status",
    "options": "Open\nIn Progress\nCompleted\nPostponed\nHalted",
    "reqd": 1
@@ -67,14 +71,16 @@
    "fieldtype": "Date",
    "in_list_view": 1,
    "label": "Task Start Date",
-   "reqd": 1
+   "reqd": 1,
+   "set_only_once": 1
   },
   {
    "fieldname": "task_target_date",
    "fieldtype": "Date",
    "in_list_view": 1,
    "label": "Task Target Date",
-   "reqd": 1
+   "reqd": 1,
+   "set_only_once": 1
   },
   {
    "fieldname": "task_completion_date",
@@ -165,15 +171,37 @@
    "fieldname": "department",
    "fieldtype": "Select",
    "in_list_view": 1,
+   "in_standard_filter": 1,
    "label": "Department",
    "options": "\nCivil\nEngineering\nProcess\nOther",
    "reqd": 1
+  },
+  {
+   "fieldname": "messages_section",
+   "fieldtype": "Section Break",
+   "label": "Messages"
+  },
+  {
+   "fieldname": "messages",
+   "fieldtype": "Table",
+   "label": "Messages",
+   "options": "zzTask Communicaton",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "communication_open",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Communication Open",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-01-06 12:23:52.902531",
+ "modified": "2026-01-12 17:13:28.801442",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "zz Project RSLD",

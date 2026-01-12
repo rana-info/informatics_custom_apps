@@ -64,5 +64,16 @@ frappe.ui.form.on("zz Project RSLD", {
 
     dialog.show();
 }
+if(frm.doc.communication_open){
+             frm.add_custom_button(__('Close Communication'), () => {
+            frappe.call({
+                method: 'close_communication',
+                doc: frm.doc,
+                callback() {
+                    frappe.msgprint(__('Communication closed'));
+                    frm.reload_doc();
+                }
+            });});
+        }
     }
 });
