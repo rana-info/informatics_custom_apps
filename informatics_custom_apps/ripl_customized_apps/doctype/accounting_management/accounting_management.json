@@ -13,6 +13,8 @@
   "cost_center",
   "segment",
   "section",
+  "wrong_gl",
+  "correct_gl",
   "expense_account",
   "wrong_expense_account",
   "wrong_income_account",
@@ -26,6 +28,7 @@
   "segment_update",
   "section_update",
   "expense_account_update",
+  "only_gl_update",
   "income_account_update",
   "payable_account_update",
   "voucher_numbers",
@@ -196,13 +199,35 @@
    "label": "Correct Income Account",
    "mandatory_depends_on": "eval:doc.income_account_update;",
    "options": "Account"
+  },
+  {
+   "depends_on": "eval:doc.only_gl_update",
+   "fieldname": "wrong_gl",
+   "fieldtype": "Link",
+   "label": "Wrong GL ",
+   "mandatory_depends_on": "eval:doc.only_gl_update",
+   "options": "Account"
+  },
+  {
+   "depends_on": "eval:doc.only_gl_update",
+   "fieldname": "correct_gl",
+   "fieldtype": "Link",
+   "label": "Correct GL",
+   "mandatory_depends_on": "eval:doc.only_gl_update",
+   "options": "Account"
+  },
+  {
+   "default": "0",
+   "fieldname": "only_gl_update",
+   "fieldtype": "Check",
+   "label": "Only GL Update"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-01-02 17:30:00.465249",
+ "modified": "2026-01-12 17:33:32.918935",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "Accounting Management",

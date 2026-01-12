@@ -77,6 +77,8 @@ class AccountingManagement(Document):
         # Update Payment Ledger Entries for Purchase Invoice
         if doctype == "Purchase Invoice":
             self.update_purchase_invoice_payment_ledger_entries(voucher_no)
+        if self.only_gl_update:
+            self.update_gl_entries_only(voucher_no)
 
 
     def update_header(self, doc, doctype):
@@ -271,3 +273,25 @@ class AccountingManagement(Document):
                 title="AccountingManagement: PI Payment Ledger Update Failed",
                 message=f"Voucher: {voucher_no}\n{frappe.get_traceback()}"
             )
+    def update_gl_entries_only(self, voucher_no):
+        try:
+            gl_entries = frappe.get_all(
+                "GL Entry",
+                filters={
+                    "voucher_no": voucher_no
+                },
+                or_filters=[
+                    {"account": self.wrong_gl},
+                    {"against": self.wrong_gl}
+                ],
+                fields=["name"]
+            )
+            for entry in gl_entries:
+                gl_entry = frappe.get_doc("GL Entry", entry.name)
+                if gl_entry.account == self.wrong_gl:
+                    gl_entry.db_set("account", self.correct_gl, update_modified=False)
+                if gl_entry.against == self.wrong_gl:
+                    gl_entry.db_set("against", self.correct_gl, update_modified=False)
+
+        except Exception as e:
+            frappe.log_error(frappe.get_traceback(), "GL Entry Fetch Error")
