@@ -72,7 +72,7 @@ class AccountingManagement(Document):
         # Update GL Entries
         self.update_gl_entries(voucher_no)
         # Update Stock Ledger Entries for Purchase Receipt
-        if doctype == "Purchase Receipt":
+        if doctype == "Purchase Receipt" or doctype == "Delivery Note":
             self.update_stock_ledger_entries(voucher_no)
         # Update Payment Ledger Entries for Purchase Invoice
         if doctype == "Purchase Invoice":
@@ -218,7 +218,7 @@ class AccountingManagement(Document):
             sle_list = frappe.get_all(
                 "Stock Ledger Entry",
                 filters={
-                    "voucher_type": "Purchase Receipt",
+                    "voucher_type": ["in", ["Purchase Receipt", "Delivery Note"]],  
                     "voucher_no": voucher_no
                 },
                 fields=["name"]
