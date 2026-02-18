@@ -11,7 +11,7 @@ def execute(filters=None):
 
     plants = [
         "Superior Biofuels",
-        "RSL Buttar",
+        "Buttar Biofuels",
         "RSL Louhka",
         "ETH Louhka",
         "RSLD Karnal",
