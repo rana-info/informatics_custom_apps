@@ -6,6 +6,7 @@ from frappe.model.document import Document
 from frappe.utils import getdate, flt, today
 from frappe import _
 from hrms.hr.doctype.leave_allocation.leave_allocation import create_additional_leave_ledger_entry
+from hrms.hr.doctype.leave_application.leave_application import get_leave_balance_on
 
 class BulkLeaveAdjustment(Document):
 
@@ -46,16 +47,25 @@ class BulkLeaveAdjustment(Document):
 		for row in self.employee:
 
 			try:
+				action = row.action
 				# -----------------------------
 				# 1. BASIC VALIDATIONS
 				# -----------------------------
 				if not row.employee or not row.leave_type:
 					raise Exception("Employee and Leave Type are mandatory")
 
-				if not row.leaves_count or flt(row.leaves_count) <= 0:
-					raise Exception("Leaves must be greater than 0")
+				# if not row.leaves_count or flt(row.leaves_count) <= 0:
+				# 	raise Exception("Leaves must be greater than 0")
+				if not row.leaves_count:
+					raise Exception("Leaves must be provided")
 
-				action = row.action
+				if action == "Allocate" and flt(row.leaves_count) <= 0:
+					raise Exception("Leaves must be greater than 0 for allocation")
+
+				if action == "Expire" and flt(row.leaves_count) == 0:
+					raise Exception("Leaves must be non-zero for expiry")
+
+
 				posting_date = self.posting_date or today()
 
 				# -----------------------------
@@ -72,7 +82,7 @@ class BulkLeaveAdjustment(Document):
 					},
 					"name"
 				)
-				print("------------------>allocation_name:",allocation_name)
+				# print("------------------>allocation_name:",allocation_name)
 				if not allocation_name:
 					raise Exception("No submitted Leave Allocation found for selected period")
 
@@ -93,15 +103,21 @@ class BulkLeaveAdjustment(Document):
 				elif action == "Expire":
 
 					# ----- VALIDATIONS -----
-					available = flt(la.total_leaves_allocated) - flt(la.get_existing_leave_count())
+					available = flt(get_leave_balance_on(
+									la.employee,
+									la.leave_type,
+									la.to_date
+								))
+
+
 
 					if flt(row.leaves_count) > available:
 						raise Exception(
-							f"Cannot expire {row.leaves_count}. Only {available} leaves available"
+							f"Cannot expire {row.leaves_count} leaves. Only {available} leaves available"
 						)
 
-					if not (getdate(la.from_date) <= getdate(self.posting_date) <= getdate(la.to_date)):
-						raise Exception("Expiry date outside allocation period")
+					# expiry date = last day before allocation start
+					expiry_date = getdate(la.from_date)
 
 					# ----- CALCULATE RESULT FIRST -----
 					new_total = flt(la.total_leaves_allocated) - flt(row.leaves_count)
@@ -109,24 +125,25 @@ class BulkLeaveAdjustment(Document):
 					if new_total < 0:
 						raise Exception("Resulting allocation cannot be negative")
 
-					# ----- UPDATE ALLOCATION FIRST -----
+					# ----- UPDATE ALLOCATION -----
 					la.db_set("total_leaves_allocated", new_total, update_modified=False)
 
-					# ----- NOW CREATE LEDGER ENTRY -----
+					# ----- CREATE LLE -----
 					create_additional_leave_ledger_entry(
 						la,
 						-abs(flt(row.leaves_count)),
-						posting_date
+						expiry_date
 					)
 
-					# ----- TAG LLE AS EXPIRED -----
+					# ----- FETCH CREATED LLE (SAFE USING transaction_name) -----
 					ledger_name = frappe.db.get_value(
 						"Leave Ledger Entry",
 						{
 							"employee": la.employee,
 							"leave_type": la.leave_type,
 							"transaction_type": "Leave Allocation",
-							"from_date": posting_date,
+							"transaction_name": la.name,
+							"from_date": expiry_date,
 							"leaves": -abs(flt(row.leaves_count))
 						},
 						"name",
@@ -134,29 +151,34 @@ class BulkLeaveAdjustment(Document):
 					)
 
 					if ledger_name:
-						frappe.db.set_value("Leave Ledger Entry", ledger_name, "is_expired", 1)
+						frappe.db.set_value("Leave Ledger Entry", ledger_name, {
+							"is_expired": 1,
+							"from_date": expiry_date,
+							"to_date": expiry_date
+						})
 
 						lle_doc = frappe.get_doc("Leave Ledger Entry", ledger_name)
 						lle_doc.add_comment(
 							"Info",
 							_("{0} leaves expired via Bulk Adjustment on {1} by {2}").format(
 								frappe.bold(row.leaves_count),
-								frappe.bold(posting_date),
+								frappe.bold(expiry_date),
 								frappe.bold(frappe.session.user)
 							)
 						)
 
+					# ----- COMMENT ON ALLOCATION -----
 					la.add_comment(
-					"Info",
-					_("{0} leaves expired via Bulk Adjustment on {1} by {2}").format(
-						frappe.bold(row.leaves_count),
-						frappe.bold(posting_date),
-						frappe.bold(frappe.session.user)
+						"Info",
+						_("{0} leaves expired via Bulk Adjustment on {1} by {2}").format(
+							frappe.bold(row.leaves_count),
+							frappe.bold(expiry_date),
+							frappe.bold(frappe.session.user)
 						)
 					)
 
-
 					message = f"{row.leaves_count} leaves expired"
+
 
 				else:
 					raise Exception("Invalid action selected")
