@@ -120,7 +120,7 @@ class BulkLeaveAdjustment(Document):
 					expiry_date = getdate(la.from_date)
 
 					# ----- CALCULATE RESULT FIRST -----
-					new_total = flt(la.total_leaves_allocated) - flt(row.leaves_count)
+					new_total = flt(la.total_leaves_allocated) - abs(flt(row.leaves_count))
 
 					if new_total < 0:
 						raise Exception("Resulting allocation cannot be negative")
