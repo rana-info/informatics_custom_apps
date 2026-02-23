@@ -136,6 +136,9 @@ def get_data(filters):
             # Apply Plant filter
             if filters.get("plant") and plant != filters.get("plant"):
                 continue
+            #Apply Account filter (if account is selected, only show items linked to that account in item table)
+            # if filters.get("account") and item.get("expense_account") != filters.get("account"):
+            #     continue
 
             # Apply Segment filter (for item-level data if available)
             if filters.get("segment") and item.get("segment") and item.get("segment") != filters.get("segment"):
