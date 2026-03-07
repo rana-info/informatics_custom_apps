@@ -165,3 +165,9 @@ def update_attendance_for_half_day(doc, event):
         else:
             print("------> Exit The  update_attendance_for_half_day Function")
 
+@frappe.whitelist()
+def add_asset_date(docname, required_date):
+    asset = frappe.get_doc("Asset", docname)
+    if not asset.available_for_use_date and not asset.purchase_date:
+        asset.db_set("available_for_use_date", required_date)
+        asset.db_set("purchase_date", required_date)

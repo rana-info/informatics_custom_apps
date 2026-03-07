@@ -56,7 +56,8 @@ app_license = "mit"
 # Home Pages
 # ----------
 doctype_js = {
-    "Loan": "public/js/loan_custom.js"
+    "Loan": "public/js/loan_custom.js",
+    "Asset": "public/js/asset_date_custom.js"
 }
 # doc_events = {
 #     "Leave Application": {
