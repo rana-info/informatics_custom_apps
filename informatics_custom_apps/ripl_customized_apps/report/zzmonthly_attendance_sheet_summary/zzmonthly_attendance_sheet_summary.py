@@ -199,6 +199,8 @@ def get_columns(filters: Filters) -> List[Dict]:
 		columns.append({"label": _("Date of Joining"), "fieldname": "doj", "fieldtype": "Data", "width": 120})
 		columns.append({"label": _("Shift"), "fieldname": "shift", "fieldtype": "Data", "width": 120})
 		columns.append({"label":_("Total Paid Days"),"fieldname":"total_paid_days","fieldtype":"Float","width":100})
+		columns.append({"label": _("Duplicate Attendance Dates(if any)"), "fieldname": "duplicate_dates", "fieldtype": "Data", "width": 200})
+
 		columns.extend(get_columns_for_days(filters))
 
 	return columns
@@ -238,18 +240,15 @@ def get_total_days_in_month(filters: Filters) -> int:
 def get_data(filters: Filters, attendance_map: Dict) -> List[Dict]:
     employee_details, group_by_param_values = get_employee_related_details(filters)
     holiday_map = get_holiday_map(filters)
-    
+
     data = []
 
     if filters.group_by:
         group_by_column = frappe.scrub(filters.group_by)
-
         for value in group_by_param_values:
             if not value:
                 continue
-
             records = get_rows(employee_details[value], filters, holiday_map, attendance_map)
-
             if records:
                 data.append({group_by_column: frappe.bold(value)})
                 data.extend(records)
@@ -267,13 +266,12 @@ def get_data(filters: Filters, attendance_map: Dict) -> List[Dict]:
     end_day = monthrange(year, month)[1]
     end_date = f"{year}-{month:02d}-{end_day:02d}"
 
-    # Find duplicate attendance within date range
-    duplicate_employees = set()
+    duplicate_employees = {}
 
     dup_list = frappe.db.sql("""
         SELECT employee, attendance_date
         FROM `tabAttendance`
-        WHERE 
+        WHERE
             docstatus = 1
             AND attendance_date BETWEEN %(start_date)s AND %(end_date)s
         GROUP BY employee, attendance_date
@@ -283,17 +281,20 @@ def get_data(filters: Filters, attendance_map: Dict) -> List[Dict]:
         "end_date": end_date
     }, as_dict=1)
 
-    # Collect employees that have duplicates
     for d in dup_list:
-        duplicate_employees.add(d.employee)
+        if d.employee not in duplicate_employees:
+            duplicate_employees[d.employee] = []
+        duplicate_employees[d.employee].append(str(d.attendance_date))
 
-    # Add is_duplicate flag to rows in this month only
     for row in data:
         if row.get("employee") in duplicate_employees:
             row["is_duplicate"] = 1
+            row["duplicate_dates"] = ", ".join(duplicate_employees[row["employee"]])
         else:
             row["is_duplicate"] = 0
-	# If user wants to filter only duplicate attendance employees
+            row["duplicate_dates"] = ""
+
+    # If user wants to filter only duplicate attendance employees
     if filters.get("only_duplicates"):
         data = [row for row in data if row.get("is_duplicate") == 1]
 
@@ -533,14 +534,14 @@ def get_rows(
             tpd = get_detailed_paid_days(employee, filters, holidays)
 
             merged_row = {
-                "employee": employee,
-				"doj": getdate(details.date_of_joining).strftime("%d-%m-%Y"),
-                "employee_name": details.employee_name,
-                "total_paid_days": tpd.get("total_paid_days"),
-                "shift": ", ".join(
-                    [str(k) if k else "No Shift" for k in employee_attendance.keys()]
-                ),
-            }
+			"employee": employee,
+			"doj": getdate(details.date_of_joining).strftime("%d-%m-%Y"),
+			"employee_name": details.employee_name,
+			"total_paid_days": tpd.get("total_paid_days"),
+			"shift": ", ".join(
+				[str(k) if k else "No Shift" for k in employee_attendance.keys()]
+			),
+		}
 
             total_days = get_total_days_in_month(filters)
 
