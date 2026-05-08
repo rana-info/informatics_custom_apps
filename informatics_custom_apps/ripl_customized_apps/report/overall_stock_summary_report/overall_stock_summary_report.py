@@ -28,14 +28,33 @@ def get_columns():
         {"label": "Rate", "fieldname": "rate", "fieldtype": "Currency", "width": 120},
     ]
 
-
 def get_data(filters):
 
     company = filters.get("company")
-    plant = filters.get("plant")
-    segment = filters.get("segment")
+    plant = filters.get("plant") or []
+    segment = filters.get("segment") or []
 
-    return frappe.db.sql("""
+    conditions = [
+        "sle.docstatus = 1",
+        "sle.is_cancelled = 0",
+        "sle.posting_date <= %(to_date)s"
+    ]
+
+    # Company filter
+    if company:
+        conditions.append("wh.company = %(company)s")
+
+    # Multi Plant filter
+    if plant:
+        conditions.append("wh.custom_branch IN %(plant)s")
+
+    # Multi Segment filter
+    if segment:
+        conditions.append("wh.custom_segment IN %(segment)s")
+
+    where_clause = " AND ".join(conditions)
+
+    return frappe.db.sql(f"""
         SELECT
             %(to_date)s AS as_on_date,
 
@@ -80,14 +99,7 @@ def get_data(filters):
             LEFT JOIN `tabWarehouse` wh 
                 ON sle.warehouse = wh.name
 
-            WHERE
-                sle.docstatus = 1
-                AND sle.is_cancelled = 0
-                AND sle.posting_date <= %(to_date)s
-
-                AND (%(company)s = '' OR %(company)s IS NULL OR wh.company = %(company)s)
-                AND (%(plant)s = '' OR %(plant)s IS NULL OR wh.custom_branch = %(plant)s)
-                AND (%(segment)s = '' OR %(segment)s IS NULL OR wh.custom_segment = %(segment)s)
+            WHERE {where_clause}
 
         ) t
 
@@ -109,6 +121,6 @@ def get_data(filters):
     """, {
         "to_date": filters.get("to_date"),
         "company": company,
-        "plant": plant,
-        "segment": segment
+        "plant": tuple(plant) if plant else None,
+        "segment": tuple(segment) if segment else None
     }, as_dict=1)

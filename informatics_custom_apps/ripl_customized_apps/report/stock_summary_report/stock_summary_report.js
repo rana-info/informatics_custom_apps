@@ -15,28 +15,24 @@ frappe.query_reports["Stock Summary Report"] = {
             fieldtype: "Link",
             options: "Company"
         },
-        {
-            fieldname: "plant",
-            label: "Plant",
-            fieldtype: "Link",
-            options: "Branch",
-
-            get_query: function () {
-                let company = frappe.query_report.get_filter_value("company");
-
-                return {
-                    filters: {
-                        company: company
-                    }
-                };
+       {
+            "fieldname": "plant",
+            "label": __("Plant"),
+            "fieldtype": "MultiSelectList",
+            "get_data": function(txt) {
+                let companies = frappe.query_report.get_filter_value("company");
+                return frappe.db.get_link_options("Branch", txt, {
+                    company: ["in", companies || []]
+                });
             }
         },
-
         {
-            fieldname: "segment",
-            label: "Segment",
-            fieldtype: "Link",
-            options: "Segment"  // change if your doctype name differs
+            "fieldname": "segment",
+            "label": __("Segment"),
+            "fieldtype": "MultiSelectList",
+            "get_data": function(txt) {
+                return frappe.db.get_link_options("Segment", txt);
+            }
         }
     ]
 };

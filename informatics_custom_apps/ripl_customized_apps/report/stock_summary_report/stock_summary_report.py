@@ -25,10 +25,31 @@ def get_columns():
         {"label": "Rate", "fieldname": "rate", "fieldtype": "Currency", "width": 120},
     ]
 
-
 def get_data(filters):
 
-    return frappe.db.sql("""
+    plant = filters.get("plant") or []
+    segment = filters.get("segment") or []
+
+    conditions = """
+        sle.docstatus = 1
+        AND sle.is_cancelled = 0
+        AND sle.posting_date <= %(to_date)s
+        AND sle.item_code IN %(item_list)s
+    """
+
+    # Company filter (single value safe)
+    if filters.get("company"):
+        conditions += " AND wh.company = %(company)s"
+
+    # Multi Plant filter
+    if plant:
+        conditions += " AND wh.custom_branch IN %(plant)s"
+
+    # Multi Segment filter
+    if segment:
+        conditions += " AND wh.custom_segment IN %(segment)s"
+
+    return frappe.db.sql(f"""
         SELECT
             %(to_date)s AS as_on_date,
 
@@ -73,30 +94,7 @@ def get_data(filters):
             LEFT JOIN `tabWarehouse` wh 
                 ON sle.warehouse = wh.name
 
-            WHERE
-                sle.docstatus = 1
-                AND sle.is_cancelled = 0
-                AND sle.posting_date <= %(to_date)s
-
-                AND sle.item_code IN %(item_list)s
-
-                AND (
-                    %(company)s IS NULL 
-                    OR %(company)s = '' 
-                    OR wh.company = %(company)s
-                )
-
-                AND (
-                    %(plant)s IS NULL 
-                    OR %(plant)s = '' 
-                    OR wh.custom_branch = %(plant)s
-                )
-
-                AND (
-                    %(segment)s IS NULL 
-                    OR %(segment)s = '' 
-                    OR wh.custom_segment = %(segment)s
-                )
+            WHERE {conditions}
 
         ) t
 
@@ -110,18 +108,18 @@ def get_data(filters):
             t.stock_uom
 
         HAVING 
-            ROUND(SUM(t.qty), 2) >= 0
+            SUM(t.qty) >= 0
 
         ORDER BY 
             SUM(t.value) DESC
+
     """, {
         "to_date": filters.get("to_date"),
         "company": filters.get("company"),
-        "plant": filters.get("plant"),
-        "segment": filters.get("segment"),
+        "plant": tuple(plant) if plant else None,
+        "segment": tuple(segment) if segment else None,
         "item_list": tuple(get_item_list())
     }, as_dict=1)
-
 
 def get_item_list():
     return [
