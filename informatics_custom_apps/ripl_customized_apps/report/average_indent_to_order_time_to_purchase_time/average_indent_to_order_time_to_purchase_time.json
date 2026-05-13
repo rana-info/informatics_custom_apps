@@ -1,0 +1,62 @@
+{
+ "add_total_row": 0,
+ "add_translate_data": 0,
+ "columns": [],
+ "creation": "2026-05-11 17:13:23.473594",
+ "disabled": 0,
+ "docstatus": 0,
+ "doctype": "Report",
+ "filters": [],
+ "idx": 0,
+ "is_standard": "Yes",
+ "letter_head": null,
+ "modified": "2026-05-11 17:13:23.473594",
+ "modified_by": "Administrator",
+ "module": "RIPL Customized Apps",
+ "name": "Average Indent To Order Time To Purchase Time",
+ "owner": "Administrator",
+ "prepared_report": 0,
+ "query": "",
+ "ref_doctype": "Purchase Invoice",
+ "report_name": "Average Indent To Order Time To Purchase Time",
+ "report_type": "Script Report",
+ "roles": [
+  {
+   "role": "Accounts User"
+  },
+  {
+   "role": "Purchase User"
+  },
+  {
+   "role": "Auditor"
+  },
+  {
+   "role": "Accounts Manager"
+  },
+  {
+   "role": "Master Admin"
+  },
+  {
+   "role": "Group View"
+  },
+  {
+   "role": "Stock User"
+  },
+  {
+   "role": "Stock Manager"
+  },
+  {
+   "role": "PO Creator"
+  },
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "GST Department"
+  },
+  {
+   "role": "Report Viewer"
+  }
+ ],
+ "timeout": 0
+}

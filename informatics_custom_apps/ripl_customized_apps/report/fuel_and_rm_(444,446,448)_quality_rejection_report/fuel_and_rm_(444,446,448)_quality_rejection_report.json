@@ -1,0 +1,32 @@
+{
+ "add_total_row": 0,
+ "add_translate_data": 0,
+ "columns": [],
+ "creation": "2026-05-12 12:54:52.776395",
+ "disabled": 0,
+ "docstatus": 0,
+ "doctype": "Report",
+ "filters": [],
+ "idx": 0,
+ "is_standard": "Yes",
+ "letter_head": null,
+ "modified": "2026-05-12 13:18:19.483654",
+ "modified_by": "Administrator",
+ "module": "RIPL Customized Apps",
+ "name": "Fuel and RM (444,446,448) Quality Rejection Report",
+ "owner": "Administrator",
+ "prepared_report": 0,
+ "query": "",
+ "ref_doctype": "Quality Inspection",
+ "report_name": "Fuel and RM (444,446,448) Quality Rejection Report",
+ "report_type": "Script Report",
+ "roles": [
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "Report Viewer"
+  }
+ ],
+ "timeout": 0
+}
