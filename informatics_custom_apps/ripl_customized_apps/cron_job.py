@@ -1,53 +1,85 @@
 import frappe
-from frappe.utils import today
+from frappe.utils import today, add_days
 
-
-# needs to update the lofic for this later with the price
 
 TARGET_ITEMS = ("106446", "106444")
 
+
 def auto_close_po_specific_items():
-    pass
-	# current_date = today()
 
-	# po_items = frappe.db.sql("""
-	# 	SELECT
-	# 		poi.parent AS po,
-	# 		poi.item_code,
-	# 		poi.qty,
-	# 		poi.received_qty
-	# 	FROM `tabPurchase Order Item` poi
-	# 	INNER JOIN `tabPurchase Order` po
-	# 		ON po.name = poi.parent
-	# 	WHERE poi.item_code IN %(items)s
-	# 	AND po.docstatus = 1
-	# 	AND po.status NOT IN ('Closed', 'Completed', 'Cancelled')
-	# 	AND IFNULL(poi.schedule_date, '') < %(today)s
-	# """, {
-	# 	"items": TARGET_ITEMS,
-	# 	"today": current_date
-	# }, as_dict=1)
+	current_date = today()
 
-	# if not po_items:
-	# 	return
+	before_30_days = add_days(current_date, -30)
 
-	# po_map = {}
+	po_items = frappe.db.sql("""
+		SELECT
+			poi.parent AS po,
+			poi.item_code,
+			poi.rate,
+			poi.schedule_date,
 
-	# for d in po_items:
-	# 	po_map.setdefault(d.po, []).append(d)
+			(
+				SELECT pri.rate
+				FROM `tabPurchase Receipt Item` pri
+				INNER JOIN `tabPurchase Receipt` pr
+					ON pr.name = pri.parent
+				WHERE
+					pri.item_code = poi.item_code
+					AND pr.docstatus = 1
+				ORDER BY pr.posting_date DESC
+				LIMIT 1
+			) AS latest_price
 
-	# to_close = list(po_map.keys())
+		FROM `tabPurchase Order Item` poi
 
-	
+		INNER JOIN `tabPurchase Order` po
+			ON po.name = poi.parent
 
-	# if to_close:
-	# 	frappe.db.sql("""
-	# 		UPDATE `tabPurchase Order`
-	# 		SET status = 'Closed'
-	# 		WHERE name IN %(pos)s
-	# 	""", {"pos": tuple(to_close)})
+		WHERE
+			poi.item_code IN %(items)s
 
-	# 	frappe.log_error(
-	# 		message=f"Auto closed POs for overdue items: {', '.join(to_close)}",
-	# 		title="PO Auto Close (106446,106444 + Due Date)"
-	# 	)
+			AND po.docstatus = 1
+
+			AND po.status NOT IN (
+				'Closed',
+				'Completed',
+				'Cancelled'
+			)
+
+			-- Older than 30 days
+			AND poi.schedule_date <= %(before_30_days)s
+
+	""", {
+		"items": TARGET_ITEMS,
+		"before_30_days": before_30_days
+	}, as_dict=1)
+
+	if not po_items:
+		return
+
+	to_close = []
+
+	for d in po_items:
+
+		latest_price = d.latest_price or 0
+		po_rate = d.rate or 0
+
+		if po_rate > latest_price:
+			to_close.append(d.po)
+
+	to_close = list(set(to_close))
+
+	if to_close:
+
+		frappe.db.sql("""
+			UPDATE `tabPurchase Order`
+			SET status = 'Closed'
+			WHERE name IN %(pos)s
+		""", {
+			"pos": tuple(to_close)
+		})
+
+		frappe.log_error(
+			message=f"Auto closed POs: {', '.join(to_close)}",
+			title="PO Auto Close - 30 Days + Higher Price"
+		)

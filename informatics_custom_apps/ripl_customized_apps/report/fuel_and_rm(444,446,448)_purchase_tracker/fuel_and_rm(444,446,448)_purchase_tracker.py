@@ -1,0 +1,240 @@
+# Copyright (c) 2026, Monil Kamboj and contributors
+# For license information, please see license.txt
+
+# report.py
+
+import frappe
+
+
+def execute(filters=None):
+    columns = get_columns()
+    data = get_data(filters)
+
+    return columns, data
+
+
+def get_columns():
+    return [
+        {
+            "label": "PO Date",
+            "fieldname": "po_date",
+            "fieldtype": "Date",
+            "width": 100
+        },
+        {
+            "label": "PO No",
+            "fieldname": "po_no",
+            "fieldtype": "Link",
+            "options": "Purchase Order",
+            "width": 150
+        },
+        {
+            "label": "Company",
+            "fieldname": "company",
+            "fieldtype": "Link",
+            "options": "Company",
+            "width": 140
+        },
+        {
+            "label": "PO Status",
+            "fieldname": "po_status",
+            "fieldtype": "Data",
+            "width": 120
+        },
+        {
+            "label": "Supplier ID",
+            "fieldname": "supplier",
+            "fieldtype": "Link",
+            "options": "Supplier",
+            "width": 140
+        },
+        {
+            "label": "Supplier Name",
+            "fieldname": "supplier_name",
+            "fieldtype": "Data",
+            "width": 180
+        },
+        {
+            "label": "Item Code",
+            "fieldname": "item_code",
+            "fieldtype": "Link",
+            "options": "Item",
+            "width": 140
+        },
+        {
+            "label": "Item Name",
+            "fieldname": "item_name",
+            "fieldtype": "Data",
+            "width": 180
+        },
+        {
+            "label": "Item Group",
+            "fieldname": "item_group",
+            "fieldtype": "Data",
+            "width": 140
+        },
+        {
+            "label": "UOM",
+            "fieldname": "uom",
+            "fieldtype": "Data",
+            "width": 80
+        },
+        {
+            "label": "Warehouse",
+            "fieldname": "warehouse",
+            "fieldtype": "Link",
+            "options": "Warehouse",
+            "width": 160
+        },
+        {
+            "label": "Plant",
+            "fieldname": "plant",
+            "fieldtype": "Data",
+            "width": 140
+        },
+        {
+            "label": "Segment",
+            "fieldname": "segment",
+            "fieldtype": "Data",
+            "width": 140
+        },
+        {
+            "label": "Ordered Qty",
+            "fieldname": "ordered_qty",
+            "fieldtype": "Float",
+            "width": 120
+        },
+        {
+            "label": "Received Qty",
+            "fieldname": "received_qty",
+            "fieldtype": "Float",
+            "width": 120
+        },
+        {
+            "label": "Pending Qty",
+            "fieldname": "pending_qty",
+            "fieldtype": "Float",
+            "width": 120
+        },
+        {
+            "label": "PO Value",
+            "fieldname": "po_value",
+            "fieldtype": "Currency",
+            "width": 140
+        },
+        {
+            "label": "Purchase Receipts",
+            "fieldname": "purchase_receipts",
+            "fieldtype": "Data",
+            "width": 220
+        },
+        {
+            "label": "Receipt Status",
+            "fieldname": "receipt_status",
+            "fieldtype": "Data",
+            "width": 140
+        },
+    ]
+
+def get_data(filters):
+
+    conditions = ""
+    values = {}
+
+    if filters.get("from_date") and filters.get("to_date"):
+        conditions += """
+            AND po.transaction_date BETWEEN %(from_date)s AND %(to_date)s
+        """
+        values["from_date"] = filters.get("from_date")
+        values["to_date"] = filters.get("to_date")
+
+    if filters.get("company"):
+        companies = filters.get("company")
+        conditions += " AND po.company IN %(company)s"
+        values["company"] = tuple(companies)
+
+    if filters.get("plant"):
+        plants = filters.get("plant")
+        conditions += " AND wh.custom_branch IN %(plant)s"
+        values["plant"] = tuple(plants)
+
+    query = f"""
+        SELECT
+
+            po.transaction_date AS po_date,
+            po.name AS po_no,
+            po.company AS company,
+            po.status AS po_status,
+
+            po.supplier AS supplier,
+            po.supplier_name AS supplier_name,
+
+            poi.item_code AS item_code,
+            poi.item_name AS item_name,
+            i.item_group AS item_group,
+            poi.uom AS uom,
+
+            poi.warehouse AS warehouse,
+            wh.custom_branch AS plant,
+            wh.custom_segment AS segment,
+
+            poi.qty AS ordered_qty,
+
+            IFNULL(SUM(pri.qty), 0) AS received_qty,
+
+            (poi.qty - IFNULL(SUM(pri.qty), 0)) AS pending_qty,
+
+            po.grand_total AS po_value,
+
+            GROUP_CONCAT(DISTINCT pri.parent) AS purchase_receipts,
+
+            CASE
+                WHEN IFNULL(SUM(pri.qty), 0) = 0 THEN 'Not Received'
+                WHEN IFNULL(SUM(pri.qty), 0) < poi.qty THEN 'Partially Received'
+                ELSE 'Fully Received'
+            END AS receipt_status
+
+        FROM
+            `tabPurchase Order` po
+
+        JOIN
+            `tabPurchase Order Item` poi
+            ON po.name = poi.parent
+
+        LEFT JOIN
+            `tabPurchase Receipt Item` pri
+            ON pri.purchase_order_item = poi.name
+            AND pri.docstatus = 1
+
+        LEFT JOIN
+            `tabWarehouse` wh
+            ON poi.warehouse = wh.name
+
+        LEFT JOIN
+            `tabItem` i
+            ON poi.item_code = i.name
+
+        WHERE
+            po.docstatus = 1
+            AND po.status NOT IN ('Closed', 'Completed')
+
+            AND poi.item_code IN (
+                '106448','106446','106444'
+            )
+
+            OR i.item_group IN (
+                '020301-Fuel-Trd',
+                '020302-Fuel-Trd Non Weightment'
+            )
+
+            {conditions}
+
+        GROUP BY
+            po.name, poi.name
+
+        ORDER BY
+            po.transaction_date DESC,
+            po.name DESC
+    """
+
+    return frappe.db.sql(query, values, as_dict=True)
