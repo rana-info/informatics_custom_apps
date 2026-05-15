@@ -1,0 +1,61 @@
+{
+ "add_total_row": 1,
+ "add_translate_data": 0,
+ "columns": [],
+ "creation": "2026-05-15 11:57:34.918048",
+ "disabled": 0,
+ "docstatus": 0,
+ "doctype": "Report",
+ "filters": [],
+ "idx": 0,
+ "is_standard": "Yes",
+ "letter_head": null,
+ "modified": "2026-05-15 11:57:34.918048",
+ "modified_by": "Administrator",
+ "module": "RIPL Customized Apps",
+ "name": "zzAccount Wise Payroll Expense",
+ "owner": "Administrator",
+ "prepared_report": 0,
+ "ref_doctype": "GL Entry",
+ "report_name": "zzAccount Wise Payroll Expense",
+ "report_type": "Script Report",
+ "roles": [
+  {
+   "role": "Accounts RO"
+  },
+  {
+   "role": "Master Admin"
+  },
+  {
+   "role": "Accounts Manager"
+  },
+  {
+   "role": "Accounts User"
+  },
+  {
+   "role": "Master Data Manager"
+  },
+  {
+   "role": "Stock Manager"
+  },
+  {
+   "role": "Group View"
+  },
+  {
+   "role": "Purchase Manager"
+  },
+  {
+   "role": "Projects User"
+  },
+  {
+   "role": "Purchase User"
+  },
+  {
+   "role": "Sales Manager"
+  },
+  {
+   "role": "Report Permission Fix"
+  }
+ ],
+ "timeout": 0
+}
