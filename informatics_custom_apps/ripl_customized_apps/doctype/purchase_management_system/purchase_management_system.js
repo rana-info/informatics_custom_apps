@@ -424,6 +424,7 @@ frappe.ui.form.on("Purchase Management System", {
 					frm.doc.__entry_type = ge.entry_type || "";
 					frm.doc.__is_weighment_required = ge.is_weighment_required ?? 1;
 
+					toggle_ge_type_checkboxes(frm, ge.is_manual_weighment, ge.is_stock_transfer);
 					toggle_new_qty_readonly(frm);
 					toggle_weight_readonly(frm);
 					toggle_outward_sections(frm);
@@ -431,6 +432,7 @@ frappe.ui.form.on("Purchase Management System", {
 				},
 			);
 		} else {
+			toggle_ge_type_checkboxes(frm, 0, 0);
 			toggle_new_qty_readonly(frm);
 			toggle_weight_readonly(frm);
 			toggle_outward_sections(frm);
