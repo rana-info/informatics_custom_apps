@@ -2,43 +2,55 @@ import frappe
 from frappe.utils import today, add_days
 
 
-TARGET_ITEMS = ("106446", "106444")
-
-
 def auto_close_po_specific_items():
 
 	current_date = today()
-
-	before_30_days = add_days(current_date, -30)
 
 	po_items = frappe.db.sql("""
 		SELECT
 			poi.parent AS po,
 			poi.item_code,
-			poi.rate,
 			poi.schedule_date,
 
+			IFNULL(i.custom_buffer_days, 0) AS buffer_days,
+			IFNULL(i.custom_auto_close_po, 0) AS auto_close_po,
+
+			CASE
+				WHEN IFNULL(poi.conversion_factor, 0) > 0
+				THEN poi.rate / poi.conversion_factor
+				ELSE poi.rate
+			END AS po_stock_uom_rate,
+
 			(
-				SELECT pri.rate
+				SELECT
+					CASE
+						WHEN IFNULL(pri.conversion_factor, 0) > 0
+						THEN pri.rate / pri.conversion_factor
+						ELSE pri.rate
+					END
 				FROM `tabPurchase Receipt Item` pri
+
 				INNER JOIN `tabPurchase Receipt` pr
 					ON pr.name = pri.parent
+
 				WHERE
 					pri.item_code = poi.item_code
 					AND pr.docstatus = 1
-				ORDER BY pr.posting_date DESC
+
+				ORDER BY pr.posting_date DESC, pr.creation DESC
 				LIMIT 1
-			) AS latest_price
+			) AS latest_stock_uom_rate
 
 		FROM `tabPurchase Order Item` poi
 
 		INNER JOIN `tabPurchase Order` po
 			ON po.name = poi.parent
 
-		WHERE
-			poi.item_code IN %(items)s
+		INNER JOIN `tabItem` i
+			ON i.item_code = poi.item_code
 
-			AND po.docstatus = 1
+		WHERE
+			po.docstatus = 1
 
 			AND po.status NOT IN (
 				'Closed',
@@ -46,13 +58,9 @@ def auto_close_po_specific_items():
 				'Cancelled'
 			)
 
-			-- Older than 30 days
-			AND poi.schedule_date <= %(before_30_days)s
-
-	""", {
-		"items": TARGET_ITEMS,
-		"before_30_days": before_30_days
-	}, as_dict=1)
+			-- Only items enabled for auto close
+			AND IFNULL(i.custom_auto_close_po, 0) = 1
+	""", as_dict=1)
 
 	if not po_items:
 		return
@@ -61,10 +69,17 @@ def auto_close_po_specific_items():
 
 	for d in po_items:
 
-		latest_price = d.latest_price or 0
-		po_rate = d.rate or 0
+		buffer_days = d.buffer_days or 0
 
-		if po_rate > latest_price:
+		before_days = add_days(current_date, -buffer_days)
+
+		if not d.schedule_date or d.schedule_date > before_days:
+			continue
+
+		latest_price = d.latest_stock_uom_rate or 0
+		po_rate = d.po_stock_uom_rate or 0
+
+		if latest_price and po_rate > latest_price:
 			to_close.append(d.po)
 
 	to_close = list(set(to_close))
@@ -81,5 +96,5 @@ def auto_close_po_specific_items():
 
 		frappe.log_error(
 			message=f"Auto closed POs: {', '.join(to_close)}",
-			title="PO Auto Close - 30 Days + Higher Price"
+			title="PO Auto Close - Dynamic Buffer Days"
 		)
