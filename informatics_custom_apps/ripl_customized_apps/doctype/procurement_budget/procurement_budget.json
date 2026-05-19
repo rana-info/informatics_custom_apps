@@ -1,0 +1,104 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-05-18 10:50:59.085555",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "section_break_zrok",
+  "amended_from",
+  "company",
+  "gl",
+  "fiscal_year",
+  "action_if_annual_budget_exceeded_on_mr",
+  "action_if_annual_budget_exceeded_on_po",
+  "budget_details"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_break_zrok",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Procurement Budget",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "fieldname": "gl",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "GL",
+   "options": "Account",
+   "reqd": 1
+  },
+  {
+   "fieldname": "fiscal_year",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Fiscal Year",
+   "options": "Fiscal Year",
+   "reqd": 1
+  },
+  {
+   "fieldname": "action_if_annual_budget_exceeded_on_mr",
+   "fieldtype": "Select",
+   "label": "Action if Annual Budget Exceeded on MR",
+   "options": "Stop\nWarn\nIgnore"
+  },
+  {
+   "fieldname": "action_if_annual_budget_exceeded_on_po",
+   "fieldtype": "Select",
+   "label": "Action if Annual Budget Exceeded on PO",
+   "options": "Stop\nWarn\nIgnore"
+  },
+  {
+   "fieldname": "budget_details",
+   "fieldtype": "Table",
+   "label": "Procurement Budget Details",
+   "options": "Procurement Cost Center"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-05-18 15:19:42.187659",
+ "modified_by": "Administrator",
+ "module": "RIPL Customized Apps",
+ "name": "Procurement Budget",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

@@ -146,14 +146,17 @@ doctype_js = {
 # Document Events
 # ---------------
 # Hook on document methods and events
+doc_events = {
 
-# doc_events = {
-# 	"*": {
-# 		"on_update": "method",
-# 		"on_cancel": "method",
-# 		"on_trash": "method"
-# 	}
-# }
+    "Material Request": {
+        "validate": "informatics_custom_apps.ripl_customized_apps.doctype.procurement_budget.utils.validate_procurement_budget"
+    },
+
+    "Purchase Order": {
+        "validate": "informatics_custom_apps.ripl_customized_apps.doctype.procurement_budget.utils.validate_procurement_budget"
+    }
+
+}
 
 # Scheduled Tasks
 # ---------------
