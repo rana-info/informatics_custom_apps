@@ -1,0 +1,488 @@
+{
+ "actions": [],
+ "allow_copy": 1,
+ "autoname": "PMS.########",
+ "creation": "2026-04-20 15:20:16.226832",
+ "default_view": "List",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "gate_entry",
+  "correction_type",
+  "column_break_ger1",
+  "company",
+  "is_completed",
+  "is_manual_weighment",
+  "is_stock_transfer",
+  "is_in_progress",
+  "column_break_ger2",
+  "plant",
+  "status",
+  "section_qty_correction",
+  "items",
+  "section_po_correction",
+  "old_purchase_order",
+  "column_break_ger3",
+  "new_purchase_order",
+  "supplier_correction_section",
+  "old_supplier",
+  "old_supplier_name",
+  "column_break_wegy",
+  "newcorrect_supplier",
+  "newcorrect_supplier_name",
+  "card_number_correction_section",
+  "old_card_number",
+  "column_break_gzlz",
+  "newcorrect_card_number",
+  "transporter_correction_section",
+  "old_transporter",
+  "old_transporter_name",
+  "column_break_qnlx",
+  "newcorrect_transporter",
+  "newcorrect_transporter_name",
+  "section_vehicle_correction",
+  "current_vehicle_no",
+  "new_vehicle_no",
+  "column_break_ger4",
+  "current_driver_name",
+  "new_driver_name",
+  "vehicle_type_correction_section",
+  "wrong_vehicle_type",
+  "column_break_bthn",
+  "new_vehicle_type",
+  "section_break_fgcq",
+  "weighment_date",
+  "column_break_wgzp",
+  "inward_date",
+  "column_break_xhrt",
+  "outward_date",
+  "weight_details_section",
+  "tare_weight",
+  "column_break_chtc",
+  "gross_weight",
+  "column_break_xawv",
+  "net_weight",
+  "section_remarks",
+  "reason",
+  "column_break_ger5",
+  "approved_on",
+  "approved_by",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "bold": 1,
+   "description": "Select Gate Entry to Modify",
+   "fieldname": "gate_entry",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Gate Entry",
+   "options": "Gate Entry",
+   "reqd": 1
+  },
+  {
+   "description": "Select the type of correction to apply",
+   "fieldname": "correction_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Correction Type",
+   "options": "\nWrong Accepted Quantity\nWrong Purchase Order\nWrong Purchase Order and Supplier\nWrong Vehicle Number\nWrong Driver Name\nWrong Card Number\nWrong Transporter\nWrong Vehicle Type\nWrong Weight",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_ger1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fetch_from": "gate_entry.company",
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.gate_entry",
+   "fieldname": "is_completed",
+   "fieldtype": "Check",
+   "label": "Is Completed",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.gate_entry",
+   "fieldname": "is_manual_weighment",
+   "fieldtype": "Check",
+   "label": "Is Manual Weighment",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.gate_entry",
+   "fieldname": "is_stock_transfer",
+   "fieldtype": "Check",
+   "label": "Is Stock Transfer",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.gate_entry",
+   "fieldname": "is_in_progress",
+   "fieldtype": "Check",
+   "label": "Is In Progress",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_ger2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fetch_from": "gate_entry.branch",
+   "fieldname": "plant",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Plant",
+   "options": "Branch",
+   "read_only": 1
+  },
+  {
+   "default": "Draft",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Draft\nPending\nApproved\nRejected\nCancelled",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.correction_type == \"Wrong Accepted Quantity\" || doc.correction_type == \"Wrong Purchase Order and Supplier\" || doc.correction_type == \"Wrong Purchase Order\"",
+   "fieldname": "section_qty_correction",
+   "fieldtype": "Section Break",
+   "label": "Quantity Correction"
+  },
+  {
+   "depends_on": "eval:doc.correction_type == \"Wrong Accepted Quantity\" || doc.correction_type == \"Wrong Purchase Order and Supplier\" || doc.correction_type == \"Wrong Purchase Order\"",
+   "fieldname": "items",
+   "fieldtype": "Table",
+   "label": "Items",
+   "options": "PMS Correction Item Details"
+  },
+  {
+   "depends_on": "eval:doc.correction_type == 'Wrong Purchase Order and Supplier' || doc.correction_type == \"Wrong Purchase Order\"",
+   "fieldname": "section_po_correction",
+   "fieldtype": "Section Break",
+   "label": "Purchase Order Correction"
+  },
+  {
+   "depends_on": "eval:doc.correction_type == 'Wrong Purchase Order and Supplier' || doc.correction_type == \"Wrong Purchase Order\"",
+   "fieldname": "old_purchase_order",
+   "fieldtype": "Link",
+   "label": "Old Purchase Order",
+   "options": "Purchase Order",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_ger3",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:doc.correction_type == 'Wrong Purchase Order and Supplier' || doc.correction_type == \"Wrong Purchase Order\"",
+   "fieldname": "new_purchase_order",
+   "fieldtype": "Link",
+   "label": "New (Correct) Purchase Order",
+   "options": "Purchase Order"
+  },
+  {
+   "depends_on": "eval:doc.correction_type == 'Wrong Purchase Order and Supplier'",
+   "fieldname": "supplier_correction_section",
+   "fieldtype": "Section Break",
+   "label": "Supplier Correction"
+  },
+  {
+   "depends_on": "eval:doc.correction_type == 'Wrong Purchase Order and Supplier'",
+   "fieldname": "old_supplier",
+   "fieldtype": "Link",
+   "label": "Old Supplier ",
+   "options": "Supplier",
+   "read_only": 1
+  },
+  {
+   "fieldname": "old_supplier_name",
+   "fieldtype": "Data",
+   "label": "Old Supplier Name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_wegy",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:doc.correction_type == 'Wrong Purchase Order and Supplier'",
+   "fieldname": "newcorrect_supplier",
+   "fieldtype": "Link",
+   "label": "New(Correct) Supplier",
+   "options": "Supplier",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "newcorrect_supplier.supplier_name",
+   "fieldname": "newcorrect_supplier_name",
+   "fieldtype": "Data",
+   "label": "New(Correct) Supplier Name",
+   "options": "Supplier",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.correction_type == 'Wrong Card Number'",
+   "fieldname": "card_number_correction_section",
+   "fieldtype": "Section Break",
+   "label": "Card Number Correction"
+  },
+  {
+   "depends_on": "eval:doc.correction_type == 'Wrong Card Number'",
+   "fieldname": "old_card_number",
+   "fieldtype": "Link",
+   "label": "Old Card Number",
+   "options": "Card Details",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_gzlz",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:doc.correction_type == 'Wrong Card Number'",
+   "fieldname": "newcorrect_card_number",
+   "fieldtype": "Link",
+   "label": "New(Correct) Card Number",
+   "options": "Card Details"
+  },
+  {
+   "depends_on": "eval:doc.correction_type == 'Wrong Transporter'",
+   "fieldname": "transporter_correction_section",
+   "fieldtype": "Section Break",
+   "label": "Transporter Correction"
+  },
+  {
+   "depends_on": "eval:doc.correction_type == 'Wrong Transporter'",
+   "fieldname": "old_transporter",
+   "fieldtype": "Link",
+   "label": "Old Transporter",
+   "options": "Supplier"
+  },
+  {
+   "fieldname": "old_transporter_name",
+   "fieldtype": "Data",
+   "label": "Old Transporter Name",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.correction_type == 'Wrong Transporter'",
+   "fieldname": "column_break_qnlx",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "newcorrect_transporter",
+   "fieldtype": "Link",
+   "label": "New(Correct) Transporter",
+   "options": "Supplier"
+  },
+  {
+   "fetch_from": "newcorrect_transporter.supplier_name",
+   "fieldname": "newcorrect_transporter_name",
+   "fieldtype": "Data",
+   "label": "New(Correct) Transporter Name",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.correction_type == 'Wrong Vehicle Number' || doc.correction_type == 'Wrong Driver Name'",
+   "fieldname": "section_vehicle_correction",
+   "fieldtype": "Section Break",
+   "label": "Vehicle / Driver Correction"
+  },
+  {
+   "depends_on": "eval:doc.correction_type == 'Wrong Vehicle Number'",
+   "fieldname": "current_vehicle_no",
+   "fieldtype": "Data",
+   "label": "Wrong Vehicle No",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.correction_type == 'Wrong Vehicle Number'",
+   "fieldname": "new_vehicle_no",
+   "fieldtype": "Data",
+   "label": "New Vehicle No",
+   "mandatory_depends_on": "eval:doc.correction_type == 'Wrong Vehicle Number'"
+  },
+  {
+   "fieldname": "column_break_ger4",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:doc.correction_type == 'Wrong Driver Name'",
+   "fieldname": "current_driver_name",
+   "fieldtype": "Data",
+   "label": "Wrong Driver Name",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.correction_type == 'Wrong Driver Name'",
+   "fieldname": "new_driver_name",
+   "fieldtype": "Data",
+   "label": "New Driver Name",
+   "mandatory_depends_on": "eval:doc.correction_type == 'Wrong Driver Name'"
+  },
+  {
+   "depends_on": "eval:doc.correction_type == 'Wrong Vehicle Type'",
+   "fieldname": "vehicle_type_correction_section",
+   "fieldtype": "Section Break",
+   "label": "Vehicle Type Correction"
+  },
+  {
+   "depends_on": "eval:doc.correction_type == 'Wrong Vehicle Type'",
+   "fieldname": "wrong_vehicle_type",
+   "fieldtype": "Data",
+   "label": "Wrong Vehicle Type",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_bthn",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:doc.correction_type == 'Wrong Vehicle Type'",
+   "fieldname": "new_vehicle_type",
+   "fieldtype": "Link",
+   "label": "New Vehicle Type",
+   "options": "Vehicle Type"
+  },
+  {
+   "depends_on": "eval:doc.correction_type == \"Wrong Accepted Quantity\" || doc.correction_type == \"Wrong Purchase Order or Supplier\" || doc.correction_type == \"Wrong Weight\"",
+   "fieldname": "section_break_fgcq",
+   "fieldtype": "Section Break",
+   "label": "Weighment"
+  },
+  {
+   "fieldname": "weighment_date",
+   "fieldtype": "Datetime",
+   "label": "Weighment Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_wgzp",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "inward_date",
+   "fieldtype": "Datetime",
+   "label": "Inward Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_xhrt",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "outward_date",
+   "fieldtype": "Datetime",
+   "label": "Outward Date",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.correction_type == \"Wrong Accepted Quantity\" || doc.correction_type == \"Wrong Purchase Order or Supplier\" || doc.correction_type == \"Wrong Weight\"\n",
+   "fieldname": "weight_details_section",
+   "fieldtype": "Section Break",
+   "label": "Weight Details"
+  },
+  {
+   "fieldname": "tare_weight",
+   "fieldtype": "Float",
+   "label": "Tare Weight"
+  },
+  {
+   "fieldname": "column_break_chtc",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "gross_weight",
+   "fieldtype": "Float",
+   "label": "Gross Weight"
+  },
+  {
+   "fieldname": "column_break_xawv",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "net_weight",
+   "fieldtype": "Float",
+   "label": "Net Weight",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_remarks",
+   "fieldtype": "Section Break",
+   "label": "Remarks"
+  },
+  {
+   "fieldname": "reason",
+   "fieldtype": "Small Text",
+   "label": "Reason",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_ger5",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "approved_on",
+   "fieldtype": "Datetime",
+   "label": "Approved On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "approved_by",
+   "fieldtype": "Link",
+   "label": "Approved By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Purchase Management System",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-05-19 10:26:51.531047",
+ "modified_by": "Administrator",
+ "module": "RIPL Customized Apps",
+ "name": "Purchase Management System",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1,
+ "track_seen": 1
+}
