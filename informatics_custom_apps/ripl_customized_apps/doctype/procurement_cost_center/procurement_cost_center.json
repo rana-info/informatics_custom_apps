@@ -7,8 +7,6 @@
  "engine": "InnoDB",
  "field_order": [
   "cost_center",
-  "plant",
-  "segment",
   "budget_amount"
  ],
  "fields": [
@@ -18,22 +16,6 @@
    "in_list_view": 1,
    "label": "Cost Center",
    "options": "Cost Center",
-   "reqd": 1
-  },
-  {
-   "fieldname": "plant",
-   "fieldtype": "Link",
-   "in_list_view": 1,
-   "label": "Plant",
-   "options": "Branch",
-   "reqd": 1
-  },
-  {
-   "fieldname": "segment",
-   "fieldtype": "Link",
-   "in_list_view": 1,
-   "label": "Segment",
-   "options": "Segment",
    "reqd": 1
   },
   {
@@ -50,7 +32,7 @@
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-05-18 13:23:54.155861",
+ "modified": "2026-05-20 09:35:47.725635",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "Procurement Cost Center",

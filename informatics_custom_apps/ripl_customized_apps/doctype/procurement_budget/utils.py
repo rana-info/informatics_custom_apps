@@ -2,7 +2,6 @@ import frappe
 from frappe.utils import getdate
 
 def validate_procurement_budget(doc, method=None):
-
     if doc.doctype == "Material Request":
 
         if doc.material_request_type != "Purchase":
@@ -56,16 +55,14 @@ def validate_procurement_budget(doc, method=None):
             key = (
                 budget.gl,
                 row.cost_center,
-                row.plant,
-                row.segment
+                budget_doc.plant,
+                budget_doc.segment
             )
 
             budget_map[key] = {
                 "budget_amount": row.budget_amount,
                 "budget_doc": budget_doc
             }
-
-    grouped_items = {}
 
     for item in doc.items:
 
@@ -92,23 +89,8 @@ def validate_procurement_budget(doc, method=None):
             segment
         )
 
-        if key not in grouped_items:
-
-            grouped_items[key] = {
-                "amount": 0,
-                "rows": []
-            }
-
-        grouped_items[key]["amount"] += item.amount or 0
-        grouped_items[key]["rows"].append(item.idx)
-
-
-    for key, grouped_data in grouped_items.items():
-
         if key not in budget_map:
             continue
-
-        expense_account, cost_center, plant, segment = key
 
         budget_data = budget_map[key]
 
@@ -120,22 +102,18 @@ def validate_procurement_budget(doc, method=None):
             company=doc.company,
             fiscal_year=fiscal_year,
             gl_account=expense_account,
-            cost_center=cost_center,
+            cost_center=item.cost_center,
             plant=plant,
             segment=segment,
             current_doc=doc.name,
             current_doctype=doc.doctype
         )
 
-        current_amount = grouped_data["amount"]
+        current_amount = item.amount or 0
 
         total_amount = consumed_amount + current_amount
 
         if total_amount > allowed_budget:
-
-            rows = ", ".join(
-                [str(d) for d in grouped_data["rows"]]
-            )
 
             action = get_budget_action(
                 doc,
@@ -143,16 +121,16 @@ def validate_procurement_budget(doc, method=None):
             )
 
             message = f"""
-            Annual Procurement Budget Exceeded For Row(s): {rows}<br><br>
+            Annual Procurement Budget Exceeded For Row #{item.idx}<br><br>
 
             GL Account: <b>{expense_account}</b><br>
-            Cost Center: <b>{cost_center}</b><br>
+            Cost Center: <b>{item.cost_center}</b><br>
             Plant: <b>{plant}</b><br>
             Segment: <b>{segment}</b><br><br>
 
             Allowed Budget: <b>{allowed_budget}</b><br>
             Consumed Budget: <b>{consumed_amount}</b><br>
-            Current Document Amount: <b>{current_amount}</b><br>
+            Current Amount: <b>{current_amount}</b><br>
             Total Amount: <b>{total_amount}</b>
             """
 
