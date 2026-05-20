@@ -7,75 +7,11 @@ from frappe.utils import getdate
 
 
 class ProcurementBudget(Document):
-
-    def autoname(self):
-
-        company_abbr = frappe.db.get_value(
-            "Company",
-            self.company,
-            "abbr"
-        )
-
-        account_name = frappe.db.get_value(
-            "Account",
-            self.gl,
-            "account_name"
-        )
-
-        gl_abbr = self.generate_gl_abbr(account_name)
-
-        fiscal_year = self.fiscal_year
-
-        self.name = (
-            f"PB-{company_abbr}-{gl_abbr}-{fiscal_year}"
-        )
-
-    def generate_gl_abbr(self, account_name):
-
-        words = account_name.split()
-
-        abbr = ""
-
-        for word in words:
-
-            if word:
-                abbr += word[0].upper()
-
-        return abbr
-
-    def validate(self):
-
-        self.validate_duplicate_rows()
     
     def on_update_after_submit(self):
 
         self.validate_budget_consumption()
 
-    def validate_duplicate_rows(self):
-
-        combinations = set()
-
-        for row in self.budget_details:
-
-            key = (
-                row.cost_center,
-                row.plant,
-                row.segment
-            )
-
-            if key in combinations:
-
-                frappe.throw(
-                    f"""
-                    Duplicate Row Found:<br><br>
-
-                    Cost Center: <b>{row.cost_center}</b><br>
-                    Plant: <b>{row.plant}</b><br>
-                    Segment: <b>{row.segment}</b>
-                    """
-                )
-
-            combinations.add(key)
 
     def validate_budget_consumption(self):
 
@@ -92,8 +28,8 @@ class ProcurementBudget(Document):
             mr_consumed = self.get_consumed_amount(
                 doctype="Material Request",
                 cost_center=row.cost_center,
-                plant=row.plant,
-                segment=row.segment,
+                plant=self.plant,
+                segment=self.segment,
                 from_date=fy_doc.year_start_date,
                 to_date=fy_doc.year_end_date
             )
@@ -101,8 +37,8 @@ class ProcurementBudget(Document):
             po_consumed = self.get_consumed_amount(
                 doctype="Purchase Order",
                 cost_center=row.cost_center,
-                plant=row.plant,
-                segment=row.segment,
+                plant=self.plant,
+                segment=self.segment,
                 from_date=fy_doc.year_start_date,
                 to_date=fy_doc.year_end_date
             )
@@ -117,8 +53,8 @@ class ProcurementBudget(Document):
                     For Row #{row.idx}<br><br>
 
                     Cost Center: <b>{row.cost_center}</b><br>
-                    Plant: <b>{row.plant}</b><br>
-                    Segment: <b>{row.segment}</b><br><br>
+                    Plant: <b>{self.plant}</b><br>
+                    Segment: <b>{self.segment}</b><br><br>
 
                     Budget Amount: <b>{row.budget_amount}</b><br>
                     MR Budget Consumed: <b>{mr_consumed}</b><br>
