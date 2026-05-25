@@ -335,7 +335,7 @@ function apply_purchase_order_filter(frm) {
 		}
 
 		return {
-			query: "ripl_customized_apps.ripl_customized_apps.doctype.purchase_management_system.purchase_management_system.get_filtered_purchase_orders",
+			query: "informatics_custom_apps.ripl_customized_apps.doctype.purchase_management_system.purchase_management_system.get_filtered_purchase_orders",
 			filters: query_filters,
 		};
 	});
