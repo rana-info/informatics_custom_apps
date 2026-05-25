@@ -6,7 +6,7 @@ import frappe
 
 def execute(filters=None):
     columns = get_columns()
-    data = get_data(filters)
+    data = get_data(filters or {})
     return columns, data
 
 
@@ -83,120 +83,169 @@ def get_columns():
         },
     ]
 
-
 def get_data(filters):
 
-	conditions = ""
+    filters = filters or {}
 
-	if filters.get("company"):
-		conditions += " AND pb.company = %(company)s "
+    conditions = []
 
-	if filters.get("fiscal_year"):
-		conditions += " AND pb.fiscal_year = %(fiscal_year)s "
+    if filters.get("company"):
+        conditions.append("pb.company = %(company)s")
 
-	if filters.get("gl_accounts"):
-		conditions += " AND pb.gl IN %(gl_accounts)s "
-		
-	budget_rows = frappe.db.sql(
-		f"""
-		SELECT
-			pb.name AS procurement_budget,
-			pb.company,
-			pb.fiscal_year,
-			pb.gl AS gl_account,
-			pbd.cost_center,
-			pb.plant,
-			pb.segment,
-			pbd.budget_amount
-		FROM `tabProcurement Budget` pb
-		INNER JOIN `tabProcurement Cost Center` pbd
-			ON pbd.parent = pb.name
-		WHERE pb.docstatus = 1
-		{conditions}
-		ORDER BY pb.gl, pbd.cost_center
-		""",
-		filters,
-		as_dict=1,
-	)
+    if filters.get("fiscal_year"):
+        conditions.append("pb.fiscal_year = %(fiscal_year)s")
 
-	data = []
+    if filters.get("gl_accounts"):
+        filters["gl_accounts"] = tuple(filters.get("gl_accounts"))
+        conditions.append("pb.gl IN %(gl_accounts)s")
 
-	for row in budget_rows:
+    if filters.get("plants"):
+        filters["plants"] = tuple(filters.get("plants"))
+        conditions.append("pb.plant IN %(plants)s")
 
-		mr_amount = get_mr_consumption(row)
+    if filters.get("segments"):
+        filters["segments"] = tuple(filters.get("segments"))
+        conditions.append("pb.segment IN %(segments)s")
 
-		po_amount = get_po_consumption(row)
+    where_clause = ""
 
-		total_consumed = mr_amount + po_amount
+    if conditions:
+        where_clause = " AND " + " AND ".join(conditions)
 
-		balance_budget = row.budget_amount - total_consumed
-
-		utilization = 0
-
-		if row.budget_amount:
-			utilization = (
-				total_consumed / row.budget_amount
-			) * 100
-
-		data.append(
-			{
-				"procurement_budget": row.procurement_budget,
-				"gl_account": row.gl_account,
-				"cost_center": row.cost_center,
-				"plant": row.plant,
-				"segment": row.segment,
-				"budget_amount": row.budget_amount,
-				"mr_amount": mr_amount,
-				"po_amount": po_amount,
-				"total_consumed": total_consumed,
-				"balance_budget": balance_budget,
-				"utilization": utilization,
-			}
-		)
-
-	return data
-
-
-def get_mr_consumption(row):
-
-    result = frappe.db.sql(
-        """
+    return frappe.db.sql(
+        f"""
         SELECT
-            COALESCE(SUM(mri.amount),0)
-        FROM `tabMaterial Request Item` mri
-        INNER JOIN `tabMaterial Request` mr
-            ON mr.name = mri.parent
-        WHERE mr.docstatus = 1
-            AND mr.material_request_type = 'Purchase'
-            AND mr.company = %(company)s
-            AND mri.expense_account = %(gl_account)s
-            AND mri.cost_center = %(cost_center)s
-            AND IFNULL(mri.branch,'') = IFNULL(%(plant)s,'')
-            AND IFNULL(mri.segment,'') = IFNULL(%(segment)s,'')
+            pb.name AS procurement_budget,
+            pb.gl AS gl_account,
+            pbd.cost_center,
+            pb.plant,
+            pb.segment,
+            pbd.budget_amount,
+
+            COALESCE(mr.mr_balance, 0) AS mr_amount,
+
+            COALESCE(po.po_amount, 0) AS po_amount,
+
+            (
+                COALESCE(mr.mr_balance, 0)
+                + COALESCE(po.po_amount, 0)
+            ) AS total_consumed,
+
+            (
+                pbd.budget_amount
+                -
+                (
+                    COALESCE(mr.mr_balance, 0)
+                    + COALESCE(po.po_amount, 0)
+                )
+            ) AS balance_budget,
+
+            CASE
+                WHEN pbd.budget_amount > 0 THEN
+                    ROUND(
+                        (
+                            (
+                                COALESCE(mr.mr_balance, 0)
+                                + COALESCE(po.po_amount, 0)
+                            ) * 100
+                        ) / pbd.budget_amount,
+                        2
+                    )
+                ELSE 0
+            END AS utilization
+
+        FROM `tabProcurement Budget` pb
+
+        INNER JOIN `tabProcurement Cost Center` pbd
+            ON pbd.parent = pb.name
+
+        LEFT JOIN
+        (
+            SELECT
+                mri.expense_account,
+                mri.cost_center,
+                IFNULL(mri.branch, '') AS plant,
+                IFNULL(mri.segment, '') AS segment,
+
+                SUM(
+                    mri.amount
+                    -
+                    COALESCE(mr_po.po_amount, 0)
+                ) AS mr_balance
+
+            FROM `tabMaterial Request Item` mri
+
+            INNER JOIN `tabMaterial Request` mr
+                ON mr.name = mri.parent
+
+            LEFT JOIN
+            (
+                SELECT
+                    poi.material_request_item,
+                    SUM(poi.amount) AS po_amount
+
+                FROM `tabPurchase Order Item` poi
+
+                INNER JOIN `tabPurchase Order` po
+                    ON po.name = poi.parent
+
+                WHERE po.docstatus = 1
+                    AND poi.material_request_item IS NOT NULL
+
+                GROUP BY poi.material_request_item
+            ) mr_po
+                ON mr_po.material_request_item = mri.name
+
+            WHERE mr.docstatus = 1
+                AND mr.material_request_type = 'Purchase'
+
+            GROUP BY
+                mri.expense_account,
+                mri.cost_center,
+                IFNULL(mri.branch, ''),
+                IFNULL(mri.segment, '')
+        ) mr
+            ON mr.expense_account = pb.gl
+            AND mr.cost_center = pbd.cost_center
+            AND mr.plant = IFNULL(pb.plant, '')
+            AND mr.segment = IFNULL(pb.segment, '')
+
+        LEFT JOIN
+        (
+            SELECT
+                poi.expense_account,
+                poi.cost_center,
+                IFNULL(poi.branch, '') AS plant,
+                IFNULL(poi.segment, '') AS segment,
+                SUM(poi.amount) AS po_amount
+
+            FROM `tabPurchase Order Item` poi
+
+            INNER JOIN `tabPurchase Order` po
+                ON po.name = poi.parent
+
+            WHERE po.docstatus = 1
+
+            GROUP BY
+                poi.expense_account,
+                poi.cost_center,
+                IFNULL(poi.branch, ''),
+                IFNULL(poi.segment, '')
+        ) po
+            ON po.expense_account = pb.gl
+            AND po.cost_center = pbd.cost_center
+            AND po.plant = IFNULL(pb.plant, '')
+            AND po.segment = IFNULL(pb.segment, '')
+
+        WHERE pb.docstatus = 1
+        {where_clause}
+
+        ORDER BY
+            pb.gl,
+            pbd.cost_center,
+            pb.plant,
+            pb.segment
         """,
-        row,
+        filters,
+        as_dict=1,
     )
-
-    return result[0][0] or 0
-
-
-def get_po_consumption(row):
-
-    result = frappe.db.sql(
-        """
-        SELECT
-            COALESCE(SUM(poi.amount),0)
-        FROM `tabPurchase Order Item` poi
-        INNER JOIN `tabPurchase Order` po
-            ON po.name = poi.parent
-        WHERE po.docstatus = 1
-            AND po.company = %(company)s
-            AND poi.expense_account = %(gl_account)s
-            AND poi.cost_center = %(cost_center)s
-            AND IFNULL(poi.branch,'') = IFNULL(%(plant)s,'')
-            AND IFNULL(poi.segment,'') = IFNULL(%(segment)s,'')
-        """,
-        row,
-    )
-
-    return result[0][0] or 0

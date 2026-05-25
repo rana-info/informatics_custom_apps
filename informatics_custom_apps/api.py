@@ -138,15 +138,12 @@ def get_taxes_and_charges(master_doctype, master_name):
 
         taxes_and_charges.append(tax)
 
-    print("-------------->", len(taxes_and_charges))
     return taxes_and_charges
 
 @frappe.whitelist()
 def update_attendance_for_half_day(doc, event):
-    print("------> Running update_attendance_for_half_day")
 
     if not doc.half_day or doc.status != "Approved":
-        print("------> Exit The  update_attendance_for_half_day Function")
         return
 
     # Find related attendance record
@@ -158,12 +155,9 @@ def update_attendance_for_half_day(doc, event):
 
     if attendance:
         att_doc = frappe.get_doc("Attendance", attendance)
-        print("---------->Attendance",attendance)
         if att_doc.docstatus == 1 and att_doc.status == "Half Day" and att_doc.leave_application and att_doc.half_day_status=="Present" and not att_doc.working_hours:
             att_doc.db_set("half_day_status", "Absent")
-            print("-------> Updated attendance half_day_status")
         else:
-            print("------> Exit The  update_attendance_for_half_day Function")
 
 @frappe.whitelist()
 def add_asset_date(docname, required_date):
