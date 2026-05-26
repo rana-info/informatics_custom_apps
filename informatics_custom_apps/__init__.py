@@ -15,8 +15,7 @@ def custom_validate_accounting_period_on_doc_save(doc, method=None):
     elif doc.doctype == "Asset":
         if doc.is_existing_asset:
             return
-        else:
-            date = doc.available_for_use_date
+        date = doc.available_for_use_date
 
     elif doc.doctype == "Asset Repair":
         date = doc.completion_date
@@ -30,23 +29,48 @@ def custom_validate_accounting_period_on_doc_save(doc, method=None):
     ap = frappe.qb.DocType("Accounting Period")
     cd = frappe.qb.DocType("Closed Document")
 
-    q = (
-        frappe.qb.from_(ap)
-        .from_(cd)
-        .select(ap.name)
-        .where(
-            (ap.name == cd.parent)
-            & (ap.company == doc.company)
-            & (ap.branch == doc.branch)
-            & (ap.segment == doc.segment)
-            & (cd.closed == 1)
-            & (cd.document_type == doc.doctype)
-            & (date >= ap.start_date)
-            & (date <= ap.end_date)
-        )
-    )
+    conditions = [
+        ap.name == cd.parent,
+        ap.company == doc.company,
+        cd.closed == 1,
+        cd.document_type == doc.doctype,
+        date >= ap.start_date,
+        date <= ap.end_date,
+    ]
 
-    accounting_period = q.run(as_dict=1)
+    branch = getattr(doc, "branch", None)
+
+    if branch:
+        branch_condition = None
+
+        if frappe.db.has_column("Accounting Period", "branch"):
+            branch_condition = ap.branch == branch
+
+        if frappe.db.has_column("Accounting Period", "custom_branch"):
+            custom_branch_condition = ap.custom_branch == branch
+
+            if branch_condition:
+                branch_condition = branch_condition | custom_branch_condition
+            else:
+                branch_condition = custom_branch_condition
+
+        if branch_condition:
+            conditions.append(branch_condition)
+
+    segment = getattr(doc, "segment", None)
+
+    if (
+        segment
+        and frappe.db.has_column("Accounting Period", "segment")
+    ):
+        conditions.append(ap.segment == segment)
+
+    q = frappe.qb.from_(ap).from_(cd).select(ap.name)
+
+    for condition in conditions:
+        q = q.where(condition)
+
+    accounting_period = q.run(as_dict=True)
 
     if accounting_period:
         frappe.throw(
@@ -56,6 +80,7 @@ def custom_validate_accounting_period_on_doc_save(doc, method=None):
             ),
             ClosedAccountingPeriod,
         )
+
 
 ap_module.validate_accounting_period_on_doc_save = (
     custom_validate_accounting_period_on_doc_save
