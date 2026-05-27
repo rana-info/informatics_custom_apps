@@ -157,7 +157,6 @@ def update_attendance_for_half_day(doc, event):
         att_doc = frappe.get_doc("Attendance", attendance)
         if att_doc.docstatus == 1 and att_doc.status == "Half Day" and att_doc.leave_application and att_doc.half_day_status=="Present" and not att_doc.working_hours:
             att_doc.db_set("half_day_status", "Absent")
-        else:
 
 @frappe.whitelist()
 def add_asset_date(docname, required_date):
