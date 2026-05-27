@@ -1,8 +1,8 @@
 // Copyright (c) 2026, Monil Kamboj and contributors
 // For license information, please see license.txt
 
-frappe.query_reports["GL Item Report"] = {
-    "filters": [
+frappe.query_reports["GL Item"] = {
+	 "filters": [
         {
             "fieldname": "company",
             "label": __("Company"),
