@@ -164,3 +164,49 @@ def add_asset_date(docname, required_date):
     if not asset.available_for_use_date and not asset.purchase_date:
         asset.db_set("available_for_use_date", required_date)
         asset.db_set("purchase_date", required_date)
+        
+        
+from erpnext.buying.doctype.purchase_order.purchase_order import (
+    make_purchase_receipt as original_make_purchase_receipt
+)
+
+
+@frappe.whitelist()
+def make_purchase_receipt(source_name, target_doc=None):
+
+    po = frappe.get_doc("Purchase Order", source_name)
+
+    blocked_items = []
+
+    for row in po.items:
+
+        item_group = frappe.db.get_value(
+            "Item",
+            row.item_code,
+            "item_group"
+        )
+
+        is_weighment_required = frappe.db.get_value(
+            "Item Group",
+            item_group,
+            "custom_is_weighment_required"
+        )
+
+        if is_weighment_required == "Yes":
+
+            blocked_items.append(
+                f"{row.item_code} - {row.item_name}"
+            )
+
+    if blocked_items:
+
+        frappe.throw(_(
+            "Purchase Receipt cannot be created because "
+            "Weighment is required for the following item(s):"
+            "<br><br><br><b>{0}</b>"
+        ).format("<br>".join(blocked_items)))
+
+    return original_make_purchase_receipt(
+        source_name,
+        target_doc
+    )
