@@ -2,17 +2,16 @@
 // For license information, please see license.txt
 
 frappe.query_reports["GL Item Asset"] = {
-	 filters: [
+	
+    filters: [
 
         {
             fieldname: "company",
             label: __("Company"),
-            fieldtype: "MultiSelectList",
+            fieldtype: "Link",
+            options: "Company",
             reqd: 1,
-
-            get_data: function(txt) {
-                return frappe.db.get_link_options("Company", txt);
-            }
+            default: frappe.defaults.get_user_default("Company")
         },
 
         {
@@ -26,38 +25,30 @@ frappe.query_reports["GL Item Asset"] = {
             fieldname: "to_date",
             label: __("To Date"),
             fieldtype: "Date",
-            default: frappe.datetime.month_end()
+            default: frappe.datetime.get_today()
         },
 
         {
             fieldname: "account",
             label: __("Account"),
-            fieldtype: "MultiSelectList",
-
-            get_data: function(txt) {
-                return frappe.db.get_link_options("Account", txt);
-            }
+            fieldtype: "Link",
+            options: "Account"
         },
 
         {
             fieldname: "plant",
             label: __("Plant"),
-            fieldtype: "MultiSelectList",
-
-            get_data: function(txt) {
-                return frappe.db.get_link_options("Branch", txt);
-            }
+            fieldtype: "Link",
+            options: "Branch"
         },
 
         {
             fieldname: "segment",
             label: __("Segment"),
-            fieldtype: "MultiSelectList",
-
-            get_data: function(txt) {
-                return frappe.db.get_link_options("Segment", txt);
-            }
+            fieldtype: "Link",
+            options: "Segment"
         }
 
     ]
+
 };
