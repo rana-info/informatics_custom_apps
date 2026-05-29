@@ -303,6 +303,8 @@ class PurchaseManagementSystem(Document):
             if po_list:
                 self.old_purchase_order = po_list[0]
 
+        self.old_segment = getattr(gate_entry_doc, 'segment', '') or ''
+
         return {
             "is_completed": self.is_completed,
             "is_in_progress": self.is_in_progress,
@@ -313,6 +315,7 @@ class PurchaseManagementSystem(Document):
             "is_manual_weighment": gate_entry_doc.is_manual_weighment if hasattr(gate_entry_doc, 'is_manual_weighment') else 0,
             "entry_type": getattr(gate_entry_doc, 'entry_type', ''),
             "is_weighment_required": getattr(gate_entry_doc, 'is_weighment_required', 1),
+            "old_segment": self.old_segment,
         }
 
     def check_existing_pr_status(self):
@@ -475,6 +478,9 @@ class PurchaseManagementSystem(Document):
             "Wrong Vehicle Type": [
                 ("wrong_vehicle_type", "new_vehicle_type", "Vehicle Type"),
             ],
+            "Wrong Segment": [
+                ("old_segment", "newcorrect_segment", "Segment"),
+            ],
         }
 
         pairs = field_pairs.get(self.correction_type, [])
@@ -518,6 +524,7 @@ class PurchaseManagementSystem(Document):
             "Wrong Driver Name": self.correct_driver_name,
             "Wrong Vehicle Type": self.correct_vehicle_type,
             "Wrong Weight": self.correct_weight,
+            "Wrong Segment": self.correct_segment,
         }
 
         if self.correction_type == "Wrong Purchase Order and Supplier":
@@ -1009,6 +1016,56 @@ class PurchaseManagementSystem(Document):
             field_map_weighment={"vehicle_type": self.new_vehicle_type},
         )
         frappe.msgprint("Vehicle Type updated successfully")
+
+    def correct_segment(self):
+        """Update segment across Gate Entry, Weighment, Purchase Receipt and Purchase Invoice."""
+        if not self.newcorrect_segment:
+            frappe.throw("New Segment is required.")
+
+        new_seg = self.newcorrect_segment
+
+        # 1. Gate Entry
+        gate_entry_doc = self.get_gate_entry_doc()
+        gate_entry_doc.db_set("segment", new_seg, update_modified=False)
+
+        # 2. Weighments
+        for wname in self.get_weighment_names():
+            frappe.db.set_value("Weighment", wname, "segment", new_seg, update_modified=False)
+
+        # 3. Purchase Receipts — header, items, taxes
+        for pr_name in self.get_linked_pr_names():
+            if int(frappe.db.get_value("Purchase Receipt", pr_name, "docstatus") or 0) == 2:
+                continue
+            frappe.db.set_value("Purchase Receipt", pr_name, "segment", new_seg, update_modified=False)
+            frappe.db.sql(
+                "UPDATE `tabPurchase Receipt Item` SET segment = %s WHERE parent = %s",
+                (new_seg, pr_name)
+            )
+            frappe.db.sql(
+                "UPDATE `tabPurchase Taxes and Charges` SET segment = %s WHERE parent = %s AND parenttype = 'Purchase Receipt'",
+                (new_seg, pr_name)
+            )
+
+        # 4. Purchase Invoices linked via PR items
+        pi_names = list(set(frappe.get_all(
+            "Purchase Invoice Item",
+            filters={"purchase_receipt": ["in", self.get_linked_pr_names()]},
+            pluck="parent",
+        )))
+        for pi_name in pi_names:
+            if int(frappe.db.get_value("Purchase Invoice", pi_name, "docstatus") or 0) == 2:
+                continue
+            frappe.db.set_value("Purchase Invoice", pi_name, "segment", new_seg, update_modified=False)
+            frappe.db.sql(
+                "UPDATE `tabPurchase Invoice Item` SET segment = %s WHERE parent = %s",
+                (new_seg, pi_name)
+            )
+            frappe.db.sql(
+                "UPDATE `tabPurchase Taxes and Charges` SET segment = %s WHERE parent = %s AND parenttype = 'Purchase Invoice'",
+                (new_seg, pi_name)
+            )
+
+        frappe.msgprint(f"Segment updated Sucessfully")
 
     def correct_weight(self):
         """Update gross, tare, and net weights on Weighment only. Recreates SE for Stock Transfers."""

@@ -89,6 +89,9 @@ function load_data(frm) {
 				frm.set_value("old_purchase_order", data.old_purchase_order);
 			}
 
+			// Auto-fill old_segment from Gate Entry
+			frm.set_value("old_segment", data.old_segment || "");
+
 			let no_weighment =
 				frm.doc.__is_weighment_required === "No" || frm.doc.__is_weighment_required === 0;
 
@@ -213,6 +216,7 @@ const ALL_CORRECTION_TYPES = [
 	"Wrong Transporter",
 	"Wrong Vehicle Type",
 	"Wrong Weight",
+	"Wrong Segment",
 ];
 
 const RESTRICTED_CORRECTION_TYPES = [
@@ -230,6 +234,7 @@ const NO_WEIGHMENT_TYPES = [
 	"Wrong Vehicle Number",
 	"Wrong Transporter",
 	"Wrong Vehicle Type",
+	"Wrong Segment",
 ];
 
 function filter_correction_type_options(frm) {

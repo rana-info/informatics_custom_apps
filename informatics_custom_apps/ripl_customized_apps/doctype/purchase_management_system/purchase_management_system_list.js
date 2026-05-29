@@ -25,6 +25,7 @@ frappe.listview_settings["Purchase Management System"] = {
 				"Wrong Transporter": "dark pink",
 				"Wrong Vehicle Type": "light red",
 				"Wrong Weight": "white",
+				"Wrong Segment": "grey"
 			};
 
 			if (!value) return "";
