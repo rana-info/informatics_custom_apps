@@ -640,14 +640,31 @@ class PurchaseManagementSystem(Document):
                         w_item.db_set("accepted_quantity", row.new_accepted_qty, update_modified=False)
                         w_item.db_set("received_quantity", new_received_qty, update_modified=False)
 
-            gross_weight = weigh_doc.gross_weight or 0
+            weigh_tare = weigh_doc.tare_weight or 0
+            weigh_gross = weigh_doc.gross_weight or 0
+            pms_tare = self.tare_weight or 0
+            pms_gross = self.gross_weight or 0
+            weights_changed = (pms_tare != weigh_tare) or (pms_gross != weigh_gross)
 
-            frappe.db.set_value(
-                "Weighment", weigh_doc.name,
-                {"net_weight": total_qty_kg,
-                "tare_weight": gross_weight - total_qty_kg},
-                update_modified=False,
-            )
+            if weights_changed:
+                frappe.db.set_value(
+                    "Weighment", weigh_doc.name,
+                    {
+                        "tare_weight": pms_tare,
+                        "gross_weight": pms_gross,
+                        "net_weight": self.net_weight or 0,
+                    },
+                    update_modified=False,
+                )
+            else:
+                frappe.db.set_value(
+                    "Weighment", weigh_doc.name,
+                    {
+                        "net_weight": total_qty_kg,
+                        "tare_weight": weigh_gross - total_qty_kg,
+                    },
+                    update_modified=False,
+                )
 
         for row in self.items:
             if not row.purchase_order_item:
