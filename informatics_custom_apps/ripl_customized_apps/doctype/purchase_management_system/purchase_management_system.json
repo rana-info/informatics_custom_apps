@@ -34,6 +34,10 @@
   "old_card_number",
   "column_break_gzlz",
   "newcorrect_card_number",
+  "segment_correction_section",
+  "old_segment",
+  "column_break_wwmr",
+  "newcorrect_segment",
   "transporter_correction_section",
   "old_transporter",
   "old_transporter_name",
@@ -88,7 +92,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Correction Type",
-   "options": "\nWrong Accepted Quantity\nWrong Purchase Order\nWrong Purchase Order and Supplier\nWrong Vehicle Number\nWrong Driver Name\nWrong Card Number\nWrong Transporter\nWrong Vehicle Type\nWrong Weight",
+   "options": "\nWrong Accepted Quantity\nWrong Purchase Order\nWrong Purchase Order and Supplier\nWrong Vehicle Number\nWrong Driver Name\nWrong Card Number\nWrong Transporter\nWrong Vehicle Type\nWrong Weight\nWrong Segment",
    "reqd": 1
   },
   {
@@ -458,13 +462,38 @@
    "print_hide": 1,
    "read_only": 1,
    "search_index": 1
+  },
+  {
+   "depends_on": "eval:doc.correction_type == 'Wrong Segment'",
+   "fieldname": "segment_correction_section",
+   "fieldtype": "Section Break",
+   "label": "Segment Correction"
+  },
+  {
+   "depends_on": "eval:doc.correction_type == 'Wrong Segment'",
+   "fieldname": "old_segment",
+   "fieldtype": "Link",
+   "label": "Old Segment",
+   "options": "Segment",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_wwmr",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:doc.correction_type == 'Wrong Segment'",
+   "fieldname": "newcorrect_segment",
+   "fieldtype": "Link",
+   "label": "New(Correct Segment",
+   "options": "Segment"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-05-19 10:26:51.531047",
+ "modified": "2026-05-29 11:49:04.786171",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "Purchase Management System",
