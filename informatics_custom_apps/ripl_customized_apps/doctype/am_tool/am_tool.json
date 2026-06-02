@@ -1,0 +1,173 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "AMT.#######",
+ "creation": "2026-06-01 17:31:59.746448",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "asset_category_update",
+  "accounting_dimension_update",
+  "section_break_dttp",
+  "asset",
+  "item_code",
+  "item_name",
+  "asset_category",
+  "segment",
+  "section",
+  "column_break_zezk",
+  "wrong_account",
+  "correct_account",
+  "wrong_cost_center",
+  "correct_cost_center",
+  "section_break_efey",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_break_dttp",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "asset",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Asset",
+   "options": "Asset",
+   "reqd": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "AM Tool",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "depends_on": "eval:doc.asset_category_update;",
+   "fieldname": "item_code",
+   "fieldtype": "Link",
+   "label": "Item Code",
+   "mandatory_depends_on": "eval:doc.asset_category_update;",
+   "options": "Item"
+  },
+  {
+   "depends_on": "eval:doc.asset_category_update;",
+   "fieldname": "asset_category",
+   "fieldtype": "Link",
+   "label": "Asset Category",
+   "mandatory_depends_on": "eval:doc.asset_category_update;",
+   "options": "Asset Category"
+  },
+  {
+   "fieldname": "section_break_efey",
+   "fieldtype": "Section Break"
+  },
+  {
+   "depends_on": "eval:doc.asset_category_update;",
+   "fieldname": "item_name",
+   "fieldtype": "Data",
+   "label": "Item Name",
+   "mandatory_depends_on": "eval:doc.asset_category_update;"
+  },
+  {
+   "fieldname": "column_break_zezk",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:doc.asset_category_update;",
+   "fieldname": "wrong_account",
+   "fieldtype": "Link",
+   "label": "Wrong Account",
+   "mandatory_depends_on": "eval:doc.asset_category_update;",
+   "options": "Account"
+  },
+  {
+   "depends_on": "eval:doc.asset_category_update;",
+   "fieldname": "correct_account",
+   "fieldtype": "Link",
+   "label": "Correct Account",
+   "mandatory_depends_on": "eval:doc.asset_category_update;",
+   "options": "Account"
+  },
+  {
+   "default": "0",
+   "fieldname": "asset_category_update",
+   "fieldtype": "Check",
+   "label": "Asset Category Update"
+  },
+  {
+   "default": "0",
+   "fieldname": "accounting_dimension_update",
+   "fieldtype": "Check",
+   "label": "Accounting Dimension Update"
+  },
+  {
+   "depends_on": "eval:doc.accounting_dimension_update;",
+   "fieldname": "wrong_cost_center",
+   "fieldtype": "Link",
+   "label": "Wrong Cost Center",
+   "mandatory_depends_on": "eval:doc.accounting_dimension_update;",
+   "options": "Cost Center"
+  },
+  {
+   "depends_on": "eval:doc.accounting_dimension_update;",
+   "fieldname": "correct_cost_center",
+   "fieldtype": "Link",
+   "label": "Correct Cost Center",
+   "mandatory_depends_on": "eval:doc.accounting_dimension_update;",
+   "options": "Cost Center"
+  },
+  {
+   "depends_on": "eval:doc.accounting_dimension_update;",
+   "fieldname": "segment",
+   "fieldtype": "Link",
+   "label": "Segment",
+   "mandatory_depends_on": "eval:doc.accounting_dimension_update;",
+   "options": "Segment"
+  },
+  {
+   "depends_on": "eval:doc.accounting_dimension_update;",
+   "fieldname": "section",
+   "fieldtype": "Link",
+   "label": "Section",
+   "options": "Section"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-06-02 16:40:47.540368",
+ "modified_by": "Administrator",
+ "module": "RIPL Customized Apps",
+ "name": "AM Tool",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Master Admin",
+   "select": 1,
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
