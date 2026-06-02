@@ -1,7 +1,9 @@
-frappe.query_reports["Item Ordered And Purchased But Not Issued"] = {
-    filters: [
+// Copyright (c) 2026, Monil Kamboj and contributors
+// For license information, please see license.txt
 
-        {
+frappe.query_reports["Plant Wise Stock Balance Report - MGT"] = {
+    filters: [
+       {
             fieldname: "company",
             label: "Company",
             fieldtype: "MultiSelectList",
@@ -11,7 +13,7 @@ frappe.query_reports["Item Ordered And Purchased But Not Issued"] = {
         },
 
         {
-            fieldname: "branch",
+            fieldname: "plant",
             label: "Plant",
             fieldtype: "MultiSelectList",
             get_data: async function(txt) {
@@ -30,24 +32,20 @@ frappe.query_reports["Item Ordered And Purchased But Not Issued"] = {
                 );
             }
         },
-
         {
-            fieldname: "item_group",
-            label: "Item Group",
-            fieldtype: "MultiSelectList",
-            get_data: function(txt) {
-                return frappe.db.get_link_options(
-                    "Item Group",
-                    txt
-                );
-            }
+            fieldname: "from_date",
+            label: __("From Date"),
+            fieldtype: "Date",
+            default: frappe.datetime.get_today(),
+            reqd: 1
         },
 
         {
-            fieldname: "months_range",
-            label: "Months",
-            fieldtype: "Select",
-            options: "\n1-3\n3-6\n6-9\n9-12\n12 Above"
+            fieldname: "to_date",
+            label: __("To Date"),
+            fieldtype: "Date",
+            default: frappe.datetime.get_today(),
+            reqd: 1
         }
     ]
 };

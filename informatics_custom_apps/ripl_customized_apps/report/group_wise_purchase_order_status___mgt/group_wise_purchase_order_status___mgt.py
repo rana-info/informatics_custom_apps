@@ -5,10 +5,20 @@ import frappe
 
 
 def execute(filters=None):
-    columns = get_columns()
-    data = get_data(filters)
+	columns = get_columns()
+	data = get_data(filters)
+	total_row = {
+		"po_no": "TOTAL",
+		"ordered_qty": sum(d.get("ordered_qty", 0) or 0 for d in data),
+		"received_qty": sum(d.get("received_qty", 0) or 0 for d in data),
+		"pending_qty": sum(d.get("pending_qty", 0) or 0 for d in data),
+		"po_value": sum(d.get("po_value", 0) or 0 for d in data),
+		"is_total_row": 1
+	}
 
-    return columns, data
+	data = [total_row] + data
+
+	return columns, data
 
 
 def get_columns():

@@ -1,8 +1,9 @@
-// Copyright (c) 2026, Monil Kamboj and contributors
-// For license information, please see license.txt
+frappe.query_reports["Asset Repair Analysis - MGT"] = {
+    tree: true,
+    name_field: "tree_label",
+    parent_field: "parent_asset",
+    initial_depth: 0,
 
-frappe.query_reports["Asset Repair Analysis"] = {
-     
     onload: function(report) {
 
         report.page.add_inner_button(__("Expand All"), function() {
@@ -35,20 +36,15 @@ frappe.query_reports["Asset Repair Analysis"] = {
     },
 
     filters: [
-
-
         {
             fieldname: "company",
-            label: __("Company"),
+            label: "Company",
             fieldtype: "MultiSelectList",
-            options: "Company",
-            reqd: 1,
             get_data: function(txt) {
                 return frappe.db.get_link_options("Company", txt);
             }
         },
-
-       {
+        {
             fieldname: "branch",
             label: "Plant",
             fieldtype: "MultiSelectList",
@@ -70,28 +66,15 @@ frappe.query_reports["Asset Repair Analysis"] = {
         },
         {
             fieldname: "from_date",
-            label: __("From Date"),
+            label: "From Date",
             fieldtype: "Date",
-            default: frappe.datetime.month_start(),
             reqd: 1
         },
-
         {
             fieldname: "to_date",
-            label: __("To Date"),
+            label: "To Date",
             fieldtype: "Date",
-            default: frappe.datetime.month_end(),
-            reqd: 1
-        },
-
-        {
-            fieldname: "report_type",
-            label: __("Report Type"),
-            fieldtype: "Select",
-            options: "Asset Wise\nAsset Repair Wise\nItem Wise",
-            default: "Summary",
             reqd: 1
         }
-
     ]
 };

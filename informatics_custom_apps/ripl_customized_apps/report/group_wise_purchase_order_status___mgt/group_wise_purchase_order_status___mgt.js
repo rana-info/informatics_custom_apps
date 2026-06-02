@@ -1,8 +1,8 @@
 // Copyright (c) 2026, Monil Kamboj and contributors
 // For license information, please see license.txt
 
-frappe.query_reports["Fuel and RM(444,446,448) Purchase Tracker"] = {
-      formatter: function (value, row, column, data, default_formatter) {
+frappe.query_reports["Group Wise Purchase Order Status - MGT"] = {
+	 formatter: function (value, row, column, data, default_formatter) {
 
         value = default_formatter(value, row, column, data);
 
@@ -12,7 +12,7 @@ frappe.query_reports["Fuel and RM(444,446,448) Purchase Tracker"] = {
 
         return value;
     },
-	onload: function (report) {
+	   onload: function (report) {
 
         report.page.add_inner_button(__("Refresh"), function () {
             frappe.query_report.refresh();
@@ -44,7 +44,7 @@ frappe.query_reports["Fuel and RM(444,446,448) Purchase Tracker"] = {
 
     },
     
-	filters: [
+    filters: [
 
         {
             fieldname: "from_date",
@@ -67,26 +67,51 @@ frappe.query_reports["Fuel and RM(444,446,448) Purchase Tracker"] = {
             }
         },
 
-        {
-            fieldname: "plant",
-            label: "Plant",
-            fieldtype: "MultiSelectList",
-            get_data: async function(txt) {
+      {
+    fieldname: "plant",
+    label: "Plant",
+    fieldtype: "MultiSelectList",
+    get_data: function (txt) {
 
-                let companies = frappe.query_report.get_filter_value("company") || [];
-                let filters = {};
+        let companies = frappe.query_report.get_filter_value("company");
 
-                if (companies.length) {
-                    filters.company = ["in", companies];
-                }
-
-                return frappe.db.get_link_options(
-                    "Branch",
-                    txt,
-                    filters
-                );
+        return frappe.call({
+            method: "frappe.client.get_list",
+            args: {
+                doctype: "Warehouse",
+                fields: ["custom_branch"],
+                filters: companies ? [
+                    ["company", "in", companies],
+                    ["custom_branch", "like", `%${txt}%`]
+                ] : [
+                    ["custom_branch", "like", `%${txt}%`]
+                ],
+                limit_page_length: 1000
             }
-        },
+        }).then(r => {
+
+            let plants = [...new Set(
+                (r.message || [])
+                    .map(d => d.custom_branch)
+                    .filter(Boolean)
+            )];
+
+            return plants.map(p => ({
+                value: p,
+                description: p
+            }));
+        });
+    }
+},
+
+        {
+            fieldname: "item_group",
+            label: "Item Group",
+            fieldtype: "MultiSelectList",
+            get_data: function(txt) {
+                return frappe.db.get_link_options("Item Group", txt);
+            }
+        }
 
     ]
 };
