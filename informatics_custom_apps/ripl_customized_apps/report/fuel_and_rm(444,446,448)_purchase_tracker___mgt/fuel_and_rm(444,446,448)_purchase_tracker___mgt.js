@@ -1,25 +1,35 @@
 // Copyright (c) 2026, Monil Kamboj and contributors
 // For license information, please see license.txt
 
-frappe.query_reports["Asset Repair Analysis"] = {
-     
-    onload: function(report) {
+frappe.query_reports["Fuel and RM(444,446,448) Purchase Tracker - MGT"] = {
 
-        report.page.add_inner_button(__("Expand All"), function() {
-            report.datatable.rowmanager.expandAllNodes();
+	   formatter: function (value, row, column, data, default_formatter) {
+
+        value = default_formatter(value, row, column, data);
+
+        if (data && data.po_no === "TOTAL") {
+            return `<b>${value}</b>`;
+        }
+
+        return value;
+    },
+	onload: function (report) {
+
+        report.page.add_inner_button(__("Refresh"), function () {
+            frappe.query_report.refresh();
         });
 
-        report.page.add_inner_button(__("Collapse All"), function() {
-            report.datatable.rowmanager.collapseAllNodes();
+        report.page.add_inner_button(__("Clear Filters"), function () {
+            frappe.query_report.clear_filters();
         });
 
-        frappe.call({
+		        frappe.call({
             method: "erpnext.accounts.utils.get_fiscal_year",
             args: {
                 date: frappe.datetime.get_today(),
                 company: frappe.defaults.get_user_default("Company")
             },
-            callback: function(r) {
+            callback: function (r) {
 
                 if (!r.message) return;
 
@@ -32,24 +42,34 @@ frappe.query_reports["Asset Repair Analysis"] = {
                 }
             }
         });
+
     },
+    
+	filters: [
 
-    filters: [
+        {
+            fieldname: "from_date",
+            label: "From Date",
+            fieldtype: "Date"
+        },
 
+        {
+            fieldname: "to_date",
+            label: "To Date",
+            fieldtype: "Date"
+        },
 
         {
             fieldname: "company",
-            label: __("Company"),
+            label: "Company",
             fieldtype: "MultiSelectList",
-            options: "Company",
-            reqd: 1,
             get_data: function(txt) {
                 return frappe.db.get_link_options("Company", txt);
             }
         },
 
-       {
-            fieldname: "branch",
+        {
+            fieldname: "plant",
             label: "Plant",
             fieldtype: "MultiSelectList",
             get_data: async function(txt) {
@@ -68,30 +88,6 @@ frappe.query_reports["Asset Repair Analysis"] = {
                 );
             }
         },
-        {
-            fieldname: "from_date",
-            label: __("From Date"),
-            fieldtype: "Date",
-            default: frappe.datetime.month_start(),
-            reqd: 1
-        },
-
-        {
-            fieldname: "to_date",
-            label: __("To Date"),
-            fieldtype: "Date",
-            default: frappe.datetime.month_end(),
-            reqd: 1
-        },
-
-        {
-            fieldname: "report_type",
-            label: __("Report Type"),
-            fieldtype: "Select",
-            options: "Asset Wise\nAsset Repair Wise\nItem Wise",
-            default: "Summary",
-            reqd: 1
-        }
 
     ]
 };

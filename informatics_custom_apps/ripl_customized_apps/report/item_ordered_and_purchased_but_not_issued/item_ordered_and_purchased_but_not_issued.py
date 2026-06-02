@@ -28,17 +28,17 @@ def get_columns():
     return [
         
         {
+            "label": "Item",
+            "fieldname": "item_code",
+            "fieldtype": "Link",
+            "options": "Item",
+            "width": 450,
+        },
+        {
             "label": "Received Qty",
             "fieldname": "received_qty",
             "fieldtype": "Float",
             "width": 130,
-        },
-         
-		{
-        	"label": "Item Name",
-            "fieldname": "item_name",
-            "fieldtype": "Data",
-            "width": 220,
         },
 
    		{
@@ -86,13 +86,7 @@ def get_columns():
             "options": "Purchase Receipt",
             "width": 170,
         },
-        {
-            "label": "Item",
-            "fieldname": "item_code",
-            "fieldtype": "Link",
-            "options": "Item",
-            "width": 150,
-        },
+
         {
             "label": "Item Group",
             "fieldname": "item_group",
@@ -141,7 +135,7 @@ def get_data(filters):
 	# Company Filter
 
 	if filters.get("company"):
-		conditions += " AND sle.company = %(company)s"
+		conditions += " AND sle.company IN %(company)s"
 		values["company"] = filters.get("company")
 
 	# Branch MultiSelect Filter
@@ -157,7 +151,7 @@ def get_data(filters):
 	# Item Group Filter
 
 	if filters.get("item_group"):
-		conditions += " AND i.item_group = %(item_group)s"
+		conditions += " AND i.item_group IN %(item_group)s"
 		values["item_group"] = filters.get("item_group")
 
 

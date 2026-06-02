@@ -10,7 +10,7 @@ def execute(filters=None):
 
     report_type = filters.get("report_type")
 
-    if report_type == "Detailed":
+    if report_type == "Asset Repair Wise":
         columns = get_detail_columns()
         data = get_detail_data(filters)
 
@@ -25,10 +25,6 @@ def execute(filters=None):
     return columns, data
 
 
-
-# =========================================================
-# COMMON FILTER CONDITIONS
-# =========================================================
 
 def get_conditions(filters):
 
@@ -65,11 +61,6 @@ def get_conditions(filters):
 
     return conditions, query_filters
 
-
-
-# =========================================================
-# SUMMARY REPORT
-# =========================================================
 
 def get_summary_columns():
 
@@ -638,13 +629,6 @@ def get_item_columns():
             "fieldname": "Item Name",
             "fieldtype": "Data",
             "width": 220
-        },
-
-        {
-            "label": "Description",
-            "fieldname": "Description",
-            "fieldtype": "Small Text",
-            "width": 250
         },
 
         {
