@@ -2,27 +2,19 @@
 // For license information, please see license.txt
 
 frappe.query_reports["Group Wise Purchase Order Status - MGT"] = {
-	 formatter: function (value, row, column, data, default_formatter) {
+	 formatter: function(value, row, column, data, default_formatter) {
 
-        value = default_formatter(value, row, column, data);
+    value = default_formatter(value, row, column, data);
 
-        if (data && data.po_no === "TOTAL") {
-            return `<b>${value}</b>`;
-        }
+    if (data && data.is_total_row) {
+        value = `<span style="font-weight:700;">${value}</span>`;
+    }
 
-        return value;
-    },
+    return value;
+},
 	   onload: function (report) {
 
-        report.page.add_inner_button(__("Refresh"), function () {
-            frappe.query_report.refresh();
-        });
-
-        report.page.add_inner_button(__("Clear Filters"), function () {
-            frappe.query_report.clear_filters();
-        });
-
-		        frappe.call({
+		frappe.call({
             method: "erpnext.accounts.utils.get_fiscal_year",
             args: {
                 date: frappe.datetime.get_today(),

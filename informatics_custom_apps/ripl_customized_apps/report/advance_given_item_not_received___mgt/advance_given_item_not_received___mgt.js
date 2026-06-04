@@ -1,49 +1,8 @@
-frappe.query_reports["Asset Repair Analysis - MGT"] = {
-    tree: true,
-    name_field: "tree_label",
-    parent_field: "parent_asset",
-    initial_depth: 0,
+// Copyright (c) 2026, Monil Kamboj and contributors
+// For license information, please see license.txt
 
-    formatter: function(value, row, column, data, default_formatter) {
-
-        value = default_formatter(value, row, column, data);
-
-        if (!data) {
-            return value;
-        }
-
-        if (
-            column.fieldname === "tree_label" &&
-            data.doctype &&
-            data.docname
-        ) {
-            value = `
-                <a href="/app/${frappe.router.slug(data.doctype)}/${encodeURIComponent(data.docname)}">
-                    ${value}
-                </a>
-            `;
-        }
-
-        if (data.indent === 0) {
-            return `<b>${value}</b>`;
-        }
-
-        if (data.indent === 1) {
-            return `<span style="font-weight:600">${value}</span>`;
-        }
-
-        return value;
-    },
-
-    onload: function(report) {
-
-        report.page.add_inner_button(__("Expand All"), function() {
-            report.datatable.rowmanager.expandAllNodes();
-        });
-
-        report.page.add_inner_button(__("Collapse All"), function() {
-            report.datatable.rowmanager.collapseAllNodes();
-        });
+frappe.query_reports["Advance Given Item Not Received - MGT"] = {
+	onload: function(report) {
 
         frappe.call({
             method: "erpnext.accounts.utils.get_fiscal_year",
@@ -68,25 +27,48 @@ frappe.query_reports["Asset Repair Analysis - MGT"] = {
             }
         });
     },
+formatter: function(value, row, column, data, default_formatter) {
+
+    // Hide percentage columns in TOTAL row
+    if (
+        data &&
+        (data.purchase_order === "TOTAL" || data.group_by === "TOTAL") &&
+        ["material_received_percent", "advance_paid_percent"].includes(column.fieldname)
+    ) {
+        return "";
+    }
+
+    value = default_formatter(value, row, column, data);
+
+    if (
+        data &&
+        (data.purchase_order === "TOTAL" || data.group_by === "TOTAL") &&
+        !["material_received_percent", "advance_paid_percent"].includes(column.fieldname)
+    ) {
+        value = `<span style="font-weight:700">${value}</span>`;
+    }
+
+    return value;
+},
 
     filters: [
+
         {
             fieldname: "company",
-            label: "Company",
+            label: __("Company"),
             fieldtype: "MultiSelectList",
             get_data: function(txt) {
                 return frappe.db.get_link_options("Company", txt);
             }
         },
-        {
-            fieldname: "branch",
+
+          {
+            fieldname: "plant",
             label: "Plant",
             fieldtype: "MultiSelectList",
             get_data: async function(txt) {
 
-                let companies =
-                    frappe.query_report.get_filter_value("company") || [];
-
+                let companies = frappe.query_report.get_filter_value("company") || [];
                 let filters = {};
 
                 if (companies.length) {
@@ -100,17 +82,28 @@ frappe.query_reports["Asset Repair Analysis - MGT"] = {
                 );
             }
         },
+
         {
             fieldname: "from_date",
-            label: "From Date",
+            label: __("From Date"),
             fieldtype: "Date",
-            reqd: 1
+            reqd: 1,
         },
+
         {
             fieldname: "to_date",
-            label: "To Date",
+            label: __("To Date"),
             fieldtype: "Date",
-            reqd: 1
-        }
+            reqd: 1,
+        },
+
+		{
+			fieldname: "view_by",
+			label: __("View By"),
+			fieldtype: "Select",
+			options: "\nStatus Wise\nSupplier Wise\nPlant Wise\nPO Wise",
+			default: "Status Wise",
+			reqd: 1
+		}
     ]
 };

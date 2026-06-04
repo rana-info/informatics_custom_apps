@@ -3,33 +3,60 @@
 
 frappe.query_reports["Fuel and RM(444,446,448) Purchase Tracker - MGT"] = {
 
-	   formatter: function (value, row, column, data, default_formatter) {
+    tree: true,
+    name_field: "name",
+    parent_field: "parent",
+    initial_depth: 1,
+
+    formatter: function(value, row, column, data, default_formatter) {
 
         value = default_formatter(value, row, column, data);
 
-        if (data && data.po_no === "TOTAL") {
+        if (!data) {
+            return value;
+        }
+
+        if (
+            column.fieldname === "name" &&
+            data.doctype &&
+            data.docname
+        ) {
+            value = `<a href="/app/${frappe.router.slug(data.doctype)}/${encodeURIComponent(data.docname)}">
+                        ${value}
+                    </a>`;
+        }
+
+        if (data.indent === 1) {
             return `<b>${value}</b>`;
+        }
+
+        if (data.indent === 2) {
+            return `<span style="font-weight:600">${value}</span>`;
         }
 
         return value;
     },
-	onload: function (report) {
 
-        report.page.add_inner_button(__("Refresh"), function () {
-            frappe.query_report.refresh();
+    onload: function(report) {
+
+        report.page.add_inner_button(__("Expand All"), function() {
+            report.datatable.rowmanager.expandAllNodes();
         });
 
-        report.page.add_inner_button(__("Clear Filters"), function () {
-            frappe.query_report.clear_filters();
+            report.page.add_inner_button(__("Collapse All"), function() {
+
+            report.datatable.rowmanager.collapseAllNodes();
+
+            report.refresh();
         });
 
-		        frappe.call({
+        frappe.call({
             method: "erpnext.accounts.utils.get_fiscal_year",
             args: {
                 date: frappe.datetime.get_today(),
                 company: frappe.defaults.get_user_default("Company")
             },
-            callback: function (r) {
+            callback: function(r) {
 
                 if (!r.message) return;
 
@@ -42,10 +69,9 @@ frappe.query_reports["Fuel and RM(444,446,448) Purchase Tracker - MGT"] = {
                 }
             }
         });
-
     },
-    
-	filters: [
+
+    filters: [
 
         {
             fieldname: "from_date",
@@ -87,7 +113,6 @@ frappe.query_reports["Fuel and RM(444,446,448) Purchase Tracker - MGT"] = {
                     filters
                 );
             }
-        },
-
+        }
     ]
 };
