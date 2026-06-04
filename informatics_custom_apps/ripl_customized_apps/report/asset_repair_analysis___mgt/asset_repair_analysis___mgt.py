@@ -20,21 +20,20 @@ def get_columns():
 			"fieldname": "tree_label",
 			"label": "Cost Center / Asset / Repair",
 			"fieldtype": "Data",
-			"width": 300,
+			"width": 550,
 		},
-        {
-            "fieldname": "asset",
-            "label": "Asset",
-            "fieldtype": "Link",
-            "options": "Asset",
-            "width": 120,
-        },
-        {
-            "fieldname": "asset_name",
-            "label": "Asset Name",
-            "fieldtype": "Data",
-            "width": 320,
-        },
+         {
+		 "fieldname": "doctype",
+			"label": "DocType",
+			"fieldtype": "Data",
+			"hidden": 1,
+		},
+		{
+			"fieldname": "docname",
+			"label": "DocName",
+			"fieldtype": "Data",
+			"hidden": 1,
+		},
          {
             "fieldname": "stock_cost",
             "label": "Stock Cost",
@@ -51,7 +50,7 @@ def get_columns():
             "fieldname": "capitalized_amount",
             "label": "Capitalized Amount",
             "fieldtype": "Currency",
-            "width": 140,
+            "width": 180,
         },
         {
             "fieldname": "total_repair_cost",
@@ -115,14 +114,7 @@ def get_columns():
             "label": "Capitalized Repairs",
             "fieldtype": "Int",
             "width": 140,
-        },
-        {
-            "fieldname": "repair_id",
-            "label": "Repair ID",
-            "fieldtype": "Link",
-            "options": "Asset Repair",
-            "width": 260,
-        },
+        }
     ]
 
 def get_data(filters):
@@ -275,6 +267,8 @@ def get_data(filters):
 
 		data.append({
 			"tree_label": cost_center,
+			"doctype": "Cost Center",
+			"docname": cost_center,
 			"cost_center": cost_center,
 			"total_repairs": cc["total_repairs"],
 			"capitalized_repairs": cc["capitalized_repairs"],
@@ -288,25 +282,28 @@ def get_data(filters):
 		for asset, asset_row in cc["assets"].items():
 
 			data.append({
-				"tree_label": asset,
-				"cost_center": cost_center,
-				"asset": asset,
-				"asset_name": asset_row["asset_name"],
-				"total_repairs": asset_row["total_repairs"],
-				"capitalized_repairs": asset_row["capitalized_repairs"],
-				"stock_cost": asset_row["stock_cost"],
-				"purchase_cost": asset_row["purchase_cost"],
-				"capitalized_amount": asset_row["capitalized_amount"],
-				"total_repair_cost": asset_row["total_repair_cost"],
-				"indent": 1
-			})
+					"tree_label": f"{asset} - {asset_row['asset_name']}",
+					"doctype": "Asset",
+					"docname": asset,
+					"asset": asset,
+					"cost_center": cost_center,
+					"asset_name": asset_row["asset_name"],
+					"total_repairs": asset_row["total_repairs"],
+					"capitalized_repairs": asset_row["capitalized_repairs"],
+					"stock_cost": asset_row["stock_cost"],
+					"purchase_cost": asset_row["purchase_cost"],
+					"capitalized_amount": asset_row["capitalized_amount"],
+					"total_repair_cost": asset_row["total_repair_cost"],
+					"indent": 1
+				})
 
 			for repair in asset_row["repairs"]:
 
 				data.append({
 					"tree_label": repair.repair_id,
+					"doctype": "Asset Repair",
+					"docname": repair.repair_id,
 					"cost_center": cost_center,
-					"repair_id": repair.repair_id,
 					"repair_type": repair.repair_type,
 					"description": repair.description,
 					"actions_performed": repair.actions_performed,

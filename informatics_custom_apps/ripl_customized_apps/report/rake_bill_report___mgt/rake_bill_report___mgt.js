@@ -1,5 +1,8 @@
 // Copyright (c) 2026, Monil Kamboj and contributors
 // For license information, please see license.txt
+$(document).on("page-change", function() {
+    $(".mt-report-note").remove();
+});
 
 frappe.query_reports["Rake Bill Report - MGT"] = {
 
@@ -60,23 +63,43 @@ frappe.query_reports["Rake Bill Report - MGT"] = {
         }
     ],
 
-    onload: function (report) {
+onload: function(report) {
 
-        report.page.add_inner_button(__("Refresh"), function () {
-            frappe.query_report.refresh();
-        });
+        $(".mt-report-note").remove();
 
-        report.page.add_inner_button(__("Clear Filters"), function () {
-            frappe.query_report.clear_filters();
-        });
+        const note = $(`
+            <div class="mt-report-note"
+                style="
+                    background:#dbeafe;
+                    border:1px solid #93c5fd;
+                    border-left:5px solid #2563eb;
+                    border-radius:6px;
+                    padding:12px 16px;
+                    margin-bottom:12px;
+                    color:#000;
+                    font-size:13px;
+                    line-height:1.6;">
+                <div style="font-weight:700;font-size:14px;">
+                    Quantity Conversion Reference
+                </div>
+                <div>
+                    All quantities in this report are displayed in <b>Metric Tons (MT)</b>.
+                </div>
+                <div>
+                    <b>1 MT = 10 Quintals = 1,000 KGS</b>
+                </div>
+            </div>
+        `);
 
-		        frappe.call({
+        report.page.main.prepend(note);
+
+        frappe.call({
             method: "erpnext.accounts.utils.get_fiscal_year",
             args: {
                 date: frappe.datetime.get_today(),
                 company: frappe.defaults.get_user_default("Company")
             },
-            callback: function (r) {
+            callback: function(r) {
 
                 if (!r.message) return;
 
@@ -89,6 +112,5 @@ frappe.query_reports["Rake Bill Report - MGT"] = {
                 }
             }
         });
-
     }
-};
+}

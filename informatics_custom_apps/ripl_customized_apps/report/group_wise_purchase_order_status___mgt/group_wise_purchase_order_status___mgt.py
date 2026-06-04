@@ -8,14 +8,23 @@ def execute(filters=None):
 	columns = get_columns()
 	data = get_data(filters)
 	total_row = {
-		"po_no": "TOTAL",
-		"ordered_qty": sum(d.get("ordered_qty", 0) or 0 for d in data),
-		"received_qty": sum(d.get("received_qty", 0) or 0 for d in data),
-		"pending_qty": sum(d.get("pending_qty", 0) or 0 for d in data),
-		"po_value": sum(d.get("po_value", 0) or 0 for d in data),
-		"is_total_row": 1
-	}
+            "item_code": "TOTAL",
+            "ordered_qty": sum(d.get("ordered_qty", 0) or 0 for d in data),
+            "received_qty": sum(d.get("received_qty", 0) or 0 for d in data),
+            "pending_qty": sum(d.get("pending_qty", 0) or 0 for d in data),
 
+            "ordered_value": sum(d.get("ordered_value", 0) or 0 for d in data),
+            "received_value": sum(d.get("received_value", 0) or 0 for d in data),
+            "pending_value": sum(d.get("pending_value", 0) or 0 for d in data),
+
+            "po_value": sum(
+                float(d.get("po_value") or 0)
+                for d in data
+                if d.get("po_value") not in ("", None)
+            ),
+
+            "is_total_row": 1
+        }
 	data = [total_row] + data
 
 	return columns, data
@@ -23,14 +32,6 @@ def execute(filters=None):
 
 def get_columns():
     return [
-        
-        {
-            "label": "PO No",
-            "fieldname": "po_no",
-            "fieldtype": "Link",
-            "options": "Purchase Order",
-            "width": 200
-        },
         
         {
             "label": "Item Code",
@@ -58,13 +59,13 @@ def get_columns():
             "label": "Ordered Qty",
             "fieldname": "ordered_qty",
             "fieldtype": "Float",
-            "width": 120
+            "width": 160
         },
         {
             "label": "Received Qty",
             "fieldname": "received_qty",
             "fieldtype": "Float",
-            "width": 120
+            "width": 160
         },
         
         
@@ -72,18 +73,27 @@ def get_columns():
             "label": "Pending Qty",
             "fieldname": "pending_qty",
             "fieldtype": "Float",
-            "width": 120
+            "width": 160
         },
-        
-           {
-            "label": "PO Value",
-            "fieldname": "po_value",
+           
+        {
+            "label": "Ordered Value",
+            "fieldname": "ordered_value",
             "fieldtype": "Currency",
-            "width": 140
+            "width": 160
         },
-           
-           
-       
+        {
+            "label": "Received Value",
+            "fieldname": "received_value",
+            "fieldtype": "Currency",
+            "width": 160
+        },
+        {
+            "label": "Pending Value",
+            "fieldname": "pending_value",
+            "fieldtype": "Currency",
+            "width": 160
+        },
          {
             "label": "Receipt Status",
             "fieldname": "receipt_status",
@@ -162,6 +172,13 @@ def get_columns():
             "fieldtype": "Link",
             "options": "Supplier",
             "width": 140
+        },
+            {
+            "label": "PO No",
+            "fieldname": "po_no",
+            "fieldtype": "Link",
+            "options": "Purchase Order",
+            "width": 200
         }
  
     ]
@@ -219,7 +236,18 @@ def get_data(filters):
 
             (poi.qty - IFNULL(SUM(pri.qty), 0)) AS pending_qty,
 
-            po.grand_total AS po_value,
+            poi.amount AS ordered_value,
+
+            (
+                poi.amount * IFNULL(SUM(pri.qty),0)
+                / NULLIF(poi.qty,0)
+            ) AS received_value,
+
+            (
+                poi.amount *
+                (poi.qty - IFNULL(SUM(pri.qty),0))
+                / NULLIF(poi.qty,0)
+            ) AS pending_value,
 
             GROUP_CONCAT(DISTINCT pri.parent) AS purchase_receipts,
 
@@ -278,12 +306,4 @@ def get_data(filters):
     """
 
     data= frappe.db.sql(query, values, as_dict=True)
-    previous_po = None
-
-    for row in data:
-        if row["po_no"] == previous_po:
-            row["po_value"] = ""
-        else:
-            previous_po = row["po_no"]
-
     return data

@@ -1,7 +1,8 @@
 // Copyright (c) 2026, Monil Kamboj and contributors
 // For license information, please see license.txt
-frappe.query_reports["Stock Summary Report"] = {
-     filters: [
+
+frappe.query_reports["Items Stock Summary Report"] = {
+	  filters: [
        {
             fieldname: "to_date",
             label: "As On Date",
