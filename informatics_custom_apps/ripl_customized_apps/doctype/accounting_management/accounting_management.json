@@ -10,8 +10,11 @@
   "section_break_gvfu",
   "doctype_name",
   "plant",
+  "wrong_cost_center",
   "cost_center",
+  "wrong_segment",
   "segment",
+  "wrong_section",
   "section",
   "wrong_gl",
   "correct_gl",
@@ -97,7 +100,7 @@
    "depends_on": "eval:doc.cost_center_update",
    "fieldname": "cost_center",
    "fieldtype": "Link",
-   "label": "Cost Center",
+   "label": "Correct Cost Center",
    "mandatory_depends_on": "eval:doc.cost_center_update",
    "options": "Cost Center"
   },
@@ -105,7 +108,7 @@
    "depends_on": "eval:doc.segment_update",
    "fieldname": "segment",
    "fieldtype": "Link",
-   "label": "Segment",
+   "label": "Correct Segment",
    "mandatory_depends_on": "eval:doc.segment_update",
    "options": "Segment"
   },
@@ -113,7 +116,7 @@
    "depends_on": "eval:doc.section_update",
    "fieldname": "section",
    "fieldtype": "Link",
-   "label": "Section",
+   "label": "Correct Section",
    "mandatory_depends_on": "eval:doc.section_update",
    "options": "Section"
   },
@@ -222,13 +225,37 @@
    "fieldname": "only_gl_update",
    "fieldtype": "Check",
    "label": "Only GL Update"
+  },
+  {
+   "depends_on": "eval:doc.cost_center_update",
+   "fieldname": "wrong_cost_center",
+   "fieldtype": "Link",
+   "label": "Wrong Cost Center",
+   "mandatory_depends_on": "eval:doc.cost_center_update",
+   "options": "Cost Center"
+  },
+  {
+   "depends_on": "eval:doc.segment_update",
+   "fieldname": "wrong_segment",
+   "fieldtype": "Link",
+   "label": "Wrong Segment",
+   "mandatory_depends_on": "eval:doc.segment_update",
+   "options": "Segment"
+  },
+  {
+   "depends_on": "eval:doc.section_update",
+   "fieldname": "wrong_section",
+   "fieldtype": "Link",
+   "label": "Wrong Section",
+   "mandatory_depends_on": "eval:doc.section_update",
+   "options": "Section"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-06-05 10:51:09.550242",
+ "modified": "2026-06-05 11:20:27.052388",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "Accounting Management",
