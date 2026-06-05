@@ -1,7 +1,5 @@
 # Copyright (c) 2026, Monil Kamboj and contributors
 # For license information, please see license.txt
-# Copyright (c) 2026, Monil Kamboj and contributors
-# For license information, please see license.txt
 
 import frappe
 from frappe import _
@@ -246,6 +244,14 @@ def get_data(filters):
             conditions.append("gl.cost_center = %(cost_center)s")
             values["cost_center"] = cost_center
 
+    # =====================================================
+    # EXCLUDE MATERIAL TRANSFER CHECKBOX
+    # =====================================================
+
+    if filters.get("exclude_material_transfer"):
+        # IFNULL is used safely so we don't accidentally filter out rows where subtype is empty
+        conditions.append("IFNULL(gl.voucher_subtype, '') != 'Material Transfer'")
+
     where_clause = " AND ".join(conditions)
 
     # =====================================================
@@ -397,6 +403,7 @@ def get_data(filters):
         se_items = frappe.db.sql("""
             SELECT
                 parent,
+                expense_account,
                 item_code,
                 item_name,
                 qty,
@@ -409,7 +416,8 @@ def get_data(filters):
         }, as_dict=True)
 
         for d in se_items:
-            item_map.setdefault(d.parent, []).append(d)
+            # Map by parent and expense_account explicitly for Stock Entries
+            item_map.setdefault((d.parent, d.expense_account), []).append(d)
 
     # =====================================================
     # MATERIAL REQUEST
@@ -444,13 +452,25 @@ def get_data(filters):
 
     for gl in gl_entries:
 
-        items = item_map.get(gl.voucher_no, [])
+        # =================================================
+        # CONDITIONAL ITEM FETCHING BASED ON VOUCHER TYPE
+        # =================================================
+        if gl.voucher_type == "Stock Entry":
+            # Map by voucher_no AND account
+            items = item_map.get((gl.voucher_no, gl.account), [])
+            # Deduplication key based on voucher_no and account
+            dedup_key = (gl.voucher_no, gl.account)
+        else:
+            # Map by voucher_no only
+            items = item_map.get(gl.voucher_no, [])
+            # Deduplication key based on voucher_no only
+            dedup_key = gl.voucher_no
 
         # =================================================
-        # SHOW ITEMS ONLY FIRST TIME PER VOUCHER
+        # SHOW ITEMS ONLY FIRST TIME PER VOUCHER / ACCOUNT
         # =================================================
 
-        if items and gl.voucher_no not in shown_voucher_items:
+        if items and dedup_key not in shown_voucher_items:
 
             for idx, item in enumerate(items):
 
@@ -474,7 +494,7 @@ def get_data(filters):
 
                 data.append(row)
 
-            shown_voucher_items.add(gl.voucher_no)
+            shown_voucher_items.add(dedup_key)
 
         else:
 

@@ -12,7 +12,7 @@ frappe.query_reports["GL Item"] = {
             "get_data": function(txt) {
                 return frappe.db.get_link_options("Company", txt);
             },
-            on_change: function() {
+            "on_change": function() {
                 frappe.query_report.set_filter_value("account", []);
                 frappe.query_report.set_filter_value("plant", []);
                 frappe.query_report.set_filter_value("segment", []);
@@ -61,6 +61,12 @@ frappe.query_reports["GL Item"] = {
             "get_data": function(txt) {
                 return frappe.db.get_link_options("Segment", txt);
             }
+        },
+        {
+            "fieldname": "exclude_material_transfer",
+            "label": __("Exclude Material Transfer"),
+            "fieldtype": "Check",
+            "default": 0
         }
     ]
 };
