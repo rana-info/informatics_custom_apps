@@ -7,8 +7,6 @@ from frappe.model.document import Document
 
 class AMTool(Document):
 	def validate(self):
-		if self.wrong_account and self.wrong_account == self.correct_account:
-			frappe.throw("Wrong Account and Correct Account cannot be the same.")
 		if self.wrong_cost_center and self.wrong_cost_center == self.correct_cost_center:
 			frappe.throw("Wrong Cost Center and Correct Cost Center cannot be the same.")
 			
@@ -19,57 +17,63 @@ class AMTool(Document):
 			self.update_accounting()
 
 	def update_category(self):
-		doc=frappe.get_doc("Asset", self.asset, update_modified=False)
+		# Update Asset fields
+		doc = frappe.get_doc("Asset", self.asset, update_modified=False)
 		doc.db_set("item_code", self.item_code, update_modified=False)
 		doc.db_set("item_name", self.item_name, update_modified=False)
 		doc.db_set("asset_category", self.asset_category, update_modified=False)
 
-		#Journal Entry Account Update
-		frappe.db.set_value(
-        "Journal Entry Account",
-        {
-            "reference_type": "Asset",
-            "reference_name": self.asset,
-            "account": self.wrong_account
-        },
-        {
-            "account": self.correct_account
-        },
-        update_modified=False
-    	)
+		# Build account mapping dict from child table rows
+		account_map = {
+			row.wrong_account: row.correct_account
+			for row in self.account_corrections  # your child table field name
+			if row.wrong_account and row.correct_account
+		}
 
-		 # ---------- GL Entry : update account ----------
-		frappe.db.set_value(
-			"GL Entry",
-			{
-				"voucher_type": "Journal Entry",
-				"voucher_subtype": "Depreciation Entry",
-				"against_voucher_type": "Asset",
-				"against_voucher": self.asset,
-				"account": self.wrong_account
-			},
-			{
-				"account": self.correct_account
-			},
-			update_modified=False
+		# Loop through each wrong→correct account pair
+		for wrong_account, correct_account in account_map.items():
+
+			# ---------- Journal Entry Account Update ----------
+			frappe.db.set_value(
+				"Journal Entry Account",
+				{
+					"reference_type": "Asset",
+					"reference_name": self.asset,
+					"account": wrong_account
+				},
+				{"account": correct_account},
+				update_modified=False
 			)
 
-		# ---------- GL Entry : update against ----------
-		frappe.db.set_value(
-			"GL Entry",
-			{
-				"voucher_type": "Journal Entry",
-				"voucher_subtype": "Depreciation Entry",
-				"against_voucher_type": "Asset",
-				"against_voucher": self.asset,
-				"against": self.wrong_account
-			},
-			{
-				"against": self.correct_account
-			},
-			update_modified=False
+			# ---------- GL Entry: update account ----------
+			frappe.db.set_value(
+				"GL Entry",
+				{
+					"voucher_type": "Journal Entry",
+					"voucher_subtype": "Depreciation Entry",
+					"against_voucher_type": "Asset",
+					"against_voucher": self.asset,
+					"account": wrong_account
+				},
+				{"account": correct_account},
+				update_modified=False
+			)
+
+			# ---------- GL Entry: update against ----------
+			frappe.db.set_value(
+				"GL Entry",
+				{
+					"voucher_type": "Journal Entry",
+					"voucher_subtype": "Depreciation Entry",
+					"against_voucher_type": "Asset",
+					"against_voucher": self.asset,
+					"against": wrong_account
+				},
+				{"against": correct_account},
+				update_modified=False
 			)
 	
+	#For Accounting Dimension Update
 	def update_accounting(self):
 		doc=frappe.get_doc("Asset", self.asset)
 		update_common = {}
