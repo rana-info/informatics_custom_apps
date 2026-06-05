@@ -6,27 +6,29 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
+  "update_menu_section",
   "asset_category_update",
   "accounting_dimension_update",
   "section_break_dttp",
   "asset",
   "item_code",
-  "item_name",
-  "asset_category",
   "segment",
   "section",
   "column_break_zezk",
-  "wrong_account",
-  "correct_account",
   "wrong_cost_center",
+  "asset_category",
+  "item_name",
   "correct_cost_center",
+  "account_mapping_section",
+  "account_corrections",
   "section_break_efey",
   "amended_from"
  ],
  "fields": [
   {
    "fieldname": "section_break_dttp",
-   "fieldtype": "Section Break"
+   "fieldtype": "Section Break",
+   "label": "Asset Details"
   },
   {
    "fieldname": "asset",
@@ -78,22 +80,6 @@
    "fieldtype": "Column Break"
   },
   {
-   "depends_on": "eval:doc.asset_category_update;",
-   "fieldname": "wrong_account",
-   "fieldtype": "Link",
-   "label": "Wrong Account",
-   "mandatory_depends_on": "eval:doc.asset_category_update;",
-   "options": "Account"
-  },
-  {
-   "depends_on": "eval:doc.asset_category_update;",
-   "fieldname": "correct_account",
-   "fieldtype": "Link",
-   "label": "Correct Account",
-   "mandatory_depends_on": "eval:doc.asset_category_update;",
-   "options": "Account"
-  },
-  {
    "default": "0",
    "fieldname": "asset_category_update",
    "fieldtype": "Check",
@@ -135,13 +121,32 @@
    "fieldtype": "Link",
    "label": "Section",
    "options": "Section"
+  },
+  {
+   "fieldname": "update_menu_section",
+   "fieldtype": "Section Break",
+   "label": "Update Menu"
+  },
+  {
+   "depends_on": "eval:doc.asset_category_update;",
+   "fieldname": "account_mapping_section",
+   "fieldtype": "Section Break",
+   "label": "Account Mapping",
+   "mandatory_depends_on": "eval:doc.asset_category_update;"
+  },
+  {
+   "allow_bulk_edit": 1,
+   "fieldname": "account_corrections",
+   "fieldtype": "Table",
+   "label": "Accounts Mapping",
+   "options": "AM Accounts Mapping"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-06-02 16:40:47.540368",
+ "modified": "2026-06-05 16:03:22.609476",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "AM Tool",
