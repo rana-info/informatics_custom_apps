@@ -44,7 +44,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Doctype Name",
-   "options": "\nStock Entry\nPurchase Receipt\nPurchase Invoice\nPayment Entry\nDelivery Note\nSales Invoice",
+   "options": "\nStock Entry\nMaterial Request\nPurchase Receipt\nPurchase Invoice\nPayment Entry\nDelivery Note\nSales Invoice",
    "reqd": 1
   },
   {
@@ -106,6 +106,7 @@
    "fieldname": "segment",
    "fieldtype": "Link",
    "label": "Segment",
+   "mandatory_depends_on": "eval:doc.segment_update",
    "options": "Segment"
   },
   {
@@ -227,7 +228,7 @@
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-01-12 17:33:32.918935",
+ "modified": "2026-06-05 10:51:09.550242",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "Accounting Management",

@@ -82,14 +82,22 @@ class AccountingManagement(Document):
 
 
     def update_header(self, doc, doctype):
-        if self.plant:
-            doc.db_set("branch", self.plant, update_modified=False)
-        if self.segment:
-            doc.db_set("segment", self.segment, update_modified=False)
-        if self.section:
-            doc.db_set("section", self.section, update_modified=False)
-        if self.cost_center and doctype != "Stock Entry":  # Skip cost_center for Stock Entry
-            doc.db_set("cost_center", self.cost_center, update_modified=False)
+        def set_if_exists(fieldname, value):
+            if value and frappe.get_meta(doctype).has_field(fieldname):
+                doc.db_set(fieldname, value, update_modified=False)
+
+        set_if_exists("branch", self.plant)
+        set_if_exists("custom_branch", self.plant)
+
+        set_if_exists("segment", self.segment)
+        set_if_exists("custom_segment", self.segment)
+
+        set_if_exists("section", self.section)
+        set_if_exists("custom_section", self.section)
+
+        if doctype != "Stock Entry":
+            set_if_exists("cost_center", self.cost_center)
+            set_if_exists("custom_cost_center", self.cost_center)
 
     def update_child(self, child):
         if self.plant and hasattr(child, "branch"):

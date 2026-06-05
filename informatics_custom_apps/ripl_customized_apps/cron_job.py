@@ -1,5 +1,6 @@
 import frappe
 from frappe.utils import today, add_days
+from erpnext.controllers.buying_controller import BuyingController
 
 
 def auto_close_po_specific_items():
@@ -98,3 +99,41 @@ def auto_close_po_specific_items():
 			message=f"Auto closed POs: {', '.join(to_close)}",
 			title="PO Auto Close - Dynamic Buffer Days"
 		)
+
+# Method for Missing Stock Ledger Entry Creation For Purchase Receipts
+def create_missing_return_pr_sles():
+
+    missing_prs = frappe.db.sql("""
+        SELECT pr.name
+        FROM `tabPurchase Receipt` pr
+        LEFT JOIN `tabStock Ledger Entry` sle
+            ON sle.voucher_type = 'Purchase Receipt'
+            AND sle.voucher_no = pr.name
+        WHERE pr.is_return = 1
+          AND pr.docstatus = 1
+          AND sle.name IS NULL
+    """, as_dict=True)
+
+    for row in missing_prs:
+        pr_name = row.name
+
+        try:
+            frappe.logger().info(
+                f"Creating missing SLE for Purchase Receipt {pr_name}"
+            )
+
+            doc = frappe.get_doc("Purchase Receipt", pr_name)
+
+            BuyingController.update_stock_ledger(
+                doc,
+                allow_negative_stock=False,
+                via_landed_cost_voucher=False
+            )
+
+            frappe.db.commit()
+
+        except Exception:
+            frappe.log_error(
+                frappe.get_traceback(),
+                f"Failed to create SLE for {pr_name}"
+            )
