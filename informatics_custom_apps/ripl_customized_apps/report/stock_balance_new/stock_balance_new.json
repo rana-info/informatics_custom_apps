@@ -10,7 +10,7 @@
  "idx": 0,
  "is_standard": "Yes",
  "letter_head": null,
- "modified": "2026-06-05 12:03:52.129331",
+ "modified": "2026-06-06 16:56:27.730728",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "Stock Balance New",
@@ -53,6 +53,9 @@
   },
   {
    "role": "Master Admin"
+  },
+  {
+   "role": "Accounts User"
   }
  ],
  "timeout": 0

@@ -1,6 +1,3 @@
-# Copyright (c) 2026, Monil Kamboj and contributors
-# For license information, please see license.txt
-
 import frappe
 
 
@@ -52,7 +49,13 @@ def get_columns():
             "width": 140,
         },
         {
-            "label": "MR Amount",
+            "label": "Total MR Amount",
+            "fieldname": "total_mr_amount",
+            "fieldtype": "Currency",
+            "width": 150,
+        },
+        {
+            "label": "MR Pending",
             "fieldname": "mr_amount",
             "fieldtype": "Currency",
             "width": 140,
@@ -83,10 +86,10 @@ def get_columns():
         },
     ]
 
+
 def get_data(filters):
 
     filters = filters or {}
-
     conditions = []
 
     if filters.get("company"):
@@ -107,13 +110,14 @@ def get_data(filters):
         filters["segments"] = tuple(filters.get("segments"))
         conditions.append("pb.segment IN %(segments)s")
 
-    where_clause = ""
+    if filters.get("hide_small_budget"):
+        conditions.append("IFNULL(pbd.budget_amount, 0) > 1")
 
+    where_clause = ""
     if conditions:
         where_clause = " AND " + " AND ".join(conditions)
 
-    return frappe.db.sql(
-        f"""
+    return frappe.db.sql(f"""
         SELECT
             pb.name AS procurement_budget,
             pb.gl AS gl_account,
@@ -121,34 +125,24 @@ def get_data(filters):
             pb.plant,
             pb.segment,
             pbd.budget_amount,
-
-            COALESCE(mr.mr_balance, 0) AS mr_amount,
-
+            COALESCE(mr.total_mr_amount, 0) AS total_mr_amount,
+            COALESCE(mr.mr_amount, 0) AS mr_amount,
             COALESCE(po.po_amount, 0) AS po_amount,
 
             (
-                COALESCE(mr.mr_balance, 0)
-                + COALESCE(po.po_amount, 0)
+                COALESCE(mr.mr_amount, 0) + COALESCE(po.po_amount, 0)
             ) AS total_consumed,
 
             (
-                pbd.budget_amount
-                -
-                (
-                    COALESCE(mr.mr_balance, 0)
-                    + COALESCE(po.po_amount, 0)
-                )
+                pbd.budget_amount -
+                (COALESCE(mr.mr_amount, 0) + COALESCE(po.po_amount, 0))
             ) AS balance_budget,
 
             CASE
                 WHEN pbd.budget_amount > 0 THEN
                     ROUND(
-                        (
-                            (
-                                COALESCE(mr.mr_balance, 0)
-                                + COALESCE(po.po_amount, 0)
-                            ) * 100
-                        ) / pbd.budget_amount,
+                        (COALESCE(mr.mr_amount, 0) + COALESCE(po.po_amount, 0)) * 100
+                        / pbd.budget_amount,
                         2
                     )
                 ELSE 0
@@ -158,40 +152,35 @@ def get_data(filters):
 
         INNER JOIN `tabProcurement Cost Center` pbd
             ON pbd.parent = pb.name
-
-        LEFT JOIN
-        (
+        LEFT JOIN (
             SELECT
                 mri.expense_account,
                 mri.cost_center,
-                IFNULL(mri.branch, '') AS plant,
-                IFNULL(mri.segment, '') AS segment,
+                IFNULL(mri.branch,'') AS plant,
+                IFNULL(mri.segment,'') AS segment,
+
+                SUM(mri.amount) AS total_mr_amount,
 
                 SUM(
-                    mri.amount
-                    -
-                    COALESCE(mr_po.po_amount, 0)
-                ) AS mr_balance
+                    GREATEST(
+                        mri.amount - COALESCE(mr_po.po_amount, 0),
+                        0
+                    )
+                ) AS mr_amount
 
             FROM `tabMaterial Request Item` mri
-
             INNER JOIN `tabMaterial Request` mr
                 ON mr.name = mri.parent
 
-            LEFT JOIN
-            (
+            LEFT JOIN (
                 SELECT
                     poi.material_request_item,
                     SUM(poi.amount) AS po_amount
-
                 FROM `tabPurchase Order Item` poi
-
                 INNER JOIN `tabPurchase Order` po
                     ON po.name = poi.parent
-
                 WHERE po.docstatus = 1
                     AND poi.material_request_item IS NOT NULL
-
                 GROUP BY poi.material_request_item
             ) mr_po
                 ON mr_po.material_request_item = mri.name
@@ -202,50 +191,65 @@ def get_data(filters):
             GROUP BY
                 mri.expense_account,
                 mri.cost_center,
-                IFNULL(mri.branch, ''),
-                IFNULL(mri.segment, '')
+                IFNULL(mri.branch,''),
+                IFNULL(mri.segment,'')
         ) mr
             ON mr.expense_account = pb.gl
             AND mr.cost_center = pbd.cost_center
-            AND mr.plant = IFNULL(pb.plant, '')
-            AND mr.segment = IFNULL(pb.segment, '')
+            AND mr.plant = IFNULL(pb.plant,'')
+            AND mr.segment = IFNULL(pb.segment,'')
 
-        LEFT JOIN
-        (
+        LEFT JOIN (
             SELECT
                 poi.expense_account,
                 poi.cost_center,
-                IFNULL(poi.branch, '') AS plant,
-                IFNULL(poi.segment, '') AS segment,
+                IFNULL(poi.branch,'') AS plant,
+                IFNULL(poi.segment,'') AS segment,
                 SUM(poi.amount) AS po_amount
 
             FROM `tabPurchase Order Item` poi
-
             INNER JOIN `tabPurchase Order` po
                 ON po.name = poi.parent
-
             WHERE po.docstatus = 1
 
             GROUP BY
                 poi.expense_account,
                 poi.cost_center,
-                IFNULL(poi.branch, ''),
-                IFNULL(poi.segment, '')
+                IFNULL(poi.branch,''),
+                IFNULL(poi.segment,'')
         ) po
             ON po.expense_account = pb.gl
             AND po.cost_center = pbd.cost_center
-            AND po.plant = IFNULL(pb.plant, '')
-            AND po.segment = IFNULL(pb.segment, '')
+            AND po.plant = IFNULL(pb.plant,'')
+            AND po.segment = IFNULL(pb.segment,'')
+
+        LEFT JOIN (
+            SELECT
+                poi.expense_account,
+                poi.cost_center,
+                IFNULL(poi.branch,'') AS plant,
+                IFNULL(poi.segment,'') AS segment,
+                SUM(poi.amount) AS mr_to_po_amount
+
+            FROM `tabPurchase Order Item` poi
+            INNER JOIN `tabPurchase Order` po
+                ON po.name = poi.parent
+            WHERE po.docstatus = 1
+                AND poi.material_request_item IS NOT NULL
+
+            GROUP BY
+                poi.expense_account,
+                poi.cost_center,
+                IFNULL(poi.branch,''),
+                IFNULL(poi.segment,'')
+        ) mrpo
+            ON mrpo.expense_account = pb.gl
+            AND mrpo.cost_center = pbd.cost_center
+            AND mrpo.plant = IFNULL(pb.plant,'')
+            AND mrpo.segment = IFNULL(pb.segment,'')
 
         WHERE pb.docstatus = 1
         {where_clause}
 
-        ORDER BY
-            pb.gl,
-            pbd.cost_center,
-            pb.plant,
-            pb.segment
-        """,
-        filters,
-        as_dict=1,
-    )
+        ORDER BY pb.gl, pbd.cost_center, pb.plant, pb.segment
+    """, filters, as_dict=1)
