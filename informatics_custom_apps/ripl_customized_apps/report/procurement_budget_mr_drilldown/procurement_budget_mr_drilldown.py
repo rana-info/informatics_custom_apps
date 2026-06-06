@@ -1,6 +1,3 @@
-# Copyright (c) 2026, Monil Kamboj and contributors
-# For license information, please see license.txt
-
 import frappe
 
 
@@ -14,45 +11,32 @@ def execute(filters=None):
             "fieldname": "material_request",
             "fieldtype": "Link",
             "options": "Material Request",
-            "width": 200,
+            "width": 340,
+
         },
         {
             "label": "MR Date",
             "fieldname": "transaction_date",
-            "fieldtype": "Date",
-            "width": 110,
+            "fieldtype": "Date",            
+            "width": 340,
+
         },
         {
-            "label": "Requested Items",
-            "fieldname": "items",
-            "fieldtype": "Data",
-            "width": 400,
-        },
-        {
-            "label": "Requested Value",
+            "label": "MR Amount",
             "fieldname": "mr_amount",
             "fieldtype": "Currency",
-            "width": 140,
-        },
-        {
-            "label": "Ordered Value",
-            "fieldname": "po_amount",
-            "fieldtype": "Currency",
-            "width": 140,
-        },
-        {
-            "label": "Pending Value",
-            "fieldname": "remaining_amount",
-            "fieldtype": "Currency",
-            "width": 140,
+            "width": 340,
+
         },
     ]
 
-    # Don't load entire database if report is opened directly
     if not filters.get("gl_account"):
         return columns, []
 
-    conditions = []
+    conditions = [
+        "mr.docstatus = 1",
+        "mr.material_request_type = 'Purchase'"
+    ]
 
     if filters.get("gl_account"):
         conditions.append("mri.expense_account = %(gl_account)s")
@@ -66,58 +50,20 @@ def execute(filters=None):
     if filters.get("segment"):
         conditions.append("IFNULL(mri.segment,'') = %(segment)s")
 
-    where_clause = ""
-    if conditions:
-        where_clause = " AND " + " AND ".join(conditions)
+    where_clause = " AND ".join(conditions)
 
-    data = frappe.db.sql(
-        f"""
+    data = frappe.db.sql(f"""
         SELECT
             mr.name AS material_request,
             mr.transaction_date,
 
-            GROUP_CONCAT(
-                DISTINCT mri.item_code
-                ORDER BY mri.item_code
-                SEPARATOR ', '
-            ) AS items,
+            SUM(mri.amount) AS mr_amount
 
-            SUM(mri.amount) AS mr_amount,
+        FROM `tabMaterial Request` mr
+        INNER JOIN `tabMaterial Request Item` mri
+            ON mri.parent = mr.name
 
-            COALESCE(
-                SUM(po_map.po_amount),
-                0
-            ) AS po_amount,
-
-            SUM(mri.amount)
-            -
-            COALESCE(
-                SUM(po_map.po_amount),
-                0
-            ) AS remaining_amount
-
-        FROM `tabMaterial Request Item` mri
-
-        INNER JOIN `tabMaterial Request` mr
-            ON mr.name = mri.parent
-
-        LEFT JOIN
-        (
-            SELECT
-                poi.material_request_item,
-                SUM(poi.amount) AS po_amount
-            FROM `tabPurchase Order Item` poi
-            INNER JOIN `tabPurchase Order` po
-                ON po.name = poi.parent
-            WHERE po.docstatus = 1
-                AND poi.material_request_item IS NOT NULL
-            GROUP BY poi.material_request_item
-        ) po_map
-            ON po_map.material_request_item = mri.name
-
-        WHERE mr.docstatus = 1
-            AND mr.material_request_type = 'Purchase'
-            {where_clause}
+        WHERE {where_clause}
 
         GROUP BY
             mr.name,
@@ -126,9 +72,6 @@ def execute(filters=None):
         ORDER BY
             mr.transaction_date DESC,
             mr.name DESC
-        """,
-        filters,
-        as_dict=True,
-    )
+    """, filters, as_dict=True)
 
     return columns, data

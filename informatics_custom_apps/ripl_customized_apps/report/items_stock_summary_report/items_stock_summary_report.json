@@ -10,7 +10,7 @@
  "idx": 0,
  "is_standard": "Yes",
  "letter_head": null,
- "modified": "2026-06-04 15:21:00.774803",
+ "modified": "2026-06-06 16:58:54.057367",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "Items Stock Summary Report",
@@ -53,6 +53,9 @@
   },
   {
    "role": "Master Admin"
+  },
+  {
+   "role": "Accounts User"
   }
  ],
  "timeout": 0
