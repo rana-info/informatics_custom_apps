@@ -39,7 +39,14 @@ frappe.query_reports["Procurement Budget Consumption"] = {
 			get_data: function(txt) {
 				return frappe.db.get_link_options("Segment", txt);
 			}
-		}
+		},
+
+		{
+			fieldname: "hide_small_budget",
+			label: __("Budget > 1 Only"),
+			fieldtype: "Check",
+			default: 1
+		},
 	],
 
 	formatter: function(value, row, column, data, default_formatter) {
@@ -50,7 +57,7 @@ frappe.query_reports["Procurement Budget Consumption"] = {
 			return value;
 		}
 
-		if (column.fieldname === "mr_amount" && flt(data.mr_amount)) {
+		if (column.fieldname === "total_mr_amount" && flt(data.total_mr_amount)) {
 
 			return `
 				<a
