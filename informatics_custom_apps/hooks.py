@@ -165,9 +165,8 @@ scheduler_events = {
 "daily_long": [
 		"informatics_custom_apps.ripl_customized_apps.doctype.zzdeputation_request.zzdeputation_request.attendance_request_created",
         "informatics_custom_apps.ripl_customized_apps.doctype.zz_project_rsld.zz_project_rsld.update_target_over_days_for_all_tasks",
-        "informatics_custom_apps.ripl_customized_apps.cron_job.auto_close_po_specific_items",
-        "informatics_custom_apps.ripl_customized_apps.cron_job.create_missing_return_pr_sles"
-	]
+        "informatics_custom_apps.ripl_customized_apps.cron_job.auto_close_po_specific_items"
+	],
 # 	"all": [
 # 		"informatics_custom_apps.tasks.all"
 # 	],
@@ -177,9 +176,9 @@ scheduler_events = {
 # 	"hourly": [
 # 		"informatics_custom_apps.tasks.hourly"
 # 	],
-# 	"weekly": [
-# 		"informatics_custom_apps.tasks.weekly"
-# 	],
+	"weekly": [
+		"informatics_custom_apps.ripl_customized_apps.cron_job.create_missing_return_pr_sles"
+	]
 # 	"monthly": [
 # 		"informatics_custom_apps.tasks.monthly"
 # 	],
