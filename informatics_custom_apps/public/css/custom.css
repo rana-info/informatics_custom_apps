@@ -1,0 +1,35 @@
+/* Orange */
+.indicator-pill.custom-orange {
+	background: #fff3cd;
+	color: #c2991f;
+}
+
+/* Sky Blue */
+.indicator-pill.custom-sky {
+	background: #d1ecf1;
+	color: #114c56;
+}
+
+/* Dark Green */
+.indicator-pill.custom-darkgreen {
+	background: #d4edda;
+	color: #104d1e;
+}
+
+/* Magenta */
+.indicator-pill.custom-magenta {
+	background: #f8d7da;
+	color: #852630;
+}
+
+/* Teal */
+.indicator-pill.custom-teal {
+	background: #d1f2eb;
+	color: #0f5132;
+}
+
+/* Brown */
+.indicator-pill.custom-brown {
+	background: #e6d3c5;
+	color: #642b11fc;
+}

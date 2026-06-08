@@ -1,0 +1,44 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-06-01 10:14:51.457552",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "old_delivery_note",
+  "new_delivery_note"
+ ],
+ "fields": [
+  {
+   "fieldname": "old_delivery_note",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Old Delivery Note",
+   "options": "Delivery Note",
+   "read_only": 1
+  },
+  {
+   "fieldname": "new_delivery_note",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "New Delivery Note",
+   "options": "Delivery Note"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-06-01 11:21:22.994261",
+ "modified_by": "Administrator",
+ "module": "RIPL Customized Apps",
+ "name": "Delivery Note Rotation",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
