@@ -104,14 +104,11 @@ def auto_close_po_specific_items():
 def create_missing_return_pr_sles():
 
     missing_prs = frappe.db.sql("""
-        SELECT pr.name
-        FROM `tabPurchase Receipt` pr
-        LEFT JOIN `tabStock Ledger Entry` sle
-            ON sle.voucher_type = 'Purchase Receipt'
-            AND sle.voucher_no = pr.name
-        WHERE pr.is_return = 1
-          AND pr.docstatus = 1
-          AND sle.name IS NULL
+        SELECT pr.name FROM `tabPurchase Receipt` pr LEFT JOIN `tabPurchase Receipt Item` pri ON pr.name = pri.parent
+		LEFT JOIN `tabItem` im ON pri.item_code = im.name
+		LEFT JOIN `tabStock Ledger Entry` sle ON sle.voucher_type = 'Purchase Receipt'
+		AND sle.voucher_no = pr.name WHERE pr.is_return = 1 AND pr.docstatus = 1 AND sle.name IS NULL 
+		AND im.is_stock_item = 1 AND pr.posting_date >= '2026-04-01';
     """, as_dict=True)
 
     for row in missing_prs:
