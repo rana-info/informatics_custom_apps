@@ -106,6 +106,11 @@ function load_data(frm) {
 				message: "Gate Entry data loaded",
 				indicator: "blue",
 			});
+
+			if (frm.doc.correction_type) {
+				frm.doc.reason = frm.doc.correction_type;
+				frm.refresh_field("reason");
+			}
 		},
 	});
 }
@@ -227,6 +232,9 @@ const RESTRICTED_CORRECTION_TYPES = [
 
 const SPECIAL_WEIGHT_TYPES = ["Wrong Weight"];
 
+// Only visible for Manual Weighment gate entries
+const MANUAL_ONLY_TYPES = ["Inward/Outward Wrong Entry (Manual)"];
+
 const OUTWARD_ONLY_TYPES = ["Wrong Card Number", "Wrong Vehicle Type"];
 
 const NO_WEIGHMENT_TYPES = [
@@ -251,7 +259,12 @@ function filter_correction_type_options(frm) {
 		allowed = NO_WEIGHMENT_TYPES;
 	} else if (is_manual_weighment || is_stock_transfer) {
 		// Manual weighment or Stock transfer: hide RESTRICTED but show Wrong Weight
-		allowed = ALL_CORRECTION_TYPES.filter((t) => !RESTRICTED_CORRECTION_TYPES.includes(t));
+		// Manual weighment also gets the entry-flow swap type
+		let base = ALL_CORRECTION_TYPES.filter((t) => !RESTRICTED_CORRECTION_TYPES.includes(t));
+		if (is_manual_weighment) {
+			base = base.concat(MANUAL_ONLY_TYPES);
+		}
+		allowed = base;
 	} else {
 		// Normal: show all except special weight types
 		allowed = ALL_CORRECTION_TYPES.filter((t) => !SPECIAL_WEIGHT_TYPES.includes(t));
@@ -259,7 +272,9 @@ function filter_correction_type_options(frm) {
 
 	frm.set_df_property("correction_type", "options", allowed.join("\n"));
 
-	if (frm.doc.correction_type && !allowed.includes(frm.doc.correction_type)) {
+	// Only clear on draft docs — submitted/approved docs must never lose their correction_type
+	// due to the async race where __is_manual_weighment isn't set yet on refresh
+	if (frm.doc.docstatus === 0 && frm.doc.correction_type && !allowed.includes(frm.doc.correction_type)) {
 		frm.set_value("correction_type", "");
 	}
 
@@ -485,6 +500,11 @@ frappe.ui.form.on("Purchase Management System", {
 
 	correction_type(frm) {
 		load_data(frm);
+
+		const ct = frm.doc.correction_type;
+
+		frm.doc.reason = ct || "";
+		frm.refresh_field("reason");
 	},
 
 	new_purchase_order(frm) {
