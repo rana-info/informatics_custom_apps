@@ -355,9 +355,16 @@ class PurchaseManagementSystem(Document):
 
     def before_save(self):
         if self.gate_entry:
-            ge_docstatus = frappe.db.get_value("Gate Entry", self.gate_entry, "docstatus")
+            ge_docstatus, entry_type = frappe.db.get_value(
+                "Gate Entry", self.gate_entry, ["docstatus", "entry_type"]
+            )
             if ge_docstatus == 2:
                 frappe.throw("Cannot apply correction on cancelled Gate Entry.")
+            if entry_type == "Outward" and self.correction_type not in ("Wrong Card Number", "Wrong Vehicle Type"):
+                frappe.throw(
+                    f"Selected Gate Entry <b>{self.gate_entry}</b> is an <b>Outward</b> entry. "
+                    f"Use SMT for Outward Entries"
+                )
 
         if self.correction_type == "Wrong Purchase Order and Supplier":
             if self.newcorrect_supplier and not self.new_purchase_order:
@@ -402,6 +409,19 @@ class PurchaseManagementSystem(Document):
             is_stock = getattr(gate_entry_doc, 'is_stock_transfer', 0)
             if (is_manual or is_stock) and not getattr(gate_entry_doc, 'is_completed', 0):
                 frappe.throw("Wrong Weight correction can only be applied to Completed Gate Entries.")
+
+        if self.correction_type == "Inward/Outward Wrong Entry (Manual)" and self.gate_entry:
+            gate_entry_doc = self.get_gate_entry_doc()
+            if not getattr(gate_entry_doc, 'is_manual_weighment', 0):
+                frappe.throw(
+                    "'Inward/Outward Wrong Entry (Manual)' can only be applied to "
+                    "Manual Weighment Gate Entries."
+                )
+            if not getattr(gate_entry_doc, 'is_in_progress', 0):
+                frappe.throw(
+                    "'Inward/Outward Wrong Entry (Manual)' can only be applied when "
+                    "Gate Entry is In Progress (first weight taken, second weight pending)."
+                )
 
         if self.correction_type in ITEM_CORRECTION_TYPES and self.gate_entry:
             gate_entry_doc = self.get_gate_entry_doc()
@@ -525,6 +545,7 @@ class PurchaseManagementSystem(Document):
             "Wrong Vehicle Type": self.correct_vehicle_type,
             "Wrong Weight": self.correct_weight,
             "Wrong Segment": self.correct_segment,
+            "Inward/Outward Wrong Entry (Manual)": self.correct_entry_flow,
         }
 
         if self.correction_type == "Wrong Purchase Order and Supplier":
@@ -1038,6 +1059,50 @@ class PurchaseManagementSystem(Document):
             field_map_weighment={"vehicle_type": self.new_vehicle_type},
         )
         frappe.msgprint("Vehicle Type updated successfully")
+
+    def correct_entry_flow(self):
+        """Swap Inward → Outward (or vice-versa) for Manual Weighment entries.
+
+        Weight swap logic (Inward → Outward):
+          - tare_weight  = current gross_weight   (first weight becomes tare)
+          - gross_weight = 0                      (second weight not yet taken)
+          - net_weight   = 0                      (unchanged / zero)
+        """
+        gate_entry_doc = self.get_gate_entry_doc()
+        current_type = getattr(gate_entry_doc, 'entry_type', 'Inward')
+        new_type = "Outward" if current_type == "Inward" else "Inward"
+
+        # Update Gate Entry entry_type
+        gate_entry_doc.db_set("entry_type", new_type, update_modified=False)
+
+        # Update each linked Weighment
+        for wname in self.get_weighment_names():
+            current_gross = frappe.db.get_value("Weighment", wname, "gross_weight") or 0
+
+            if new_type == "Outward":
+                # Was Inward: first weight (gross) becomes tare; gross reset to 0
+                wei_data = {
+                    "entry_type": new_type,
+                    "tare_weight": current_gross,
+                    "gross_weight": 0,
+                    "net_weight": 0,
+                }
+            else:
+                # Was Outward: first weight (tare) becomes gross; tare reset to 0
+                current_tare = frappe.db.get_value("Weighment", wname, "tare_weight") or 0
+                wei_data = {
+                    "entry_type": new_type,
+                    "gross_weight": current_tare,
+                    "tare_weight": 0,
+                    "net_weight": 0,
+                }
+
+            frappe.db.set_value("Weighment", wname, wei_data, update_modified=False)
+
+        frappe.msgprint(
+            f"Entry type swapped from <b>{current_type}</b> to <b>{new_type}</b>. "
+            f"Weights adjusted accordingly."
+        )
 
     def correct_segment(self):
         """Update segment across Gate Entry, Weighment, Purchase Receipt and Purchase Invoice."""
