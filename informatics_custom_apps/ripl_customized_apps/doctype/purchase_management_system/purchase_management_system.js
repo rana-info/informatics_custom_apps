@@ -464,6 +464,14 @@ frappe.ui.form.on("Purchase Management System", {
 			toggle_outward_sections(frm);
 			filter_correction_type_options(frm);
 		}
+
+		if (frm.doc.status === "Approved" || frm.doc.status === "Pending" || frm.doc.status === "Cancelled") {
+			if (frm.doc.correction_type) {
+				frm.set_df_property("correction_type", "read_only", 1);
+				frm.set_df_property("gate_entry", "read_only", 1);
+				frm.refresh_fields(["correction_type", "gate_entry"]);
+			}
+		}
 	},
 
 	gate_entry(frm) {

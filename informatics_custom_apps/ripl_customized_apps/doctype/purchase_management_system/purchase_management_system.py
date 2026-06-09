@@ -1192,14 +1192,20 @@ class PurchaseManagementSystem(Document):
 
         # For in-progress manual weighment: complete the GE + Weighment and free the card
         if is_manual and is_in_progress:
+            approval_datetime = frappe.utils.now()
             gate_entry_doc.db_set(
                 {"is_completed": 1, "is_in_progress": 0},
                 update_modified=False,
             )
+            # outward_date only exists on Weighment, not Gate Entry
             for wname in weighment_names:
                 frappe.db.set_value(
                     "Weighment", wname,
                     {"is_completed": 1, "is_in_progress": 0},
+                    update_modified=False,
+                )
+                frappe.db.set_value(
+                    "Weighment", wname, "outward_date", approval_datetime,
                     update_modified=False,
                 )
             # Free the card assigned to the gate entry
