@@ -409,7 +409,15 @@ class SalesManagementTool(Document):
             frappe.db.set_value("Weighment", wname, "item_group", self.new_item_group, update_modified=False)
 
     def handle_sales_partner_correction(self):
-        """Cascades new Sales Partner across Deal, Dispatch Orders, Sales Orders, Delivery Notes, and Sales Invoices."""
+        """Cascades new Sales Partner across Deal, Dispatch Orders, Sales Orders,
+        Delivery Notes, and Sales Invoices.
+
+        Also updates:
+            - rate_of_commission_per_uom  in Deal, SO, DN, SI
+            (fetched from Sales Partner.custom_rate_of_commission_per_uom)
+            - total_commission             in SO, DN, SI
+            (= rate_of_commission_per_uom * total_net_weight / 100)
+        """
         if not self.deal:
             frappe.throw("Deal is required for Sales Partner correction.")
         if not self.new_sales_partner:
@@ -419,23 +427,52 @@ class SalesManagementTool(Document):
 
         new_sp = self.new_sales_partner
 
-        frappe.db.set_value("Deal", self.deal, "sales_partner", new_sp, update_modified=False)
+        # Fetch the commission rate from the new Sales Partner master
+        new_rate = frappe.db.get_value(
+            "Sales Partner", new_sp, "custom_rate_of_commission_per_uom"
+        ) or 0
 
+        frappe.db.set_value(
+            "Deal", self.deal,
+            {"sales_partner": new_sp, "rate_of_commission_per_uom": new_rate},
+            update_modified=False
+        )
+
+        # --- Dispatch Orders: sales_partner + rate + total_commission ---
         dispatch_orders = frappe.get_all(
             "Dispatch Order",
             filters={"deal": self.deal, "docstatus": ["<", 2]},
             pluck="name"
         )
         for do_name in dispatch_orders:
-            frappe.db.set_value("Dispatch Order", do_name, "sales_partner", new_sp, update_modified=False)
+            do_net_weight = frappe.db.get_value("Dispatch Order", do_name, "total_net_weight") or 0
+            frappe.db.set_value(
+                "Dispatch Order", do_name,
+                {
+                    "sales_partner": new_sp,
+                    "rate_of_commission_per_uom": new_rate,
+                    "total_commission": new_rate * do_net_weight / 100,
+                },
+                update_modified=False
+            )
 
+        # --- Sales Orders -> Delivery Notes -> Sales Invoices ---
         sales_orders = frappe.get_all(
             "Sales Order",
             filters={"deal": self.deal, "docstatus": ["<", 2]},
             pluck="name"
         )
         for so_name in sales_orders:
-            frappe.db.set_value("Sales Order", so_name, "sales_partner", new_sp, update_modified=False)
+            so_net_weight = frappe.db.get_value("Sales Order", so_name, "total_net_weight") or 0
+            frappe.db.set_value(
+                "Sales Order", so_name,
+                {
+                    "sales_partner": new_sp,
+                    "rate_of_commission_per_uom": new_rate,
+                    "total_commission": new_rate * so_net_weight / 100,
+                },
+                update_modified=False
+            )
 
             dn_names = frappe.get_all(
                 "Delivery Note Item",
@@ -444,7 +481,16 @@ class SalesManagementTool(Document):
                 distinct=True
             )
             for dn_name in list(set(dn_names)):
-                frappe.db.set_value("Delivery Note", dn_name, "sales_partner", new_sp, update_modified=False)
+                dn_net_weight = frappe.db.get_value("Delivery Note", dn_name, "total_net_weight") or 0
+                frappe.db.set_value(
+                    "Delivery Note", dn_name,
+                    {
+                        "sales_partner": new_sp,
+                        "rate_of_commission_per_uom": new_rate,
+                        "total_commission": new_rate * dn_net_weight / 100,
+                    },
+                    update_modified=False
+                )
 
                 si_names = frappe.get_all(
                     "Sales Invoice Item",
@@ -453,7 +499,17 @@ class SalesManagementTool(Document):
                     distinct=True
                 )
                 for si_name in list(set(si_names)):
-                    frappe.db.set_value("Sales Invoice", si_name, "sales_partner", new_sp, update_modified=False)
+                    si_net_weight = frappe.db.get_value("Sales Invoice", si_name, "total_net_weight") or 0
+                    frappe.db.set_value(
+                        "Sales Invoice", si_name,
+                        {
+                            "sales_partner": new_sp,
+                            "rate_of_commission_per_uom": new_rate,
+                            "total_commission": new_rate * si_net_weight / 100,
+                        },
+                        update_modified=False
+                    )
+
 
     def _reset_weighment_weights(self, weighments):
         """Zero out weight fields and mark all related weighments as in-progress."""
