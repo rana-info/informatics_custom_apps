@@ -95,7 +95,13 @@ function load_data(frm) {
 			let no_weighment =
 				frm.doc.__is_weighment_required === "No" || frm.doc.__is_weighment_required === 0;
 
-			if (!no_weighment) {
+			// For in-progress manual weighment + Wrong Weight: show weight section so user can set both weights
+			let is_manual_inprogress_weight =
+				frm.doc.__is_manual_weighment &&
+				frm.doc.is_in_progress &&
+				frm.doc.correction_type === "Wrong Weight";
+
+			if (!no_weighment || is_manual_inprogress_weight) {
 				toggle_status_section(frm, true);
 				handle_status_logic(frm);
 			} else {
@@ -103,7 +109,7 @@ function load_data(frm) {
 			}
 
 			frappe.show_alert({
-				message: "Gate Entry data loaded",
+				message: __("Gate Entry data loaded"),
 				indicator: "blue",
 			});
 
