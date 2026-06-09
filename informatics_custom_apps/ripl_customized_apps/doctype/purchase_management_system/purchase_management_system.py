@@ -407,8 +407,20 @@ class PurchaseManagementSystem(Document):
             gate_entry_doc = self.get_gate_entry_doc()
             is_manual = getattr(gate_entry_doc, 'is_manual_weighment', 0)
             is_stock = getattr(gate_entry_doc, 'is_stock_transfer', 0)
-            if (is_manual or is_stock) and not getattr(gate_entry_doc, 'is_completed', 0):
-                frappe.throw("Wrong Weight correction can only be applied to Completed Gate Entries.")
+            is_completed = getattr(gate_entry_doc, 'is_completed', 0)
+            is_in_progress = getattr(gate_entry_doc, 'is_in_progress', 0)
+
+            if is_manual:
+                # Manual weighment: allow both in-progress and completed
+                if not is_completed and not is_in_progress:
+                    frappe.throw(
+                        "Wrong Weight correction for Manual Weighment requires the Gate Entry "
+                        "to be either In Progress or Completed."
+                    )
+            elif is_stock:
+                # Stock transfer: must be completed
+                if not is_completed:
+                    frappe.throw("Wrong Weight correction can only be applied to Completed Gate Entries.")
 
         if self.correction_type == "Inward/Outward Wrong Entry (Manual)" and self.gate_entry:
             gate_entry_doc = self.get_gate_entry_doc()
@@ -1155,10 +1167,16 @@ class PurchaseManagementSystem(Document):
         frappe.msgprint(f"Segment updated Sucessfully")
 
     def correct_weight(self):
-        """Update gross, tare, and net weights on Weighment only. Recreates SE for Stock Transfers."""
+        """Update gross, tare, and net weights on Weighment only. Recreates SE for Stock Transfers.
+        For in-progress manual weighment entries, also completes the GE + Weighment and frees the card."""
         gross = self.gross_weight or 0
         tare = self.tare_weight or 0
-        net = gross - tare
+
+        gate_entry_doc = self.get_gate_entry_doc()
+        is_manual = getattr(gate_entry_doc, 'is_manual_weighment', 0)
+
+
+        net = (self.net_weight or 0) if is_manual else (gross - tare)
 
         weighment_names = self.get_weighment_names()
         for wname in weighment_names:
@@ -1170,7 +1188,32 @@ class PurchaseManagementSystem(Document):
                 update_modified=False,
             )
 
-        gate_entry_doc = self.get_gate_entry_doc()
+        is_in_progress = getattr(gate_entry_doc, 'is_in_progress', 0)
+
+        # For in-progress manual weighment: complete the GE + Weighment and free the card
+        if is_manual and is_in_progress:
+            gate_entry_doc.db_set(
+                {"is_completed": 1, "is_in_progress": 0},
+                update_modified=False,
+            )
+            for wname in weighment_names:
+                frappe.db.set_value(
+                    "Weighment", wname,
+                    {"is_completed": 1, "is_in_progress": 0},
+                    update_modified=False,
+                )
+            # Free the card assigned to the gate entry
+            card_number = getattr(gate_entry_doc, 'card_number', None)
+            if card_number:
+                frappe.db.set_value(
+                    "Card Details", card_number, "is_assigned", 0,
+                    update_modified=False,
+                )
+            frappe.msgprint(
+                f"Weight updated successfully."
+            )
+            return
+
         if getattr(gate_entry_doc, "is_stock_transfer", 0) and getattr(gate_entry_doc, "entry_type", "") == "Inward":
             se_items = frappe.get_all("Stock Entry Detail", filters={"custom_gate_entry": self.gate_entry}, pluck="parent")
             if se_items:
