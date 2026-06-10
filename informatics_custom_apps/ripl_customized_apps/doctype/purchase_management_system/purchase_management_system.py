@@ -404,21 +404,18 @@ class PurchaseManagementSystem(Document):
 
     def validate(self):
         if self.correction_type == "Wrong Weight":
-            gate_entry_doc = self.get_gate_entry_doc()
-            is_manual = getattr(gate_entry_doc, 'is_manual_weighment', 0)
-            is_stock = getattr(gate_entry_doc, 'is_stock_transfer', 0)
-            is_completed = getattr(gate_entry_doc, 'is_completed', 0)
-            is_in_progress = getattr(gate_entry_doc, 'is_in_progress', 0)
+            is_manual = int(self.is_manual_weighment or 0)
+            is_stock = int(self.is_stock_transfer or 0)
+            is_completed = int(self.is_completed or 0)
+            is_in_progress = int(self.is_in_progress or 0)
 
             if is_manual:
-                # Manual weighment: allow both in-progress and completed
                 if not is_completed and not is_in_progress:
                     frappe.throw(
                         "Wrong Weight correction for Manual Weighment requires the Gate Entry "
                         "to be either In Progress or Completed."
                     )
             elif is_stock:
-                # Stock transfer: must be completed
                 if not is_completed:
                     frappe.throw("Wrong Weight correction can only be applied to Completed Gate Entries.")
 
