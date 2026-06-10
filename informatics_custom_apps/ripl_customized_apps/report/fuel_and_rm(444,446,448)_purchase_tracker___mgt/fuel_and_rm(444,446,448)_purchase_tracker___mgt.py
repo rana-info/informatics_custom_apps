@@ -87,7 +87,7 @@ def get_data(filters):
 			(poi.qty - IFNULL(pri.received_qty, 0)) AS pending_qty,
 
 			po.grand_total AS po_value,
-			wh.custom_branch AS plant,
+			poi.branch AS plant,
 
 			(poi.qty / SUM(poi.qty) OVER (PARTITION BY po.name)) * po.grand_total AS ordered_value,
 			(IFNULL(pri.received_qty,0) / SUM(poi.qty) OVER (PARTITION BY po.name)) * po.grand_total AS received_value,

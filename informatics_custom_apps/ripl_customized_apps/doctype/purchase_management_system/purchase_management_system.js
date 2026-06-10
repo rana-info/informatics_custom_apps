@@ -95,7 +95,13 @@ function load_data(frm) {
 			let no_weighment =
 				frm.doc.__is_weighment_required === "No" || frm.doc.__is_weighment_required === 0;
 
-			if (!no_weighment) {
+			// For in-progress manual weighment + Wrong Weight: show weight section so user can set both weights
+			let is_manual_inprogress_weight =
+				frm.doc.__is_manual_weighment &&
+				frm.doc.is_in_progress &&
+				frm.doc.correction_type === "Wrong Weight";
+
+			if (!no_weighment || is_manual_inprogress_weight) {
 				toggle_status_section(frm, true);
 				handle_status_logic(frm);
 			} else {
@@ -103,7 +109,7 @@ function load_data(frm) {
 			}
 
 			frappe.show_alert({
-				message: "Gate Entry data loaded",
+				message: __("Gate Entry data loaded"),
 				indicator: "blue",
 			});
 
@@ -457,6 +463,14 @@ frappe.ui.form.on("Purchase Management System", {
 			toggle_weight_readonly(frm);
 			toggle_outward_sections(frm);
 			filter_correction_type_options(frm);
+		}
+
+		if (frm.doc.status === "Approved" || frm.doc.status === "Pending" || frm.doc.status === "Cancelled") {
+			if (frm.doc.correction_type) {
+				frm.set_df_property("correction_type", "read_only", 1);
+				frm.set_df_property("gate_entry", "read_only", 1);
+				frm.refresh_fields(["correction_type", "gate_entry"]);
+			}
 		}
 	},
 
