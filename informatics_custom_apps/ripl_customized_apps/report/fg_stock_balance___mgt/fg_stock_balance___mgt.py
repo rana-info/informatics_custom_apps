@@ -2,6 +2,7 @@
 # For license information, please see license.txt
 
 import frappe
+from frappe.utils import flt
 
 
 def execute(filters=None):
@@ -22,8 +23,16 @@ def get_columns():
             "fieldname": "item_group",
             "fieldtype": "Link",
             "options": "Item Group",
-            "width": 600,
+            "width": 400,
             "align": "left",
+        },
+        {
+            "label": "Item",
+            "fieldname": "item_code",
+            "fieldtype": "Link",
+            "options": "Item",
+            "width": 550,
+            "align":"left"
         },
         {
             "label": "UOM",
@@ -35,13 +44,13 @@ def get_columns():
             "label": "Qty",
             "fieldname": "qty",
             "fieldtype": "Float",
-            "width": 150,
+            "width": 170,
         },
         {
             "label": "Value",
             "fieldname": "value",
             "fieldtype": "Currency",
-            "width": 150,
+            "width": 180,
         },
         {
             "label": "Rate",
@@ -54,50 +63,34 @@ def get_columns():
 
 def convert_qty(item_code, qty, stock_uom):
     """
-    Convert quantity using Item UOM conversion.
-    Pick highest available UOM.
+    Convert quantity to highest available UOM.
+    Example:
+    1000 LTR = 1 KLR
+    60288 LTR -> 60.29 KLR
     """
 
     stock_uom = (stock_uom or "").strip()
 
     conversions = frappe.get_all(
         "UOM Conversion Detail",
-        filters={
-            "parent": item_code
-        },
-        fields=[
-            "uom",
-            "conversion_factor"
-        ],
-        order_by="conversion_factor desc"
+        filters={"parent": item_code},
+        fields=["uom", "conversion_factor"],
+        order_by="conversion_factor desc",
+        limit=1
     )
 
     if not conversions:
         return round(qty, 2), stock_uom
 
-    highest = None
+    row = conversions[0]
+    factor = flt(row.conversion_factor)
 
-    for row in conversions:
+    if factor <= 0:
+        return round(qty, 2), stock_uom
 
-        factor = row.conversion_factor or 0
+    converted_qty = qty / factor
 
-        if factor <= 0:
-            continue
-
-        converted_qty = qty / factor
-
-        if converted_qty >= 1:
-            highest = (
-                round(converted_qty, 2),
-                row.uom
-            )
-            break
-
-    if highest:
-        return highest
-
-    return round(qty, 2), stock_uom
-
+    return round(converted_qty, 2), row.uom
 
 def get_data(filters):
 
@@ -180,11 +173,11 @@ def get_data(filters):
 
             b.warehouse,
 
-            i.name AS item_code,
-
-            i.item_group,
+            i.name as item_code,
 
             i.item_name,
+
+            i.item_group,
 
             i.stock_uom,
 
@@ -246,20 +239,16 @@ def get_data(filters):
 
         result.append({
             "plant": row.plant,
-
             "warehouse": row.warehouse,
 
             "item_group": row.item_group,
 
+            "item_code": row.item_code,
             "item_name": row.item_name,
 
             "stock_uom": uom_conv,
-
             "qty": qty_conv,
-
             "value": value,
-
             "rate": rate,
         })
-
     return result
