@@ -1,5 +1,5 @@
 import frappe
-
+from frappe.utils import flt
 
 def execute(filters=None):
 	columns = get_columns()
@@ -75,6 +75,7 @@ def get_data(filters):
 			po.supplier_name,
 			po.custom_despatch_material_to,
 			po.incoterm,
+			poi.item_group,
 
 			poi.name AS po_item,
 			poi.item_code,
@@ -143,6 +144,7 @@ def get_data(filters):
 
 			"item_code": r.item_code,
 			"item_name": r.item_name,
+			"item_group":r.item_group,
 
 			"uom": "Quintal",
 
@@ -158,22 +160,31 @@ def get_data(filters):
 			"receipt_status": r.receipt_status,
 		})
 
+
+
+
 	po_summary = {}
 
 	for r in item_rows:
-		key = (r["plant"], r["po_no"])
 
-		po_summary.setdefault(key, {
-			"oq": 0, "rq": 0, "pq": 0,
-			"ov": 0, "rv": 0, "pv": 0,
-			"po_value": 0,
-			"po_date": None,
-			"supplier": None,
-			"supplier_name": None,
-			"incoterm": None,
-			"custom_despatch_material_to": None,
-			"company": None,
-		})
+		key = (r["item_group"], r["plant"], r["po_no"])
+
+		if key not in po_summary:
+			po_summary[key] = {
+				"oq": 0,
+				"rq": 0,
+				"pq": 0,
+				"ov": 0,
+				"rv": 0,
+				"pv": 0,
+
+				"po_date": r["po_date"],
+				"supplier": r["supplier"],
+				"supplier_name": r["supplier_name"],
+				"incoterm": r["incoterm"],
+				"custom_despatch_material_to": r["custom_despatch_material_to"],
+				"company": r["company"],
+			}
 
 		s = po_summary[key]
 
@@ -185,110 +196,177 @@ def get_data(filters):
 		s["rv"] += r["received_value"]
 		s["pv"] += r["pending_value"]
 
-		s["po_value"] = r["po_value"]
 
-		s["po_date"] = r["po_date"]
-		s["supplier"] = r["supplier"]
-		s["supplier_name"] = r["supplier_name"]
-		s["incoterm"] = r["incoterm"]
-		s["custom_despatch_material_to"] = r["custom_despatch_material_to"]
-		s["company"] = r["company"]
+	# -----------------------------------
+	# Plant Summary
+	# -----------------------------------
 
 	plant_summary = {}
 
-	for (plant, po), v in po_summary.items():
+	for (grp, plant, po), s in po_summary.items():
 
-		plant_summary.setdefault(plant, {
-			"oq": 0, "rq": 0, "pq": 0,
-			"ov": 0, "rv": 0, "pv": 0,
-			"po_value": 0
-		})
+		key = (grp, plant)
 
-		p = plant_summary[plant]
+		if key not in plant_summary:
+			plant_summary[key] = {
+				"oq": 0,
+				"rq": 0,
+				"pq": 0,
+				"ov": 0,
+				"rv": 0,
+				"pv": 0,
+			}
 
-		p["oq"] += v["oq"]
-		p["rq"] += v["rq"]
-		p["pq"] += v["pq"]
+		plant_summary[key]["oq"] += s["oq"]
+		plant_summary[key]["rq"] += s["rq"]
+		plant_summary[key]["pq"] += s["pq"]
 
-		p["ov"] += v["ov"]
-		p["rv"] += v["rv"]
-		p["pv"] += v["pv"]
+		plant_summary[key]["ov"] += s["ov"]
+		plant_summary[key]["rv"] += s["rv"]
+		plant_summary[key]["pv"] += s["pv"]
 
-		p["po_value"] += v["po_value"]
+
+	# -----------------------------------
+	# Group Summary
+	# -----------------------------------
+
+	group_summary = {}
+
+	for (grp, plant), p in plant_summary.items():
+
+		if grp not in group_summary:
+			group_summary[grp] = {
+				"oq": 0,
+				"rq": 0,
+				"pq": 0,
+				"ov": 0,
+				"rv": 0,
+				"pv": 0,
+			}
+
+		group_summary[grp]["oq"] += p["oq"]
+		group_summary[grp]["rq"] += p["rq"]
+		group_summary[grp]["pq"] += p["pq"]
+
+		group_summary[grp]["ov"] += p["ov"]
+		group_summary[grp]["rv"] += p["rv"]
+		group_summary[grp]["pv"] += p["pv"]
+
 
 	tree = []
-	plant_added = set()
-	po_added = set()
 
-	for r in item_rows:
-		plant = r["plant"]
-		po = r["po_no"]
+	# GROUP
+	for grp, g in group_summary.items():
 
-		if plant not in plant_added:
-			s = plant_summary[plant]
-			tree.append({
-				 "name": plant,
-				"doctype": "Branch",
-				"docname": plant,
-				"parent": "",
-				"indent": 1,
-				"po_value": s["po_value"],
-				"ordered_qty": s["oq"],
-				"received_qty": s["rq"],
-				"pending_qty": s["pq"],
-				"ordered_value": s["ov"],
-				"received_value": s["rv"],
-				"pending_value": s["pv"],
-			})
-			plant_added.add(plant)
-
-		if (plant, po) not in po_added:
-			s = po_summary[(plant, po)]
-			tree.append({
-				"name": po,
-				"doctype": "Purchase Order",
-				"docname": po,
-				"parent": plant,
-				"indent": 2,
-
-				"po_value": s["po_value"],
-				"po_date": s["po_date"],
-				"supplier_name": s["supplier_name"],
-				"supplier": s["supplier"],
-
-				"ordered_qty": s["oq"],
-				"received_qty": s["rq"],
-				"pending_qty": s["pq"],
-
-				"ordered_value": s["ov"],
-				"received_value": s["rv"],
-				"pending_value": s["pv"],
-
-				"custom_despatch_material_to": s["custom_despatch_material_to"],
-				"incoterm": s["incoterm"],
-				"company": s["company"],
-			})
-			po_added.add((plant, po))
+		group_id = f"GRP::{grp}"
 
 		tree.append({
-			"name": f"{r['item_code']} - {r['item_name']}",
-			"doctype": "Item",
-			"docname": r["item_code"],
-			"parent": po,
-			"indent": 3,
+			"name": grp,
+			"doctype": "Item Group",
+			"docname": group_id,
+			"parent": "",
+			"indent": 0,
 
-			"plant": plant,
+			"ordered_qty": g["oq"],
+			"received_qty": g["rq"],
+			"pending_qty": g["pq"],
 
-			"uom": "Quintal",
-			"ordered_qty": r["ordered_qty"],
-			"received_qty": r["received_qty"],
-			"pending_qty": r["pending_qty"],
-
-			"ordered_value": r["ordered_value"],
-			"received_value": r["received_value"],
-			"pending_value": r["pending_value"],
-
-			"receipt_status": r["receipt_status"],
+			"ordered_value": g["ov"],
+			"received_value": g["rv"],
+			"pending_value": g["pv"],
 		})
+
+		# PLANT
+		plants = [
+			x for x in plant_summary
+			if x[0] == grp
+		]
+
+		for (_, plant) in plants:
+
+			p = plant_summary[(grp, plant)]
+
+			plant_id = f"{grp}::{plant}"
+
+			tree.append({
+				"name": plant,
+				"doctype": "Branch",
+				"docname": plant_id,
+				"parent": group_id,
+				"indent": 1,
+
+				"ordered_qty": p["oq"],
+				"received_qty": p["rq"],
+				"pending_qty": p["pq"],
+
+				"ordered_value": p["ov"],
+				"received_value": p["rv"],
+				"pending_value": p["pv"],
+			})
+
+			# PO
+			pos = [
+				x for x in po_summary
+				if x[0] == grp and x[1] == plant
+			]
+
+			for (_, _, po) in pos:
+
+				s = po_summary[(grp, plant, po)]
+
+				po_id = f"{grp}::{plant}::{po}"
+
+				tree.append({
+					"name": po,
+					"doctype": "Purchase Order",
+					"docname": po_id,
+					"parent": plant_id,
+					"indent": 2,
+
+					"po_date": s["po_date"],
+					"supplier": s["supplier"],
+					"supplier_name": s["supplier_name"],
+					"company": s["company"],
+
+					"ordered_qty": s["oq"],
+					"received_qty": s["rq"],
+					"pending_qty": s["pq"],
+
+					"ordered_value": s["ov"],
+					"received_value": s["rv"],
+					"pending_value": s["pv"],
+
+					"custom_despatch_material_to": s["custom_despatch_material_to"],
+					"incoterm": s["incoterm"],
+				})
+
+				# ITEMS
+				for r in item_rows:
+
+					if (
+						r["item_group"] == grp
+						and r["plant"] == plant
+						and r["po_no"] == po
+					):
+
+						tree.append({
+							"name": f'{r["item_code"]} - {r["item_name"]}',
+							"doctype": "Item",
+							"docname": f'{po_id}::{r["item_code"]}',
+							"parent": po_id,
+							"indent": 3,
+
+							"uom": "Quintal",
+
+							"ordered_qty": r["ordered_qty"],
+							"received_qty": r["received_qty"],
+							"pending_qty": r["pending_qty"],
+
+							"ordered_value": r["ordered_value"],
+							"received_value": r["received_value"],
+							"pending_value": r["pending_value"],
+
+							"receipt_status": r["receipt_status"],
+						})
 
 	return tree
