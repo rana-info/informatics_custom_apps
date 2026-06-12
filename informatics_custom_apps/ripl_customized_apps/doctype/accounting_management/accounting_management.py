@@ -72,21 +72,21 @@ class AccountingManagement(Document):
         set_if_exists("custom_branch", self.plant)
 
         # Segment - update only if wrong matches
-        if self.segment and self.wrong_segment:
+        if self.segment:
             for fieldname in ["segment", "custom_segment"]:
                 if frappe.get_meta(doctype).has_field(fieldname):
                     if doc.get(fieldname) == self.wrong_segment:
                         doc.db_set(fieldname, self.segment, update_modified=False)
 
         # Section - update only if wrong matches
-        if self.section and self.wrong_section:
+        if self.section:
             for fieldname in ["section", "custom_section"]:
                 if frappe.get_meta(doctype).has_field(fieldname):
                     if doc.get(fieldname) == self.wrong_section:
                         doc.db_set(fieldname, self.section, update_modified=False)
 
         # Cost Center - update only if wrong matches
-        if self.cost_center and self.wrong_cost_center:
+        if self.cost_center:
             for fieldname in ["cost_center", "custom_cost_center"]:
                 if frappe.get_meta(doctype).has_field(fieldname):
                     if doc.get(fieldname) == self.wrong_cost_center:
@@ -104,21 +104,21 @@ class AccountingManagement(Document):
         set_if_exists("custom_branch", self.plant)
 
         # Segment - update only if wrong matches
-        if self.segment and self.wrong_segment:
+        if self.segment:
             for fieldname in ["segment", "custom_segment"]:
                 if frappe.get_meta(child_doctype).has_field(fieldname):
                     if child.get(fieldname) == self.wrong_segment:
                         child.db_set(fieldname, self.segment, update_modified=False)
 
         # Section - update only if wrong matches
-        if self.section and self.wrong_section:
+        if self.section:
             for fieldname in ["section", "custom_section"]:
                 if frappe.get_meta(child_doctype).has_field(fieldname):
                     if child.get(fieldname) == self.wrong_section:
                         child.db_set(fieldname, self.section, update_modified=False)
 
         # Cost Center - update only if wrong matches
-        if self.cost_center and self.wrong_cost_center:
+        if self.cost_center:
             for fieldname in ["cost_center", "custom_cost_center"]:
                 if frappe.get_meta(child_doctype).has_field(fieldname):
                     if child.get(fieldname) == self.wrong_cost_center:
