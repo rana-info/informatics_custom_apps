@@ -85,13 +85,12 @@ class AccountingManagement(Document):
                     if doc.get(fieldname) == self.wrong_section:
                         doc.db_set(fieldname, self.section, update_modified=False)
 
-        # Cost Center - update only if wrong matches (skip Stock Entry)
-        if doctype != "Stock Entry":
-            if self.cost_center and self.wrong_cost_center:
-                for fieldname in ["cost_center", "custom_cost_center"]:
-                    if frappe.get_meta(doctype).has_field(fieldname):
-                        if doc.get(fieldname) == self.wrong_cost_center:
-                            doc.db_set(fieldname, self.cost_center, update_modified=False)
+        # Cost Center - update only if wrong matches
+        if self.cost_center and self.wrong_cost_center:
+            for fieldname in ["cost_center", "custom_cost_center"]:
+                if frappe.get_meta(doctype).has_field(fieldname):
+                    if doc.get(fieldname) == self.wrong_cost_center:
+                        doc.db_set(fieldname, self.cost_center, update_modified=False)
 
     def update_child(self, child):
         child_doctype = child.doctype
