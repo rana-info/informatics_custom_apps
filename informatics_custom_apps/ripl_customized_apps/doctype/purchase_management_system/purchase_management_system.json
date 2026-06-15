@@ -20,7 +20,11 @@
   "status",
   "section_qty_correction",
   "items",
-  "section_po_correction",
+  "manual_entry_correction",
+  "manual_entry_new_purchase_order",
+  "fetch_po_details",
+  "manual_entry_items",
+  "purchase_order_correction",
   "old_purchase_order",
   "column_break_ger3",
   "new_purchase_order",
@@ -92,7 +96,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Correction Type",
-   "options": "\nWrong Accepted Quantity\nWrong Purchase Order\nWrong Purchase Order and Supplier\nWrong Vehicle Number\nWrong Driver Name\nWrong Card Number\nWrong Transporter\nWrong Vehicle Type\nWrong Weight\nWrong Segment\nInward/Outward Wrong Entry (Manual)",
+   "options": "\nWrong Accepted Quantity\nWrong Purchase Order\nWrong Purchase Order and Supplier\nWrong Vehicle Number\nWrong Driver Name\nWrong Card Number\nWrong Transporter\nWrong Vehicle Type\nWrong Weight\nWrong Segment\nInward/Outward Wrong Entry (Manual)\nWrong Manual Entry",
    "reqd": 1
   },
   {
@@ -175,10 +179,24 @@
    "options": "PMS Correction Item Details"
   },
   {
-   "depends_on": "eval:doc.correction_type == 'Wrong Purchase Order and Supplier' || doc.correction_type == \"Wrong Purchase Order\"",
-   "fieldname": "section_po_correction",
-   "fieldtype": "Section Break",
-   "label": "Purchase Order Correction"
+   "depends_on": "eval:doc.correction_type == 'Wrong Manual Entry'",
+   "fieldname": "manual_entry_new_purchase_order",
+   "fieldtype": "Link",
+   "label": "New Purchase Order",
+   "options": "Purchase Order"
+  },
+  {
+   "depends_on": "eval:doc.correction_type == 'Wrong Manual Entry' && doc.docstatus === 0",
+   "fieldname": "fetch_po_details",
+   "fieldtype": "Button",
+   "label": "Fetch PO Details"
+  },
+  {
+   "depends_on": "eval:doc.correction_type == 'Wrong Manual Entry'",
+   "fieldname": "manual_entry_items",
+   "fieldtype": "Table",
+   "label": "PO Details",
+   "options": "PMS Manual Entry Item"
   },
   {
    "depends_on": "eval:doc.correction_type == 'Wrong Purchase Order and Supplier' || doc.correction_type == \"Wrong Purchase Order\"",
@@ -364,7 +382,7 @@
    "options": "Vehicle Type"
   },
   {
-   "depends_on": "eval:doc.correction_type == \"Wrong Accepted Quantity\" || doc.correction_type == \"Wrong Purchase Order or Supplier\" || doc.correction_type == \"Wrong Weight\" || doc.correction_type == \"Inward/Outward Wrong Entry (Manual)\"",
+   "depends_on": "eval:doc.correction_type == \"Wrong Accepted Quantity\" || doc.correction_type == \"Wrong Purchase Order or Supplier\" || doc.correction_type == \"Wrong Weight\" || doc.correction_type == \"Inward/Outward Wrong Entry (Manual)\" || doc.correction_type == \"Wrong Manual Entry\"\n",
    "fieldname": "section_break_fgcq",
    "fieldtype": "Section Break",
    "label": "Weighment"
@@ -396,7 +414,7 @@
    "read_only": 1
   },
   {
-   "depends_on": "eval:doc.correction_type == \"Wrong Accepted Quantity\" || doc.correction_type == \"Wrong Purchase Order or Supplier\" || doc.correction_type == \"Wrong Weight\" || doc.correction_type == \"Inward/Outward Wrong Entry (Manual)\"",
+   "depends_on": "eval:doc.correction_type == \"Wrong Accepted Quantity\" || doc.correction_type == \"Wrong Purchase Order or Supplier\" || doc.correction_type == \"Wrong Weight\" || doc.correction_type == \"Inward/Outward Wrong Entry (Manual)\" || doc.correction_type == \"Wrong Manual Entry\"",
    "fieldname": "weight_details_section",
    "fieldtype": "Section Break",
    "label": "Weight Details"
@@ -487,13 +505,24 @@
    "fieldtype": "Link",
    "label": "New(Correct Segment",
    "options": "Segment"
+  },
+  {
+   "depends_on": "eval:doc.correction_type == 'Wrong Manual Entry'",
+   "fieldname": "purchase_order_correction",
+   "fieldtype": "Section Break",
+   "label": "Purchase Order Correction"
+  },
+  {
+   "fieldname": "manual_entry_correction",
+   "fieldtype": "Section Break",
+   "label": "Manual Entry Correction"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-06-08 09:37:55.945821",
+ "modified": "2026-06-13 13:43:53.658311",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "Purchase Management System",
