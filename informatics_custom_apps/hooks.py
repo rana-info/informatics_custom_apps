@@ -154,6 +154,10 @@ doc_events = {
 
     "Purchase Order": {
         "validate": "informatics_custom_apps.ripl_customized_apps.doctype.procurement_budget.utils.validate_procurement_budget"
+    },
+    
+    "Stock Entry": {
+        "on_submit": "informatics_custom_apps.customizations.segment_reallocation.on_stock_entry_submit"
     }
 
 }
