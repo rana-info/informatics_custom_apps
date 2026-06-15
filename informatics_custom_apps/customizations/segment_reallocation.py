@@ -48,7 +48,7 @@ def process_stock_entry(stock_entry_name):
         if frappe.db.exists(
             "Journal Entry",
             {
-                "custom_stock_entry_reference": se.name
+                "cheque_no": se.name
             }
         ):
             return
