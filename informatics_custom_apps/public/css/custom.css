@@ -33,3 +33,187 @@
 	background: #e6d3c5;
 	color: #642b11fc;
 }
+
+/* =============================================================
+   PMS – Purchase Management System
+   Correction Type Badge Colors
+   Paste this into: public/custom.css
+   ============================================================= */
+
+/* ── Base override: remove Frappe's default pill background so
+      our custom colors take full control ── */
+.indicator-pill.pms-correction-tag {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    padding: 2px 10px 2px 8px;
+    border-radius: 20px;
+    white-space: nowrap;
+    background-color: transparent;
+    border: 1.5px solid transparent;
+}
+
+.indicator-pill.pms-correction-tag .indicator-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 5px;
+    flex-shrink: 0;
+}
+
+/* ─────────────────────────────────────────
+   1. Wrong Accepted Quantity  →  Deep Indigo
+   ───────────────────────────────────────── */
+.pms-ct-qty {
+    color: #4338ca !important;
+    background-color: #eef2ff !important;
+    border-color: #a5b4fc !important;
+}
+.pms-ct-qty .indicator-dot {
+    background-color: #4338ca !important;
+}
+
+/* ─────────────────────────────────────────
+   2. Wrong Purchase Order  →  Amber
+   ───────────────────────────────────────── */
+.pms-ct-po {
+    color: #b45309 !important;
+    background-color: #fffbeb !important;
+    border-color: #fcd34d !important;
+}
+.pms-ct-po .indicator-dot {
+    background-color: #b45309 !important;
+}
+
+/* ─────────────────────────────────────────
+   3. Wrong PO and Supplier  →  Burnt Orange
+   ───────────────────────────────────────── */
+.pms-ct-po-supplier {
+    color: #c2410c !important;
+    background-color: #fff7ed !important;
+    border-color: #fdba74 !important;
+}
+.pms-ct-po-supplier .indicator-dot {
+    background-color: #c2410c !important;
+}
+
+/* ─────────────────────────────────────────
+   4. Wrong Vehicle Number  →  Violet
+   ───────────────────────────────────────── */
+.pms-ct-vehicle-no {
+    color: #7c3aed !important;
+    background-color: #f5f3ff !important;
+    border-color: #c4b5fd !important;
+}
+.pms-ct-vehicle-no .indicator-dot {
+    background-color: #7c3aed !important;
+}
+
+/* ─────────────────────────────────────────
+   5. Wrong Driver Name  →  Teal
+   ───────────────────────────────────────── */
+.pms-ct-driver {
+    color: #0f766e !important;
+    background-color: #f0fdfa !important;
+    border-color: #5eead4 !important;
+}
+.pms-ct-driver .indicator-dot {
+    background-color: #0f766e !important;
+}
+
+/* ─────────────────────────────────────────
+   6. Wrong Card Number  →  Fuchsia / Magenta
+   ───────────────────────────────────────── */
+.pms-ct-card {
+    color: #a21caf !important;
+    background-color: #fdf4ff !important;
+    border-color: #e879f9 !important;
+}
+.pms-ct-card .indicator-dot {
+    background-color: #a21caf !important;
+}
+
+/* ─────────────────────────────────────────
+   7. Wrong Transporter  →  Rose
+   ───────────────────────────────────────── */
+.pms-ct-transporter {
+    color: #be123c !important;
+    background-color: #fff1f2 !important;
+    border-color: #fda4af !important;
+}
+.pms-ct-transporter .indicator-dot {
+    background-color: #be123c !important;
+}
+
+/* ─────────────────────────────────────────
+   8. Wrong Vehicle Type  →  Sky Blue
+   ───────────────────────────────────────── */
+.pms-ct-vehicle-type {
+    color: #0369a1 !important;
+    background-color: #f0f9ff !important;
+    border-color: #7dd3fc !important;
+}
+.pms-ct-vehicle-type .indicator-dot {
+    background-color: #0369a1 !important;
+}
+
+/* ─────────────────────────────────────────
+   9. Wrong Weight  →  Emerald Green
+   ───────────────────────────────────────── */
+.pms-ct-weight {
+    color: #047857 !important;
+    background-color: #ecfdf5 !important;
+    border-color: #6ee7b7 !important;
+}
+.pms-ct-weight .indicator-dot {
+    background-color: #047857 !important;
+}
+
+/* ─────────────────────────────────────────
+   10. Wrong Segment  →  Cyan / Slate
+   ───────────────────────────────────────── */
+.pms-ct-segment {
+    color: #0e7490 !important;
+    background-color: #ecfeff !important;
+    border-color: #67e8f9 !important;
+}
+.pms-ct-segment .indicator-dot {
+    background-color: #0e7490 !important;
+}
+
+/* ─────────────────────────────────────────
+   11. Inward/Outward Wrong Entry (Manual)  →  Deep Gold
+   ───────────────────────────────────────── */
+.pms-ct-inout {
+    color: #92400e !important;
+    background-color: #fef3c7 !important;
+    border-color: #fbbf24 !important;
+}
+.pms-ct-inout .indicator-dot {
+    background-color: #92400e !important;
+}
+
+/* ─────────────────────────────────────────
+   12. Wrong Manual Entry  →  Crimson / Dark Red
+   ───────────────────────────────────────── */
+.pms-ct-manual {
+    color: #991b1b !important;
+    background-color: #fef2f2 !important;
+    border-color: #fca5a5 !important;
+}
+.pms-ct-manual .indicator-dot {
+    background-color: #991b1b !important;
+}
+
+/* ─────────────────────────────────────────
+   Fallback  →  Neutral Grey
+   ───────────────────────────────────────── */
+.pms-ct-default {
+    color: #374151 !important;
+    background-color: #f9fafb !important;
+    border-color: #d1d5db !important;
+}
+.pms-ct-default .indicator-dot {
+    background-color: #374151 !important;
+}

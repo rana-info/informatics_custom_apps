@@ -365,6 +365,74 @@ class PurchaseManagementSystem(Document):
                     f"Selected Gate Entry <b>{self.gate_entry}</b> is an <b>Outward</b> entry. "
                     f"Use SMT for Outward Entries"
                 )
+        
+        if self.correction_type == "Wrong Manual Entry" and self.gate_entry:
+            is_manual, ge_entry_type, ge_company, ge_branch, ge_segment = frappe.db.get_value(
+                "Gate Entry", self.gate_entry,
+                ["is_manual_weighment", "entry_type", "company", "branch", "segment"]
+            )
+            if not is_manual:
+                frappe.throw(
+                    f"<b>Wrong Manual Entry</b> can only be applied to "
+                    f"<b>Manual Weighment</b> Gate Entries "
+                    f"(Gate Entry <b>{self.gate_entry}</b> is not a manual weighment)."
+                )
+            if ge_entry_type != "Inward":
+                frappe.throw(
+                    f"<b>Wrong Manual Entry</b> can only be applied to "
+                    f"<b>Inward</b> Gate Entries "
+                    f"(Gate Entry <b>{self.gate_entry}</b> is <b>{ge_entry_type}</b>)."
+                )
+
+            # Company / Plant / Segment of the new PO must all match the Gate Entry
+            if self.manual_entry_new_purchase_order:
+                po_company, po_branch, po_segment = frappe.db.get_value(
+                    "Purchase Order", self.manual_entry_new_purchase_order,
+                    ["company", "branch", "segment"]
+                )
+
+                mismatches = []
+                if po_company != ge_company:
+                    mismatches.append(
+                        f"<b>Company</b>: Gate Entry has <b>{ge_company or 'None'}</b>, "
+                        f"PO has <b>{po_company or 'None'}</b>"
+                    )
+                if po_branch != ge_branch:
+                    mismatches.append(
+                        f"<b>Plant</b>: Gate Entry has <b>{ge_branch or 'None'}</b>, "
+                        f"PO has <b>{po_branch or 'None'}</b>"
+                    )
+                if po_segment != ge_segment:
+                    mismatches.append(
+                        f"<b>Segment</b>: Gate Entry has <b>{ge_segment or 'None'}</b>, "
+                        f"PO has <b>{po_segment or 'None'}</b>"
+                    )
+
+                if mismatches:
+                    mismatch_lines = "<br>".join(f"&nbsp;&nbsp;• {m}" for m in mismatches)
+                    frappe.throw(
+                        f"Selected Purchase Order <b>{self.manual_entry_new_purchase_order}</b> "
+                        f"does not match the Gate Entry on the following field(s):<br>"
+                        f"{mismatch_lines}<br><br>"
+                        f"Please select a PO that belongs to the same Company, Plant, and Segment "
+                        f"as Gate Entry <b>{self.gate_entry}</b>."
+                    )
+
+            # PR check only relevant when GE is completed (approval creates a draft PR)
+            if self.is_completed:
+                status, pr_name = self.check_existing_pr_status()
+
+                if status == "DRAFT":
+                    frappe.throw(
+                        f"Draft Purchase Receipt {pr_name} exists. "
+                        f"Please delete it before applying this correction."
+                    )
+
+                if status == "SUBMITTED":
+                    frappe.throw(
+                        f"Submitted Purchase Receipt {pr_name} exists. "
+                        f"Please cancel it before applying this correction."
+                    )
 
         if self.correction_type == "Wrong Purchase Order and Supplier":
             if self.newcorrect_supplier and not self.new_purchase_order:
@@ -418,6 +486,26 @@ class PurchaseManagementSystem(Document):
             elif is_stock:
                 if not is_completed:
                     frappe.throw("Wrong Weight correction can only be applied to Completed Gate Entries.")
+        
+        if self.correction_type == "Wrong Manual Entry":
+            gate_entry_doc = self.get_gate_entry_doc()
+
+            if not getattr(gate_entry_doc, 'is_manual_weighment', 0):
+                frappe.throw(
+                    "<b>Wrong Manual Entry</b> can only be used for "
+                    "<b>Manual Weighment</b> Gate Entries."
+                )
+
+            if getattr(gate_entry_doc, 'entry_type', '') != "Inward":
+                frappe.throw(
+                    "<b>Wrong Manual Entry</b> can only be applied to "
+                    "<b>Inward</b> Gate Entries."
+                )
+
+            if not self.manual_entry_new_purchase_order:
+                frappe.throw(
+                    "Please select New Purchase Order."
+                )
 
         if self.correction_type == "Inward/Outward Wrong Entry (Manual)" and self.gate_entry:
             gate_entry_doc = self.get_gate_entry_doc()
@@ -555,6 +643,7 @@ class PurchaseManagementSystem(Document):
             "Wrong Weight": self.correct_weight,
             "Wrong Segment": self.correct_segment,
             "Inward/Outward Wrong Entry (Manual)": self.correct_entry_flow,
+            "Wrong Manual Entry": self.correct_manual_entry,
         }
 
         if self.correction_type == "Wrong Purchase Order and Supplier":
@@ -1162,6 +1251,219 @@ class PurchaseManagementSystem(Document):
             )
 
         frappe.msgprint(f"Segment updated Sucessfully")
+        
+    def correct_manual_entry(self):
+        """Convert a Manual Weighment Gate Entry into a normal entry:
+        - Clears is_manual_weighment on GE + Weighment
+        - Sets supplier/supplier_name from the new PO on GE + Weighment
+        - Replaces PO child tables on GE + Weighment
+        - Rebuilds items child table on GE + Weighment
+        - If completed: updates PO received qty, creates draft PR
+        """
+        ge = self.get_gate_entry_doc()
+        weighment_names = self.get_weighment_names()
+        weighment_docs = self.get_weighment_docs(weighment_names)
+
+        # Fetch supplier details from the new PO
+        po_supplier, po_supplier_name = frappe.db.get_value(
+            "Purchase Order",
+            self.manual_entry_new_purchase_order,
+            ["supplier", "supplier_name"],
+        )
+
+        # 1. Clear manual weighment flag + set supplier on Gate Entry
+        ge.db_set({
+            "is_manual_weighment": 0,
+            "supplier": po_supplier,
+            "supplier_name": po_supplier_name,
+        }, update_modified=False)
+
+        # 2. Clear manual weighment flag + set supplier on all Weighments
+        for w in weighment_docs:
+            frappe.db.set_value(
+                "Weighment", w.name,
+                {
+                    "is_manual_weighment": 0,
+                    "supplier": po_supplier,
+                    "supplier_name": po_supplier_name,
+                },
+                update_modified=False,
+            )
+
+        # 3. Replace PO child table links on GE + Weighment
+        self.replace_po_links(
+            self.manual_entry_new_purchase_order,
+            weighment_names,
+        )
+
+        # 4. Rebuild items child table
+        self.rebuild_manual_entry_items(weighment_docs)
+
+        # 5. If completed: update PO received qty, Rake Bill, and create draft PR
+        if self.is_completed:
+            self.update_manual_entry_po_qty()
+            self.create_manual_entry_pr(weighment_names)
+
+            # Update Rake Bill (gate_entry_received_qty etc.) for Rail Rack POs
+            for row in self.manual_entry_items:
+                accepted_qty_kg = self.convert_to_kg(row.new_accepted_qty, row.uom)
+                if accepted_qty_kg:
+                    self.update_rake_bill(self.manual_entry_new_purchase_order, accepted_qty_kg)
+
+            # Recalculate Rake Bill factory_received_qty from weighments
+            self.recalc_rake_bill_factory_received_qty(self.manual_entry_new_purchase_order)
+
+        frappe.msgprint("Manual Entry corrected successfully.")
+
+    def rebuild_manual_entry_items(self, weighment_docs):
+        """Replace items child table on GE + Weighment via SQL (docs are submitted)."""
+        ge_name = self.gate_entry
+
+        # Delete existing item rows
+        frappe.db.sql(
+            "DELETE FROM `tabPurchase Details` WHERE parent = %s AND parenttype = 'Gate Entry'",
+            (ge_name,)
+        )
+        for w in weighment_docs:
+            frappe.db.sql(
+                "DELETE FROM `tabPurchase Details` WHERE parent = %s AND parenttype = 'Weighment'",
+                (w.name,)
+            )
+
+        def _item_row(parent, parenttype, po_item, accepted_qty, item_master):
+            """Build a complete dict matching all fields of a normal Purchase Details row."""
+            cf = po_item.conversion_factor or 1
+            rate = po_item.rate or 0
+            amount = rate * accepted_qty
+            stock_qty = accepted_qty * cf
+
+            return {
+                "name": frappe.generate_hash("", 10),
+                "parent": parent,
+                "parenttype": parenttype,
+                "parentfield": "items",
+                "idx": 1,
+                "docstatus": 1,
+
+                # Item identification
+                "item_code": po_item.item_code,
+                "item_name": po_item.item_name,
+                "description": po_item.description or po_item.item_name,
+                "item_group": getattr(item_master, "item_group", "") or "",
+                "is_weighable_item": getattr(item_master, "is_weighable_item", 0) or 0,
+                "is_ineligible_for_input_tax_credit": getattr(po_item, "is_ineligible_for_itc", 0) or 0,
+
+                # Quantities & UOM
+                "qty": po_item.qty,
+                "uom": po_item.uom,
+                "stock_uom": po_item.stock_uom or po_item.uom,
+                "conversion_factor": cf,
+                "stock_qty": stock_qty,
+                "accepted_quantity": accepted_qty,
+                "received_quantity": accepted_qty,
+                "rejected_quantity": 0,
+
+                # Pricing
+                "rate": rate,
+                "amount": amount,
+                "rate_company_currency": rate,
+                "amount_company_currency": amount,
+
+                # Tax
+                "item_tax_template": getattr(po_item, "item_tax_template", "") or "",
+                "gst_treatment": getattr(po_item, "gst_treatment", "") or "",
+
+                # Weight
+                "weight_per_unit": getattr(po_item, "weight_per_unit", 0) or 0,
+                "total_weight": getattr(po_item, "total_weight", 0) or 0,
+                "weight_uom": getattr(po_item, "weight_uom", "") or "",
+
+                # References
+                "purchase_order": self.manual_entry_new_purchase_order,
+                "purchase_order_item": po_item.name,
+                "material_request": getattr(po_item, "material_request", "") or "",
+                "material_request_item": getattr(po_item, "material_request_item", "") or "",
+                "warehouse": po_item.warehouse or "",
+
+                # Organization
+                "cost_center": po_item.cost_center or "",
+                "branch": getattr(po_item, "branch", "") or "",
+            }
+
+        # Column list for the INSERT (must match _item_row keys exactly)
+        COLUMNS = (
+            "name, parent, parenttype, parentfield, idx, docstatus, "
+            "item_code, item_name, description, item_group, is_weighable_item, "
+            "is_ineligible_for_input_tax_credit, "
+            "qty, uom, stock_uom, conversion_factor, stock_qty, "
+            "accepted_quantity, received_quantity, rejected_quantity, "
+            "rate, amount, rate_company_currency, amount_company_currency, "
+            "item_tax_template, gst_treatment, "
+            "weight_per_unit, total_weight, weight_uom, "
+            "purchase_order, purchase_order_item, material_request, material_request_item, "
+            "warehouse, cost_center, branch"
+        )
+
+        VALUES = (
+            "%(name)s, %(parent)s, %(parenttype)s, %(parentfield)s, %(idx)s, %(docstatus)s, "
+            "%(item_code)s, %(item_name)s, %(description)s, %(item_group)s, %(is_weighable_item)s, "
+            "%(is_ineligible_for_input_tax_credit)s, "
+            "%(qty)s, %(uom)s, %(stock_uom)s, %(conversion_factor)s, %(stock_qty)s, "
+            "%(accepted_quantity)s, %(received_quantity)s, %(rejected_quantity)s, "
+            "%(rate)s, %(amount)s, %(rate_company_currency)s, %(amount_company_currency)s, "
+            "%(item_tax_template)s, %(gst_treatment)s, "
+            "%(weight_per_unit)s, %(total_weight)s, %(weight_uom)s, "
+            "%(purchase_order)s, %(purchase_order_item)s, %(material_request)s, %(material_request_item)s, "
+            "%(warehouse)s, %(cost_center)s, %(branch)s"
+        )
+
+        INSERT_SQL = f"INSERT INTO `tabPurchase Details` ({COLUMNS}) VALUES ({VALUES})"
+
+        for idx, row in enumerate(self.manual_entry_items, start=1):
+            po_item = frappe.get_doc("Purchase Order Item", row.purchase_order_item)
+            item_master = frappe.get_cached_doc("Item", po_item.item_code)
+            accepted_qty = row.new_accepted_qty or 0
+
+            ge_row = _item_row(ge_name, "Gate Entry", po_item, accepted_qty, item_master)
+            ge_row["idx"] = idx
+            frappe.db.sql(INSERT_SQL, ge_row)
+
+            for w in weighment_docs:
+                w_row = _item_row(w.name, "Weighment", po_item, accepted_qty, item_master)
+                w_row["idx"] = idx
+                frappe.db.sql(INSERT_SQL, w_row)
+
+    def update_manual_entry_po_qty(self):
+        """Update gate_entry_received_qty on PO items and recalculate percentage.
+        Only called for is_completed entries.
+        Note: Rake Bill update is handled separately in correct_manual_entry."""
+        for row in self.manual_entry_items:
+            # Convert accepted qty to KG before adding to PO received qty
+            accepted_qty_kg = self.convert_to_kg(row.new_accepted_qty, row.uom)
+
+            old_qty = frappe.db.get_value(
+                "Purchase Order Item",
+                row.purchase_order_item,
+                "gate_entry_received_qty",
+            ) or 0
+
+            frappe.db.set_value(
+                "Purchase Order Item",
+                row.purchase_order_item,
+                "gate_entry_received_qty",
+                old_qty + accepted_qty_kg,
+                update_modified=False,
+            )
+
+            self.update_po_received_percentage(row.purchase_order_item)
+
+    def create_manual_entry_pr(self, weighment_names):
+        """Create a draft Purchase Receipt from the Weighment."""
+        created_prs = self.recreate_purchase_receipts(weighment_names)
+        if created_prs:
+            frappe.msgprint(
+                f"Draft Purchase Receipt created: {', '.join(created_prs)}"
+            )
 
     def correct_weight(self):
         """Update gross, tare, and net weights on Weighment only. Recreates SE for Stock Transfers.
@@ -1334,3 +1636,25 @@ def get_filtered_purchase_orders(doctype, txt, searchfield, start, page_len, fil
         "start": start,
         "page_len": page_len,
     })
+
+@frappe.whitelist()
+def fetch_po_details(purchase_order):
+
+    if not purchase_order:
+        frappe.throw("Please select a Purchase Order.")
+
+    po = frappe.get_doc("Purchase Order", purchase_order)
+
+    data = []
+
+    for item in po.items:
+
+        data.append({
+            "item_code": item.item_code,
+            "item_name": item.item_name,
+            "purchase_order_item": item.name,
+            "qty": item.qty,
+            "uom": item.uom,
+        })
+
+    return data

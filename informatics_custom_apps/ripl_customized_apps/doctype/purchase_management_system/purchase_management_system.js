@@ -16,22 +16,25 @@ function handle_status_logic(frm) {
 	frm.refresh_fields(["is_completed", "is_in_progress"]);
 }
 
-function toggle_ge_type_checkboxes(frm, is_manual, is_stock) {
-	// Mutually exclusive: show only the relevant flag, hide the other
+function toggle_ge_type_checkboxes(frm, is_manual, is_stock, set_values = true) {
+
 	const has_manual = Number(is_manual || 0) === 1;
 	const has_stock  = Number(is_stock  || 0) === 1;
 
 	frm.set_df_property("is_manual_weighment", "hidden", has_manual ? 0 : 1);
 	frm.set_df_property("is_stock_transfer",   "hidden", has_stock  ? 0 : 1);
 
-	frm.set_value("is_manual_weighment", has_manual ? 1 : 0);
-	frm.set_value("is_stock_transfer",   has_stock  ? 1 : 0);
+	if (set_values) {
+		frm.set_value("is_manual_weighment", has_manual ? 1 : 0);
+		frm.set_value("is_stock_transfer",   has_stock  ? 1 : 0);
+	}
 
 	frm.refresh_fields(["is_manual_weighment", "is_stock_transfer"]);
 }
 
 function load_data(frm) {
-	if (!frm.doc.gate_entry || !frm.doc.correction_type) {
+	// Do not re-populate fields on submitted/approved documents — it dirties the form
+	if (!frm.doc.gate_entry || !frm.doc.correction_type || frm.doc.docstatus !== 0) {
 		return;
 	}
 
@@ -84,6 +87,7 @@ function load_data(frm) {
 			toggle_outward_sections(frm);
 			filter_correction_type_options(frm);
 			apply_purchase_order_filter(frm);
+			apply_manual_entry_po_filter(frm);
 
 			if (data.old_purchase_order) {
 				frm.set_value("old_purchase_order", data.old_purchase_order);
@@ -239,7 +243,10 @@ const RESTRICTED_CORRECTION_TYPES = [
 const SPECIAL_WEIGHT_TYPES = ["Wrong Weight"];
 
 // Only visible for Manual Weighment gate entries
-const MANUAL_ONLY_TYPES = ["Inward/Outward Wrong Entry (Manual)"];
+const MANUAL_ONLY_TYPES = [
+	"Inward/Outward Wrong Entry (Manual)",
+	"Wrong Manual Entry"
+];
 
 const OUTWARD_ONLY_TYPES = ["Wrong Card Number", "Wrong Vehicle Type"];
 
@@ -379,6 +386,35 @@ function apply_transporter_filter(frm) {
 	});
 }
 
+// ---------------- APPLY MANUAL ENTRY PO FILTER ---------------- //
+function apply_manual_entry_po_filter(frm) {
+	if (!frm.doc.company || !frm.doc.plant) return;
+
+	let ge_supplier = frm.doc.__ge_supplier || null;
+	let ge_segment  = frm.doc.__ge_segment  || null;
+
+	frm.set_query("manual_entry_new_purchase_order", () => {
+		let filters = {
+			company:  frm.doc.company,
+			branch:   frm.doc.plant,
+			docstatus: 1,
+			status: ["not in", ["Closed", "Completed"]],
+		};
+
+		// Restrict to same supplier as the Gate Entry
+		if (ge_supplier) {
+			filters.supplier = ge_supplier;
+		}
+
+		// Restrict to same segment as the Gate Entry
+		if (ge_segment) {
+			filters.segment = ge_segment;
+		}
+
+		return { filters };
+	});
+}
+
 // function apply_purchase_order_filter(frm) {
 // 	if (!frm.doc.company || !frm.doc.plant) return;
 
@@ -413,7 +449,10 @@ frappe.ui.form.on("Purchase Management System", {
 	},
 
 	refresh(frm) {
-		frm.enable_save();
+		// Only enable free editing on draft documents
+		if (frm.doc.docstatus === 0) {
+			frm.enable_save();
+		}
 
 		apply_transporter_filter(frm);
 
@@ -450,7 +489,8 @@ frappe.ui.form.on("Purchase Management System", {
 					frm.doc.__entry_type = ge.entry_type || "";
 					frm.doc.__is_weighment_required = ge.is_weighment_required ?? 1;
 
-					toggle_ge_type_checkboxes(frm, ge.is_manual_weighment, ge.is_stock_transfer);
+					// Visibility always updates; values only update on draft to avoid dirtying submitted forms
+					toggle_ge_type_checkboxes(frm, ge.is_manual_weighment, ge.is_stock_transfer, frm.doc.docstatus === 0);
 					toggle_new_qty_readonly(frm);
 					toggle_weight_readonly(frm);
 					toggle_outward_sections(frm);
@@ -473,6 +513,62 @@ frappe.ui.form.on("Purchase Management System", {
 			}
 		}
 	},
+	fetch_po_details(frm) {
+
+	if (!frm.doc.manual_entry_new_purchase_order) {
+		frappe.throw("Please select Purchase Order");
+	}
+
+	frappe.call({
+		method:
+		"informatics_custom_apps.ripl_customized_apps.doctype.purchase_management_system.purchase_management_system.fetch_po_details",
+
+		args: {
+			purchase_order: frm.doc.manual_entry_new_purchase_order
+		},
+
+		callback(r) {
+
+			frm.clear_table("manual_entry_items");
+
+			// Determine which auto-fill scenario applies
+			let is_completed      = frm.doc.is_completed;
+			let is_in_progress    = frm.doc.is_in_progress;
+			let is_manual         = frm.doc.__is_manual_weighment;
+
+			// is_completed → use net_weight; is_in_progress + manual → use gross_weight
+			let auto_qty    = is_completed  ? (frm.doc.net_weight   || 0)
+			                : (is_in_progress && is_manual) ? (frm.doc.gross_weight || 0)
+			                : 0;
+			let make_readonly = is_completed || (is_in_progress && is_manual);
+
+			(r.message || []).forEach(d => {
+
+				let row = frm.add_child("manual_entry_items");
+
+				row.item_code          = d.item_code;
+				row.item_name          = d.item_name;
+				row.purchase_order_item = d.purchase_order_item;
+				row.qty                = d.qty;
+				row.uom                = d.uom;
+
+				if (auto_qty) {
+					row.new_accepted_qty = auto_qty;
+				}
+			});
+
+			frm.refresh_field("manual_entry_items");
+
+			// Set read-only property on the grid column
+			frm.fields_dict.manual_entry_items.grid
+				.update_docfield_property(
+					"new_accepted_qty",
+					"read_only",
+					make_readonly ? 1 : 0
+				);
+		}
+	});
+},
 
 	gate_entry(frm) {
 		if (frm.doc.gate_entry) {
@@ -486,17 +582,22 @@ frappe.ui.form.on("Purchase Management System", {
 					"is_in_progress",
 					"entry_type",
 					"is_weighment_required",
+					"supplier",
+					"segment",
 				],
 				(ge) => {
 					frm.doc.__is_stock_transfer = ge.is_stock_transfer || 0;
 					frm.doc.__is_manual_weighment = ge.is_manual_weighment || 0;
 					frm.doc.__is_weighment_required = ge.is_weighment_required ?? 1;
+					frm.doc.__ge_supplier = ge.supplier || null;
+					frm.doc.__ge_segment  = ge.segment  || null;
 					frm.set_value("is_completed", ge.is_completed || 0);
 					frm.set_value("is_in_progress", ge.is_in_progress || 0);
 					frm.doc.__entry_type = ge.entry_type || "";
 					toggle_ge_type_checkboxes(frm, ge.is_manual_weighment, ge.is_stock_transfer);
 					filter_correction_type_options(frm);
 					toggle_outward_sections(frm);
+					apply_manual_entry_po_filter(frm);
 				},
 			);
 		} else {
@@ -510,6 +611,7 @@ frappe.ui.form.on("Purchase Management System", {
 		}
 		load_data(frm);
 		apply_purchase_order_filter(frm);
+		apply_manual_entry_po_filter(frm);
 	},
 
 	correction_type(frm) {
@@ -519,6 +621,9 @@ frappe.ui.form.on("Purchase Management System", {
 
 		frm.doc.reason = ct || "";
 		frm.refresh_field("reason");
+
+		apply_purchase_order_filter(frm);
+		apply_manual_entry_po_filter(frm);
 	},
 
 	new_purchase_order(frm) {
