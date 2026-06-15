@@ -1299,10 +1299,19 @@ class PurchaseManagementSystem(Document):
         # 4. Rebuild items child table
         self.rebuild_manual_entry_items(weighment_docs)
 
-        # 5. If completed: update PO received qty + create draft PR
+        # 5. If completed: update PO received qty, Rake Bill, and create draft PR
         if self.is_completed:
             self.update_manual_entry_po_qty()
             self.create_manual_entry_pr(weighment_names)
+
+            # Update Rake Bill (gate_entry_received_qty etc.) for Rail Rack POs
+            for row in self.manual_entry_items:
+                accepted_qty_kg = self.convert_to_kg(row.new_accepted_qty, row.uom)
+                if accepted_qty_kg:
+                    self.update_rake_bill(self.manual_entry_new_purchase_order, accepted_qty_kg)
+
+            # Recalculate Rake Bill factory_received_qty from weighments
+            self.recalc_rake_bill_factory_received_qty(self.manual_entry_new_purchase_order)
 
         frappe.msgprint("Manual Entry corrected successfully.")
 
@@ -1426,7 +1435,8 @@ class PurchaseManagementSystem(Document):
 
     def update_manual_entry_po_qty(self):
         """Update gate_entry_received_qty on PO items and recalculate percentage.
-        Only called for is_completed entries."""
+        Only called for is_completed entries.
+        Note: Rake Bill update is handled separately in correct_manual_entry."""
         for row in self.manual_entry_items:
             # Convert accepted qty to KG before adding to PO received qty
             accepted_qty_kg = self.convert_to_kg(row.new_accepted_qty, row.uom)
