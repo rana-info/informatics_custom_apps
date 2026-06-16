@@ -1,4 +1,4 @@
-__version__ = "2.0.0"
+__version__ = "2.0.1"
 import frappe
 import erpnext.accounts.doctype.accounting_period.accounting_period as ap_module
 
