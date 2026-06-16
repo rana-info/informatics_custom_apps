@@ -57,7 +57,8 @@ app_include_css = "/assets/informatics_custom_apps/css/custom.css"
 # ----------
 doctype_js = {
     "Loan": "public/js/loan_custom.js",
-    "Asset": "public/js/asset_date_custom.js"
+    "Asset": "public/js/asset_date_custom.js",
+    "Sales Order": "public/js/sales_order_custom.js"
 }
 # doc_events = {
 #     "Leave Application": {
