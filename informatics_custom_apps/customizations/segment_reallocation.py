@@ -44,7 +44,6 @@ def process_stock_entry(stock_entry_name):
         if se.stock_entry_type not in APPLICABLE_TYPES:
             return
 
-        # Prevent duplicate JE
         if frappe.db.exists(
             "Journal Entry",
             {
@@ -128,10 +127,8 @@ def process_stock_entry(stock_entry_name):
                 se.flags.ignore_permissions = True
                 se.flags.ignore_links = True
 
-                # Cancel Stock Entry
                 se.cancel()
 
-                # Add comment
                 se.add_comment(
                     "Comment",
                     text=(
@@ -154,6 +151,7 @@ def process_stock_entry(stock_entry_name):
         raise
 
 
+
 def handle_case1(rows, se):
 
     currency = frappe.get_cached_value(
@@ -162,68 +160,74 @@ def handle_case1(rows, se):
         "default_currency"
     )
 
-    je = frappe.new_doc(
-        "Journal Entry"
-    )
+    meta = frappe.get_meta("Journal Entry Account")
+    seg_df = meta.get_field(SEGMENT_FIELDNAME)
 
-    je.voucher_type = "Journal Entry"
-    je.posting_date = se.posting_date
-    je.company = se.company
+    original_fetch = None
 
-    je.user_remark = (
-        f"Segment reallocation "
-        f"(Case 1 - same GL) "
-        f"for {se.name}"
-    )
+    if seg_df:
+        original_fetch = seg_df.fetch_from
+        seg_df.fetch_from = None
 
-    je.cheque_no = se.name
-    je.cheque_date = se.posting_date
-    for row in rows:
+    try:
 
-        # Debit target segment
-        je.append(
-            "accounts",
-            {
-                "account": row.tgt_gl,
-                "debit_in_account_currency": flt(
-                    row.amount,
-                    2
-                ),
-                "credit_in_account_currency": 0,
-                SEGMENT_FIELDNAME: row.tgt_seg,
-                "account_currency": currency,
-                "cost_center": row.cost_center,
-                "branch": row.branch,
-            }
+        je = frappe.new_doc("Journal Entry")
+
+        je.voucher_type = "Journal Entry"
+        je.posting_date = se.posting_date
+        je.company = se.company
+
+        je.user_remark = (
+            f"Segment reallocation (Case 1 - same GL) for {se.name}"
         )
 
-        # Credit source segment
-        je.append(
-            "accounts",
-            {
-                "account": row.src_gl,
-                "debit_in_account_currency": 0,
-                "credit_in_account_currency": flt(
-                    row.amount,
-                    2
-                ),
-                SEGMENT_FIELDNAME: row.src_seg,
-                "account_currency": currency,
-                "cost_center": row.cost_center,
-                "branch": row.branch,
-            }
-        )
+        je.cheque_no = se.name
+        je.cheque_date = se.posting_date
 
-    if not je.accounts:
-        return
+        for row in rows:
 
-    je.flags.ignore_permissions = True
-    je.flags.ignore_mandatory = True
+            je.append(
+                "accounts",
+                {
+                    "account": row.tgt_gl,
+                    "debit_in_account_currency": flt(row.amount, 2),
+                    "credit_in_account_currency": 0,
+                    "account_currency": currency,
+                    "cost_center": row.cost_center,
+                    "branch": row.branch,
 
-    je.insert()
-    je.submit()
+                    SEGMENT_FIELDNAME: row.tgt_seg
+                }
+            )
 
-    return je.name
+            je.append(
+                "accounts",
+                {
+                    "account": row.src_gl,
+                    "debit_in_account_currency": 0,
+                    "credit_in_account_currency": flt(row.amount, 2),
+                    "account_currency": currency,
+                    "cost_center": row.cost_center,
+                    "branch": row.branch,
+
+                    SEGMENT_FIELDNAME: row.src_seg
+                }
+            )
+
+        if not je.accounts:
+            return
+
+        je.flags.ignore_permissions = True
+        je.flags.ignore_mandatory = True
+
+        je.insert()
+        je.submit()
+
+        return je.name
+
+    finally:
+        if seg_df:
+            seg_df.fetch_from = original_fetch
 
 
 def get_warehouse_gl_and_segment(
