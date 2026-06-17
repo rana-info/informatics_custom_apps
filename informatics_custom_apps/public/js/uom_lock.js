@@ -1,14 +1,29 @@
+// Copyright (c) 2025, Monil Kamboj and contributors
+// For license information, please see license.txt
+
+// uom_lock.js
+// Prevents UOM changes after document creation for Sales Order and Purchase Order
+
+// 1. Lock UOM column in the main items grid (Sales Order + Purchase Order)
 frappe.ui.form.on('Sales Order', {
     refresh(frm) {
-        if (frm.is_new()) return;
-        frm.fields_dict['items'].grid.update_docfield_property('uom', 'read_only', 1);
-        frm.fields_dict['items'].grid.update_docfield_property('stock_uom', 'read_only', 1);
+        if (frm.doc.docstatus === 1) {   // only lock if submitted
+            frm.fields_dict['items'].grid.update_docfield_property('uom', 'read_only', 1);
+            frm.fields_dict['items'].grid.update_docfield_property('stock_uom', 'read_only', 1);
+        }
     }
 });
 
-// Override update_child_items to make UOM read-only in the dialog
-const _original_update_child_items = erpnext.utils.update_child_items;
+frappe.ui.form.on('Purchase Order', {
+    refresh(frm) {
+        if (frm.doc.docstatus === 1) {   // only lock if submitted
+            frm.fields_dict['items'].grid.update_docfield_property('uom', 'read_only', 1);
+            frm.fields_dict['items'].grid.update_docfield_property('stock_uom', 'read_only', 1);
+        }
+    }
+});
 
+// 2. Override the Update Items dialog so UOM is read-only there too
 erpnext.utils.update_child_items = function (opts) {
     const frm = opts.frm;
     const cannot_add_row = typeof opts.cannot_add_row === "undefined" ? true : opts.cannot_add_row;
@@ -128,7 +143,7 @@ erpnext.utils.update_child_items = function (opts) {
             fieldtype: "Link",
             fieldname: "uom",
             options: "UOM",
-            read_only: 1,           // <-- ONLY CHANGE: was 0, now 1
+            read_only: 1,   // <-- locked
             label: __("UOM"),
             reqd: 1,
             onchange: function () {

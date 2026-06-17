@@ -28,6 +28,10 @@ app_license = "mit"
 app_include_css = "/assets/informatics_custom_apps/css/custom.css"
 # app_include_js = "/assets/informatics_custom_apps/js/informatics_custom_apps.js"
 
+app_include_js = [
+    "/assets/informatics_custom_apps/js/uom_lock.js"
+]
+
 # include js, css files in header of web template
 # web_include_css = "/assets/informatics_custom_apps/css/informatics_custom_apps.css"
 # web_include_js = "/assets/informatics_custom_apps/js/informatics_custom_apps.js"
@@ -57,8 +61,7 @@ app_include_css = "/assets/informatics_custom_apps/css/custom.css"
 # ----------
 doctype_js = {
     "Loan": "public/js/loan_custom.js",
-    "Asset": "public/js/asset_date_custom.js",
-    "Sales Order": "public/js/sales_order_custom.js"
+    "Asset": "public/js/asset_date_custom.js"
 }
 # doc_events = {
 #     "Leave Application": {
