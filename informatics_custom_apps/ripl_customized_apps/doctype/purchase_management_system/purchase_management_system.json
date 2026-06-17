@@ -507,7 +507,7 @@
    "options": "Segment"
   },
   {
-   "depends_on": "eval:doc.correction_type == 'Wrong Manual Entry'",
+   "depends_on": "eval:doc.correction_type == 'Wrong Purchase Order' || doc.correction_type == 'Wrong Purchase Order and Supplier'",
    "fieldname": "purchase_order_correction",
    "fieldtype": "Section Break",
    "label": "Purchase Order Correction"
@@ -522,7 +522,7 @@
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-06-13 13:43:53.658311",
+ "modified": "2026-06-17 10:25:55.692144",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "Purchase Management System",
