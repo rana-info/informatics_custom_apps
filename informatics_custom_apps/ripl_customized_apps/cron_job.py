@@ -136,7 +136,6 @@ def create_missing_return_pr_sles():
             )
 
 #Method to cacnel GL Entries for return prs
-
 def cancel_gl_entries_for_return_prs():
 	query=frappe.db.sql("""SELECT  gl.name from `tabGL Entry` as gl left join `tabPurchase Receipt` as pr on gl.voucher_no = pr.name
 	where gl.is_cancelled = 0 and gl.posting_date >= '2026-04-01' and pr.is_return = 1 ;""",as_dict=1)
