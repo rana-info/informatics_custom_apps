@@ -185,7 +185,8 @@ scheduler_events = {
 # 		"informatics_custom_apps.tasks.hourly"
 # 	],
 	"weekly": [
-		"informatics_custom_apps.ripl_customized_apps.cron_job.create_missing_return_pr_sles"
+		"informatics_custom_apps.ripl_customized_apps.cron_job.create_missing_return_pr_sles",
+        "informatics_custom_apps.ripl_customized_apps.cron_job.cancel_gl_entries_for_return_prs"
 	]
 # 	"monthly": [
 # 		"informatics_custom_apps.tasks.monthly"

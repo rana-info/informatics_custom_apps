@@ -134,3 +134,21 @@ def create_missing_return_pr_sles():
                 frappe.get_traceback(),
                 f"Failed to create SLE for {pr_name}"
             )
+
+#Method to cacnel GL Entries for return prs
+
+def cancel_gl_entries_for_return_prs():
+	query=frappe.db.sql("""SELECT  gl.name from `tabGL Entry` as gl left join `tabPurchase Receipt` as pr on gl.voucher_no = pr.name
+	where gl.is_cancelled = 0 and gl.posting_date >= '2026-04-01' and pr.is_return = 1 ;""",as_dict=1)
+	for row in query:
+		try:
+			frappe.db.set_value("GL Entry", row.name, "is_cancelled", 1)
+			frappe.get_doc("GL Entry", row.name).add_comment(
+                "Comment",
+                "Cancelled GL Entry for return PR through scheduled job"
+            )
+		except Exception:
+			frappe.log_error(
+				frappe.get_traceback(),
+				f"Failed to cancel GL Entry {row.name} for return PR"
+			)
