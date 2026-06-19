@@ -1,6 +1,17 @@
 import frappe
 from frappe.utils import flt
 
+FUEL_ITEM_GROUPS = (
+	"020301-Fuel-Trd",
+	"020302-Fuel-Trd Non Weightment",
+	"020104-Bagasse-Trd",
+	"020104-Bagasse-Trd (Non Weighment)",
+	"010108-Bagasse-Mfg (Non Weighment)",
+	"010102-Bagasse-Mfg",
+)
+RM_ITEM_CODES = ("106448", "106446", "106444")
+
+
 def execute(filters=None):
 	columns = get_columns()
 	data = get_data(filters)
@@ -9,12 +20,14 @@ def execute(filters=None):
 
 def get_columns():
 	return [
-     	{"fieldname": "doctype", "fieldtype": "Data", "hidden": 1},
+		{"fieldname": "doctype", "fieldtype": "Data", "hidden": 1},
 		{"fieldname": "docname", "fieldtype": "Data", "hidden": 1},
 		{"label": "Item", "fieldname": "name", "fieldtype": "Data", "width": 300},
 
+		{"label": "Purchase Order", "fieldname": "po_no", "fieldtype": "Link", "options": "Purchase Order", "width": 200},
 		{"label": "Supplier Name", "fieldname": "supplier_name", "fieldtype": "Data", "width": 190},
 		{"label": "PO Date", "fieldname": "po_date", "fieldtype": "Date", "width": 120},
+
 		{"label": "Ordered Qty", "fieldname": "ordered_qty", "fieldtype": "Float", "width": 120},
 		{"label": "Received Qty", "fieldname": "received_qty", "fieldtype": "Float", "width": 120},
 		{"label": "Pending Qty", "fieldname": "pending_qty", "fieldtype": "Float", "width": 120},
@@ -66,68 +79,139 @@ def get_data(filters):
 		conditions += " AND wh.custom_branch IN %(plant)s"
 		values["plant"] = tuple(plants)
 
+	# ── Supplier filter ─────────────────────────────────────────────
+	if filters.get("supplier"):
+		suppliers = filters.get("supplier")
+		if isinstance(suppliers, str):
+			suppliers = [s.strip() for s in suppliers.split(",") if s.strip()]
+		if suppliers:
+			conditions += " AND po.supplier IN %(supplier)s"
+			values["supplier"] = tuple(suppliers)
+
+	# ── Fuel / RM category filter ───────────────────────────────────
+	# "Fuel" = items belonging to the Fuel/Bagasse item groups
+	# "RM"   = items with item_code 106444 / 106446 / 106448
+	category = (filters.get("category") or "").strip()
+	if category == "Fuel":
+		selected_categories = ["Fuel"]
+	elif category == "RM":
+		selected_categories = ["RM"]
+	else:
+		selected_categories = ["Fuel", "RM"]
+
+	category_parts = []
+	if "RM" in selected_categories:
+		category_parts.append("poi.item_code IN %(rm_codes)s")
+		values["rm_codes"] = RM_ITEM_CODES
+	if "Fuel" in selected_categories:
+		category_parts.append("poi.item_group IN %(fuel_groups)s")
+		values["fuel_groups"] = FUEL_ITEM_GROUPS
+
+	category_sql = "(" + " OR ".join(category_parts) + ")" if category_parts else "1=0"
+
 	data = frappe.db.sql(f"""
-		SELECT
-			po.name AS po_no,
-			po.transaction_date AS po_date,
-			po.company,
-			po.supplier,
-			po.supplier_name,
-			po.custom_despatch_material_to,
-			po.incoterm,
-			poi.item_group,
+				SELECT
+					po.name AS po_no,
+					po.transaction_date AS po_date,
+					po.company,
+					po.supplier,
+					po.supplier_name,
+					po.custom_despatch_material_to,
+					po.incoterm,
+					poi.item_group,
 
-			poi.name AS po_item,
-			poi.item_code,
-			poi.item_name,
-			poi.qty AS ordered_qty,
-			poi.uom,
-			poi.segment,
+					poi.name AS po_item,
+					poi.item_code,
+					poi.item_name,
 
-			IFNULL(pri.received_qty, 0) AS received_qty,
-			(poi.qty - IFNULL(pri.received_qty, 0)) AS pending_qty,
+					poi.qty AS ordered_qty,
+					poi.uom,
+					poi.segment,
 
-			po.grand_total AS po_value,
-			poi.branch AS plant,
+					IFNULL(pri.received_qty, 0) AS received_qty,
 
-			(poi.qty / SUM(poi.qty) OVER (PARTITION BY po.name)) * po.grand_total AS ordered_value,
-			(IFNULL(pri.received_qty,0) / SUM(poi.qty) OVER (PARTITION BY po.name)) * po.grand_total AS received_value,
-			((poi.qty - IFNULL(pri.received_qty,0)) / SUM(poi.qty) OVER (PARTITION BY po.name)) * po.grand_total AS pending_value,
+					GREATEST(
+						poi.qty - IFNULL(pri.received_qty, 0),
+						0
+					) AS pending_qty,
 
-			CASE
-				WHEN IFNULL(pri.received_qty,0)=0 THEN 'Not Received'
-				WHEN IFNULL(pri.received_qty,0)<poi.qty THEN 'Partially Received'
-				ELSE 'Fully Received'
-			END AS receipt_status
+					po.grand_total AS po_value,
 
-		FROM `tabPurchase Order` po
-		INNER JOIN `tabPurchase Order Item` poi ON poi.parent = po.name
+					poi.branch AS plant,
 
-		LEFT JOIN (
-			SELECT purchase_order_item, SUM(qty) AS received_qty
-			FROM `tabPurchase Receipt Item`
-			WHERE docstatus = 1
-			GROUP BY purchase_order_item
-		) pri ON pri.purchase_order_item = poi.name
+					(
+						poi.qty
+						/ NULLIF(SUM(poi.qty) OVER (PARTITION BY po.name), 0)
+					) * po.grand_total AS ordered_value,
 
-		LEFT JOIN `tabWarehouse` wh ON wh.name = poi.warehouse
+					(
+						IFNULL(pri.received_qty, 0)
+						/ NULLIF(SUM(poi.qty) OVER (PARTITION BY po.name), 0)
+					) * po.grand_total AS received_value,
 
-		WHERE
-			po.docstatus = 1
-			AND po.status NOT IN ('Closed','Completed')
-			AND (
-				poi.item_code IN ('106448','106446','106444')
-				OR poi.item_group IN (
-					'020301-Fuel-Trd',
-					'020302-Fuel-Trd Non Weightment',
-					'020104-Bagasse-Trd',
-					'020104-Bagasse-Trd (Non Weighment)',
-					'010108-Bagasse-Mfg (Non Weighment)',
-					'010102-Bagasse-Mfg'
-				)
-			)
-			{conditions}
-	""".format(conditions=conditions), values, as_dict=True)
+					(
+						GREATEST(
+							poi.qty - IFNULL(pri.received_qty, 0),
+							0
+						)
+						/ NULLIF(SUM(poi.qty) OVER (PARTITION BY po.name), 0)
+					) * po.grand_total AS pending_value,
+
+					CASE
+						WHEN IFNULL(pri.received_qty, 0) = 0
+							THEN 'Not Received'
+
+						WHEN GREATEST(
+							poi.qty - IFNULL(pri.received_qty, 0),
+							0
+						) > 0
+							THEN 'Partially Received'
+
+						ELSE 'Fully Received'
+					END AS receipt_status
+
+				FROM `tabPurchase Order` po
+
+				INNER JOIN `tabPurchase Order Item` poi
+					ON poi.parent = po.name
+
+				LEFT JOIN (
+					SELECT
+						pri.purchase_order_item,
+						SUM(
+							CASE
+								WHEN pr.is_return = 1 THEN 0
+								ELSE pri.qty
+							END
+						) AS received_qty
+
+					FROM `tabPurchase Receipt Item` pri
+
+					INNER JOIN `tabPurchase Receipt` pr
+						ON pr.name = pri.parent
+						AND pr.docstatus = 1
+
+					WHERE
+						pri.docstatus = 1
+
+					GROUP BY
+						pri.purchase_order_item
+
+				) pri
+					ON pri.purchase_order_item = poi.name
+
+				LEFT JOIN `tabWarehouse` wh
+					ON wh.name = poi.warehouse
+
+				WHERE
+					po.docstatus = 1
+					AND po.status NOT IN (
+						'Closed',
+						'Completed'
+							)
+					AND {category_sql}
+					{conditions}
+	""", values, as_dict=True)
 
 	item_rows = []
 	for r in data:
@@ -295,6 +379,8 @@ def get_data(filters):
 				"parent": group_id,
 				"indent": 1,
 
+				"plant": plant,
+
 				"ordered_qty": p["oq"],
 				"received_qty": p["rq"],
 				"pending_qty": p["pq"],
@@ -323,6 +409,8 @@ def get_data(filters):
 					"parent": plant_id,
 					"indent": 2,
 
+					"plant": plant,
+					"po_no": po,
 					"po_date": s["po_date"],
 					"supplier": s["supplier"],
 					"supplier_name": s["supplier_name"],
@@ -357,6 +445,13 @@ def get_data(filters):
 							"indent": 3,
 
 							"uom": "Quintal",
+
+							"plant": plant,
+							"po_no": r["po_no"],
+							"po_date": r["po_date"],
+							"supplier": r["supplier"],
+							"supplier_name": r["supplier_name"],
+							"company": r["company"],
 
 							"ordered_qty": r["ordered_qty"],
 							"received_qty": r["received_qty"],
