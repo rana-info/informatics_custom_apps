@@ -1,0 +1,19 @@
+{
+ "content": null,
+ "creation": "2026-06-18 09:37:02.820422",
+ "docstatus": 0,
+ "doctype": "Page",
+ "idx": 0,
+ "modified": "2026-06-18 09:37:27.694718",
+ "modified_by": "Administrator",
+ "module": "RIPL Customized Apps",
+ "name": "item-group-wise-stoc",
+ "owner": "Administrator",
+ "page_name": "item-group-wise-stoc",
+ "roles": [],
+ "script": null,
+ "standard": "Yes",
+ "style": null,
+ "system_page": 0,
+ "title": "Item Group Wise Stock Balance"
+}

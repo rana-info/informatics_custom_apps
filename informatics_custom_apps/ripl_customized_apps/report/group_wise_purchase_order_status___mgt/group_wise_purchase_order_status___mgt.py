@@ -232,58 +232,137 @@ def get_data(filters):
 
             poi.qty AS ordered_qty,
 
-            IFNULL(SUM(pri.qty), 0) AS received_qty,
+            IFNULL(
+                SUM(
+                    CASE
+                        WHEN pr.is_return = 1 THEN 0
+                        ELSE pri.qty
+                    END
+                ),
+                0
+            ) AS received_qty,
 
-            (poi.qty - IFNULL(SUM(pri.qty), 0)) AS pending_qty,
+            GREATEST(
+                poi.qty -
+                IFNULL(
+                    SUM(
+                        CASE
+                            WHEN pr.is_return = 1 THEN 0
+                            ELSE pri.qty
+                        END
+                    ),
+                    0
+                ),
+                0
+            ) AS pending_qty,
 
             poi.amount AS ordered_value,
 
             (
-                poi.amount * IFNULL(SUM(pri.qty),0)
-                / NULLIF(poi.qty,0)
+                poi.amount *
+                IFNULL(
+                    SUM(
+                        CASE
+                            WHEN pr.is_return = 1 THEN 0
+                            ELSE pri.qty
+                        END
+                    ),
+                    0
+                )
+                / NULLIF(poi.qty, 0)
             ) AS received_value,
 
             (
                 poi.amount *
-                (poi.qty - IFNULL(SUM(pri.qty),0))
-                / NULLIF(poi.qty,0)
+                GREATEST(
+                    poi.qty -
+                    IFNULL(
+                        SUM(
+                            CASE
+                                WHEN pr.is_return = 1 THEN 0
+                                ELSE pri.qty
+                            END
+                        ),
+                        0
+                    ),
+                    0
+                )
+                / NULLIF(poi.qty, 0)
             ) AS pending_value,
 
-            GROUP_CONCAT(DISTINCT pri.parent) AS purchase_receipts,
+            GROUP_CONCAT(
+                DISTINCT CASE
+                    WHEN pr.is_return = 1 THEN NULL
+                    ELSE pri.parent
+                END
+            ) AS purchase_receipts,
 
             CASE
-                WHEN IFNULL(SUM(pri.qty), 0) = 0 THEN 'Not Received'
-                WHEN IFNULL(SUM(pri.qty), 0) < poi.qty THEN 'Partially Received'
+                WHEN IFNULL(
+                    SUM(
+                        CASE
+                            WHEN pr.is_return = 1 THEN 0
+                            ELSE pri.qty
+                        END
+                    ),
+                    0
+                ) = 0
+                    THEN 'Not Received'
+
+                WHEN GREATEST(
+                    poi.qty -
+                    IFNULL(
+                        SUM(
+                            CASE
+                                WHEN pr.is_return = 1 THEN 0
+                                ELSE pri.qty
+                            END
+                        ),
+                        0
+                    ),
+                    0
+                ) > 0
+                    THEN 'Partially Received'
+
                 ELSE 'Fully Received'
             END AS receipt_status
 
-        FROM
-            `tabPurchase Order` po
+        FROM `tabPurchase Order` po
 
-        JOIN
-            `tabPurchase Order Item` poi
+        JOIN `tabPurchase Order Item` poi
             ON po.name = poi.parent
 
-        LEFT JOIN
-            `tabPurchase Receipt Item` pri
+        LEFT JOIN `tabPurchase Receipt Item` pri
             ON pri.purchase_order_item = poi.name
             AND pri.docstatus = 1
 
-        LEFT JOIN
-            `tabWarehouse` wh
+        LEFT JOIN `tabPurchase Receipt` pr
+            ON pr.name = pri.parent
+            AND pr.docstatus = 1
+
+        LEFT JOIN `tabWarehouse` wh
             ON poi.warehouse = wh.name
 
-        LEFT JOIN
-            `tabItem` i
+        LEFT JOIN `tabItem` i
             ON poi.item_code = i.name
 
         WHERE
             po.docstatus = 1
-            AND po.status NOT IN ('Closed', 'Completed')
+            AND po.status NOT IN (
+                'Closed',
+                'Completed'
+            )
 
             AND poi.item_code NOT IN (
-                '125428','125426','111513','111512',
-                '125427','111511','125556','125557','125558'
+                '125428',
+                '125426',
+                '111513',
+                '111512',
+                '125427',
+                '111511',
+                '125556',
+                '125557',
+                '125558'
             )
 
             AND i.item_group NOT IN (
@@ -298,7 +377,8 @@ def get_data(filters):
             {conditions}
 
         GROUP BY
-            po.name, poi.name
+            po.name,
+            poi.name
 
         ORDER BY
             po.transaction_date DESC,
