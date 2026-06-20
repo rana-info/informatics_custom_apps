@@ -34,6 +34,11 @@
 	color: #642b11fc;
 }
 
+.indicator-pill.custom-darkblue {
+    background: #becfe2;
+    color: #254292;
+}
+
 /* =============================================================
    PMS – Purchase Management System
    Correction Type Badge Colors

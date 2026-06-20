@@ -13,10 +13,11 @@ class SalesManagementTool(Document):
             )
 
         if self.deal_correction:
-            if self.correction_type and self.correction_type != "Wrong Sales Partner":
+            allowed_deal_corrections = {"Wrong Sales Partner", "Wrong Segment(Deal)"}
+            if self.correction_type and self.correction_type not in allowed_deal_corrections:
                 frappe.throw(
                     f"'{self.correction_type}' cannot be tackled in Deal Correction mode. "
-                    f"Only 'Wrong Sales Partner' is allowed when Deal Correction is enabled."
+                    f"Only {', '.join(allowed_deal_corrections)} are allowed when Deal Correction is enabled."
                 )
             return
 
@@ -276,6 +277,7 @@ class SalesManagementTool(Document):
             "Change First Weight(Tare)": self.handle_change_first_weight,
             "Wrong Segment": self.handle_wrong_segment,
             "Unlink Weighment": self.handle_unlink_weighment,
+            "Wrong Segment(Deal)": self.handle_wrong_segment_deal,
         }
 
         handler = handlers.get(self.correction_type)
@@ -613,6 +615,168 @@ class SalesManagementTool(Document):
             frappe.db.set_value("Weighment", wname, "segment", new_seg, update_modified=False)
 
 
+    def handle_wrong_segment_deal(self):
+        """Cascades new Cost Center and Segment across Deal, Dispatch Orders,
+        Sales Orders (+ Items), Delivery Notes (+ Items), Sales Invoices (+ Items),
+        GL Entries, and Stock Ledger Entries.
+
+        The new cost_center and segment values are read from the selected
+        Cost Center document. Deal only has a cost_center field (no segment).
+        """
+        if not self.deal:
+            frappe.throw("Deal is required for Wrong Segment(Deal) correction.")
+        if not self.new_cost_center:
+            frappe.throw("New Cost Center is required.")
+        if not frappe.db.exists("Deal", self.deal):
+            frappe.throw(f"Deal '{self.deal}' does not exist.")
+        if not frappe.db.exists("Cost Center", self.new_cost_center):
+            frappe.throw(f"Cost Center '{self.new_cost_center}' does not exist.")
+
+        new_cc = self.new_cost_center
+        # Cost Center document has a 'segment' field (custom or standard) that holds
+        # the segment name associated with that cost center.
+        # The cost center 'name' field is the full path like "9999 - Distillery - BBPL".
+        new_segment = frappe.db.get_value("Cost Center", new_cc, "segment") or ""
+
+        # --- Deal: cost_center only (Deal has no segment field) ---
+        frappe.db.set_value(
+            "Deal", self.deal,
+            {"cost_center": new_cc},
+            update_modified=False
+        )
+
+        # --- Dispatch Orders: cost_center only ---
+        dispatch_orders = frappe.get_all(
+            "Dispatch Order",
+            filters={"deal": self.deal, "docstatus": ["<", 2]},
+            pluck="name"
+        )
+        for do_name in dispatch_orders:
+            frappe.db.set_value(
+                "Dispatch Order", do_name,
+                {"cost_center": new_cc},
+                update_modified=False
+            )
+
+        # --- Sales Orders -> Delivery Notes -> Sales Invoices ---
+        sales_orders = frappe.get_all(
+            "Sales Order",
+            filters={"deal": self.deal, "docstatus": ["<", 2]},
+            pluck="name"
+        )
+        for so_name in sales_orders:
+            # Sales Order header: cost_center + segment
+            frappe.db.set_value(
+                "Sales Order", so_name,
+                {"cost_center": new_cc, "segment": new_segment},
+                update_modified=False
+            )
+            # Sales Order Items
+            so_items = frappe.get_all(
+                "Sales Order Item",
+                filters={"parent": so_name},
+                pluck="name"
+            )
+            for soi_name in so_items:
+                frappe.db.set_value(
+                    "Sales Order Item", soi_name,
+                    {"cost_center": new_cc, "segment": new_segment},
+                    update_modified=False
+                )
+
+            # Delivery Notes linked via SO
+            dn_names = frappe.get_all(
+                "Delivery Note Item",
+                filters={"against_sales_order": so_name, "docstatus": ["<", 2]},
+                pluck="parent",
+                distinct=True
+            )
+            for dn_name in list(set(dn_names)):
+                # DN header: cost_center + segment
+                frappe.db.set_value(
+                    "Delivery Note", dn_name,
+                    {"cost_center": new_cc, "segment": new_segment},
+                    update_modified=False
+                )
+                # DN Items
+                dni_names = frappe.get_all(
+                    "Delivery Note Item",
+                    filters={"parent": dn_name},
+                    pluck="name"
+                )
+                for dni_name in dni_names:
+                    frappe.db.set_value(
+                        "Delivery Note Item", dni_name,
+                        {"cost_center": new_cc, "segment": new_segment},
+                        update_modified=False
+                    )
+
+                # GL Entries from DN: cost_center + segment
+                dn_gl_entries = frappe.get_all(
+                    "GL Entry",
+                    filters={"voucher_no": dn_name, "is_cancelled": 0},
+                    pluck="name"
+                )
+                for gl_name in dn_gl_entries:
+                    frappe.db.set_value(
+                        "GL Entry", gl_name,
+                        {"cost_center": new_cc, "segment": new_segment},
+                        update_modified=False
+                    )
+
+                # Stock Ledger Entries from DN: segment only
+                dn_sle_entries = frappe.get_all(
+                    "Stock Ledger Entry",
+                    filters={"voucher_no": dn_name, "is_cancelled": 0},
+                    pluck="name"
+                )
+                for sle_name in dn_sle_entries:
+                    frappe.db.set_value(
+                        "Stock Ledger Entry", sle_name,
+                        {"segment": new_segment},
+                        update_modified=False
+                    )
+
+                # Sales Invoices linked via DN
+                si_names = frappe.get_all(
+                    "Sales Invoice Item",
+                    filters={"delivery_note": dn_name, "docstatus": ["<", 2]},
+                    pluck="parent",
+                    distinct=True
+                )
+                for si_name in list(set(si_names)):
+                    # SI header: cost_center + segment
+                    frappe.db.set_value(
+                        "Sales Invoice", si_name,
+                        {"cost_center": new_cc, "segment": new_segment},
+                        update_modified=False
+                    )
+                    # SI Items
+                    sii_names = frappe.get_all(
+                        "Sales Invoice Item",
+                        filters={"parent": si_name},
+                        pluck="name"
+                    )
+                    for sii_name in sii_names:
+                        frappe.db.set_value(
+                            "Sales Invoice Item", sii_name,
+                            {"cost_center": new_cc, "segment": new_segment},
+                            update_modified=False
+                        )
+
+                    # GL Entries from SI: cost_center + segment
+                    si_gl_entries = frappe.get_all(
+                        "GL Entry",
+                        filters={"voucher_no": si_name, "is_cancelled": 0},
+                        pluck="name"
+                    )
+                    for gl_name in si_gl_entries:
+                        frappe.db.set_value(
+                            "GL Entry", gl_name,
+                            {"cost_center": new_cc, "segment": new_segment},
+                            update_modified=False
+                        )
+
     def handle_unlink_weighment(self):
         """Unlinks the selected Delivery Note from its Weighment by clearing custom_weighment."""
         if not self.delivery_note:
@@ -791,14 +955,19 @@ class SalesManagementTool(Document):
         if not self.deal:
             return {}
         
-        deal = frappe.db.get_value("Deal", self.deal, ["name", "sales_partner", "company", "branch"], as_dict=1)
+        deal = frappe.db.get_value(
+            "Deal", self.deal,
+            ["name", "sales_partner", "company", "branch", "cost_center"],
+            as_dict=1
+        )
         if not deal:
             return {}
 
         return {
             "wrong_sales_partner": deal.sales_partner,
             "company": deal.company,
-            "plant": deal.branch
+            "plant": deal.branch,
+            "cost_center": deal.cost_center,
         }
 
     @frappe.whitelist()

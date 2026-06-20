@@ -93,9 +93,8 @@ function update_correction_options_for_mode(frm) {
 	}
 
 	if (frm.doc.deal_correction === 1) {
-		// Deal mode: only Wrong Sales Partner
-		frm.set_df_property("correction_type", "options", "Wrong Sales Partner");
-		frm.set_value("correction_type", "Wrong Sales Partner");
+		// Deal mode: Wrong Sales Partner + Wrong Segment(Deal)
+		frm.set_df_property("correction_type", "options", "Wrong Sales Partner\nWrong Segment(Deal)");
 	} else if (frm.doc.delivery_note_correction === 1) {
 		// DN correction mode: only Unlink Weighment
 		frm.set_df_property("correction_type", "options", "Unlink Weighment");
@@ -103,10 +102,10 @@ function update_correction_options_for_mode(frm) {
 	} else {
 		// Normal gate-entry mode: all options except the mode-specific ones
 		const opts = frm._all_correction_options.filter(
-			(o) => o !== "Wrong Sales Partner" && o !== "Unlink Weighment"
+			(o) => o !== "Wrong Sales Partner" && o !== "Unlink Weighment" && o !== "Wrong Segment(Deal)"
 		);
 		frm.set_df_property("correction_type", "options", opts.join("\n"));
-		if (["Wrong Sales Partner", "Unlink Weighment"].includes(frm.doc.correction_type)) {
+		if (["Wrong Sales Partner", "Unlink Weighment", "Wrong Segment(Deal)"].includes(frm.doc.correction_type)) {
 			frm.set_value("correction_type", "");
 		}
 		update_correction_options(frm, {
@@ -134,7 +133,7 @@ function update_correction_options(frm, data = {}) {
 	}
 
 	let options = frm._all_correction_options.filter(
-		(o) => o !== "Wrong Sales Partner" && o !== "Unlink Weighment"
+		(o) => o !== "Wrong Sales Partner" && o !== "Unlink Weighment" && o !== "Wrong Segment(Deal)"
 	);
 
 	if (is_manual) options = options.filter((o) => !blocked_manual.includes(o));
@@ -391,8 +390,9 @@ frappe.ui.form.on("Sales Management Tool", {
 			frm.doc.deal = "";
 			frm.doc.wrong_sales_partner = "";
 			frm.doc.new_sales_partner = "";
+			frm.doc.new_cost_center = "";
 			frm.doc.correction_type = "";
-			frm.refresh_fields(["deal", "wrong_sales_partner", "new_sales_partner", "correction_type"]);
+			frm.refresh_fields(["deal", "wrong_sales_partner", "new_sales_partner", "new_cost_center", "correction_type"]);
 		}
 		toggle_deal_correction_mode(frm);
 	},
@@ -476,6 +476,13 @@ frappe.ui.form.on("Sales Management Tool", {
 
 		frm.doc.reason = ct || "";
 		frm.refresh_field("reason");
+
+		// // Cost Center filter for Wrong Segment(Deal)
+		// if (ct === "Wrong Segment(Deal)" && frm.doc.company) {
+		// 	frm.set_query("new_cost_center", () => ({
+		// 		filters: { company: frm.doc.company, is_group: 0 },
+		// 	}));
+		// }
 	},
 
 
