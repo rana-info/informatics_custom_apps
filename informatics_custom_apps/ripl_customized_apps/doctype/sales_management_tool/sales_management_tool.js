@@ -92,26 +92,34 @@ function update_correction_options_for_mode(frm) {
 			.split("\n").map((o) => o.trim()).filter(Boolean);
 	}
 
+	const saved_ct = frm.doc.correction_type;
+
 	if (frm.doc.deal_correction === 1) {
 		// Deal mode: Wrong Sales Partner + Wrong Segment(Deal)
 		frm.set_df_property("correction_type", "options", "Wrong Sales Partner\nWrong Segment(Deal)");
 	} else if (frm.doc.delivery_note_correction === 1) {
 		// DN correction mode: only Unlink Weighment
 		frm.set_df_property("correction_type", "options", "Unlink Weighment");
-		frm.set_value("correction_type", "Unlink Weighment");
+		if (frm.doc.docstatus < 1) {
+			frm.set_value("correction_type", "Unlink Weighment");
+		}
 	} else {
 		// Normal gate-entry mode: all options except the mode-specific ones
 		const opts = frm._all_correction_options.filter(
 			(o) => o !== "Wrong Sales Partner" && o !== "Unlink Weighment" && o !== "Wrong Segment(Deal)"
 		);
 		frm.set_df_property("correction_type", "options", opts.join("\n"));
-		if (["Wrong Sales Partner", "Unlink Weighment", "Wrong Segment(Deal)"].includes(frm.doc.correction_type)) {
+		if (frm.doc.docstatus < 1 && ["Wrong Sales Partner", "Unlink Weighment", "Wrong Segment(Deal)"].includes(frm.doc.correction_type)) {
 			frm.set_value("correction_type", "");
 		}
 		update_correction_options(frm, {
 			is_manual_weighment: frm.doc.is_manual_weighment,
 			entry_type: "Outward",
 		});
+	}
+
+	if (frm.doc.docstatus >= 1 && saved_ct) {
+		frm.doc.correction_type = saved_ct;
 	}
 	frm.refresh_field("correction_type");
 }
