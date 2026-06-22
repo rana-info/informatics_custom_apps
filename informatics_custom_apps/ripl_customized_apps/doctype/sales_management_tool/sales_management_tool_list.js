@@ -41,6 +41,7 @@ frappe.listview_settings["Sales Management Tool"] = {
 				"Wrong Segment": "custom-teal",
 
 				"Unlink Weighment": "custom-brown",
+				"Wrong Segment(Deal)": "custom-darkblue",
 			};
 
 			if (!value) return "";

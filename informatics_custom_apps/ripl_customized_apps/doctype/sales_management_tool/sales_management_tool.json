@@ -42,6 +42,8 @@
   "wrong_sales_partner",
   "column_break_rdhs",
   "new_sales_partner",
+  "cost_center_and_segment_correction_section",
+  "new_cost_center",
   "item_group_correction_section",
   "wrong_item_group",
   "column_break_shqe",
@@ -102,7 +104,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Correction Type",
-   "options": "\nWrong Vehicle Number\nWrong Driver Name\nWrong Transporter\nWrong Card Number\nWrong Vehicle Type\nReset Second Weight (Not Manual)\nReset Second Weight (Manual)\nWrong Item Group\nWrong Delivery Note\nInward/Outward Wrong Entry (Manual)\nWrong Sales Partner\nChange First Weight(Tare)\nWrong Segment\nUnlink Weighment",
+   "options": "\nWrong Vehicle Number\nWrong Driver Name\nWrong Transporter\nWrong Card Number\nWrong Vehicle Type\nReset Second Weight (Not Manual)\nReset Second Weight (Manual)\nWrong Item Group\nWrong Delivery Note\nInward/Outward Wrong Entry (Manual)\nWrong Sales Partner\nChange First Weight(Tare)\nWrong Segment\nUnlink Weighment\nWrong Segment(Deal)",
    "reqd": 1
   },
   {
@@ -498,11 +500,23 @@
    "fieldtype": "Data",
    "label": "Corrected Delivery Note",
    "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.correction_type == \"Wrong Segment(Deal)\"",
+   "fieldname": "cost_center_and_segment_correction_section",
+   "fieldtype": "Section Break",
+   "label": "Cost Center and Segment Correction"
+  },
+  {
+   "fieldname": "new_cost_center",
+   "fieldtype": "Link",
+   "label": "New Cost Center",
+   "options": "Cost Center"
   }
  ],
  "is_submittable": 1,
  "links": [],
- "modified": "2026-06-07 17:41:51.722804",
+ "modified": "2026-06-20 11:07:49.582653",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "Sales Management Tool",
