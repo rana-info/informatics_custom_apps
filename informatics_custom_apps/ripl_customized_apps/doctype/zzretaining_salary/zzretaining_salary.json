@@ -1,0 +1,358 @@
+{
+ "actions": [],
+ "autoname": "RT-.YY.-.######",
+ "creation": "2026-06-18 11:18:02.152272",
+ "default_view": "List",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "employee",
+  "employee_name",
+  "currency",
+  "column_break_5",
+  "company",
+  "reports_to",
+  "column_break_cegx",
+  "posting_date",
+  "edit_posting_date",
+  "reporting_manager",
+  "section_break_paid_off",
+  "paid_off_periods",
+  "section_break_17",
+  "employees",
+  "section_break_11",
+  "earnings",
+  "deductions_section",
+  "deductions",
+  "net_calculation_section",
+  "net_earnings",
+  "net_deductions",
+  "net_retaining_salary",
+  "tab_break_rqfe",
+  "pay_via_salary_slip",
+  "total_amount",
+  "branch",
+  "segment",
+  "section",
+  "column_break_fccx",
+  "salary_component",
+  "cost_center",
+  "expense_account",
+  "payable_account",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Name",
+   "options": "RT-.YY.-",
+   "reqd": 1
+  },
+  {
+   "fieldname": "employee",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Employee",
+   "options": "Employee",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "employee.employee_name",
+   "fieldname": "employee_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Employee Name",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "company.default_currency",
+   "fieldname": "currency",
+   "fieldtype": "Link",
+   "label": "Currency",
+   "options": "Currency"
+  },
+  {
+   "fieldname": "column_break_5",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fetch_from": "employee.company",
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "employee.reports_to",
+   "fieldname": "reports_to",
+   "fieldtype": "Link",
+   "label": "Reports To",
+   "options": "Employee",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_cegx",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Today",
+   "description": "\"Retaining Salary will be created for this date\".",
+   "fieldname": "posting_date",
+   "fieldtype": "Date",
+   "label": "Posting Date",
+   "read_only_depends_on": "eval:doc.edit_posting_date==0"
+  },
+  {
+   "default": "0",
+   "fieldname": "edit_posting_date",
+   "fieldtype": "Check",
+   "label": "Edit Posting Date"
+  },
+  {
+   "fetch_from": "reports_to.employee_name",
+   "fieldname": "reporting_manager",
+   "fieldtype": "Data",
+   "label": "Reporting Manager"
+  },
+  {
+   "fieldname": "section_break_paid_off",
+   "fieldtype": "Section Break",
+   "label": "Paid Off Periods"
+  },
+  {
+   "fieldname": "paid_off_periods",
+   "fieldtype": "Table",
+   "label": "Paid Off Periods",
+   "options": "Retaining Salary Paid Off Period"
+  },
+  {
+   "fieldname": "section_break_17",
+   "fieldtype": "Section Break",
+   "label": "Salary Slips"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "employees",
+   "fieldtype": "Table",
+   "label": "Salary Slips",
+   "options": "zzRetaining Employee"
+  },
+  {
+   "fieldname": "section_break_11",
+   "fieldtype": "Section Break",
+   "label": "Earnings"
+  },
+  {
+   "fieldname": "earnings",
+   "fieldtype": "Table",
+   "label": "Earnings",
+   "options": "zzRet Salary Details"
+  },
+  {
+   "fieldname": "deductions_section",
+   "fieldtype": "Section Break",
+   "label": "Deductions"
+  },
+  {
+   "fieldname": "deductions",
+   "fieldtype": "Table",
+   "label": "Deductions",
+   "options": "zzRet Salary Details"
+  },
+  {
+   "fieldname": "net_calculation_section",
+   "fieldtype": "Section Break",
+   "label": "Net Calculation"
+  },
+  {
+   "fieldname": "net_earnings",
+   "fieldtype": "Currency",
+   "label": "Net Earning",
+   "read_only": 1
+  },
+  {
+   "fieldname": "net_deductions",
+   "fieldtype": "Currency",
+   "label": "Net Deduction",
+   "read_only": 1
+  },
+  {
+   "fieldname": "net_retaining_salary",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Net Retaining Salary",
+   "read_only": 1
+  },
+  {
+   "fieldname": "tab_break_rqfe",
+   "fieldtype": "Tab Break",
+   "label": "Payment and Accounting"
+  },
+  {
+   "default": "1",
+   "fieldname": "pay_via_salary_slip",
+   "fieldtype": "Check",
+   "label": "Pay via Salary Slip"
+  },
+  {
+   "fieldname": "total_amount",
+   "fieldtype": "Currency",
+   "label": "Total Amount",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "employee.branch",
+   "fieldname": "branch",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Branch",
+   "options": "Branch"
+  },
+  {
+   "fetch_from": "employee.segment",
+   "fieldname": "segment",
+   "fieldtype": "Link",
+   "label": "Segment",
+   "options": "Segment"
+  },
+  {
+   "fetch_from": "employee.custom_section",
+   "fieldname": "section",
+   "fieldtype": "Link",
+   "label": "Section",
+   "options": "Section"
+  },
+  {
+   "fieldname": "column_break_fccx",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "pay_via_salary_slip",
+   "fieldname": "salary_component",
+   "fieldtype": "Link",
+   "label": "Salary Component",
+   "link_filters": "[[\"Salary Component\",\"type\",\"=\",\"Earning\"]]",
+   "options": "Salary Component"
+  },
+  {
+   "fetch_from": "employee.payroll_cost_center",
+   "fieldname": "cost_center",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Cost Center",
+   "options": "Cost Center"
+  },
+  {
+   "depends_on": "eval:!doc.pay_via_salary_slip\n",
+   "fieldname": "expense_account",
+   "fieldtype": "Link",
+   "label": "Expense Account",
+   "link_filters": "[[\"Account\",\"company\",\"=\",\"eval:doc.company\"],[\"Account\",\"root_type\",\"=\",\"Expense\"],[\"Account\",\"is_group\",\"=\",0]]",
+   "options": "Account"
+  },
+  {
+   "fetch_from": "company.default_payroll_payable_account",
+   "fieldname": "payable_account",
+   "fieldtype": "Link",
+   "label": "Payable Account",
+   "link_filters": "[[\"Account\",\"company\",\"=\",\"eval:doc.company\"],[\"Account\",\"root_type\",\"=\",\"Expense\"]]",
+   "options": "Account"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "zzRetaining Salary",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  }
+ ],
+ "is_submittable": 1,
+ "links": [
+  {
+   "link_doctype": "zzRetaining Salary Slip",
+   "link_fieldname": "retaining_salary"
+  },
+  {
+   "link_doctype": "Additional Salary",
+   "link_fieldname": "ref_docname"
+  },
+  {
+   "link_doctype": "Journal Entry",
+   "link_fieldname": "cheque_no"
+  }
+ ],
+ "modified": "2026-06-23 11:30:53.261442",
+ "modified_by": "Administrator",
+ "module": "RIPL Customized Apps",
+ "name": "zzRetaining Salary",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "select": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "HR Manager",
+   "select": 1,
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Employee",
+   "share": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "HR User",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
