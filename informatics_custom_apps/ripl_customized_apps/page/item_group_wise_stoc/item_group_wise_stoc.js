@@ -24,6 +24,14 @@ const GROUP_METHOD = {
 	'General Store':  'get_general_store_detail',
 };
 
+// Groups that support drilling further down into an Item Code + Item Name
+// wise breakup (via a popup dialog) when a row in their detail table is
+// clicked. Maps group label -> whitelisted method name on the backend.
+const ITEM_DETAIL_METHOD = {
+	'Finished Goods': 'get_finished_goods_item_detail',
+	'General Store':  'get_general_store_item_detail',
+};
+
 class StockSummary {
 	constructor(page) {
 		this.page = page;
@@ -74,7 +82,18 @@ class StockSummary {
 			change:    () => this.on_group_filter_change(),
 		});
 
+		this.inv_health_field = this.page.add_field({
+			label:     'Show Inventory Health',
+			fieldtype: 'Check',
+			fieldname: 'show_inventory_health',
+			change:    () => this.render_active_panels(),
+		});
+
 		this.page.set_secondary_action('Refresh', () => this.refresh(), 'refresh');
+	}
+
+	_get_show_inv_health() {
+		return this.inv_health_field ? !!this.inv_health_field.get_value() : false;
 	}
 
 	get_query_filters() {
@@ -195,54 +214,359 @@ class StockSummary {
 	render_active_panels() {
 		this.$detail_panels.empty();
 
-		GROUP_ORDER
-			.filter((g) => this.active_groups.has(g))
-			.forEach((label) => {
-				const cls = GROUP_CLASS[label] || '';
+		const show_ih    = this._get_show_inv_health();
+		const active_arr = GROUP_ORDER.filter((g) => this.active_groups.has(g));
 
-				let extra_badge = '';
-				if (label === 'Fuel') {
-					extra_badge = `<span class="qty-badge">Qty in Qtl</span><span class="avg-badge">Avg in ₹/Qtl</span>`;
-				} else if (label === 'Finished Goods') {
-					extra_badge = `<span class="avg-badge">Avg Rate in ₹</span>`;
-				} else if (label === 'Raw Material') {
-					extra_badge = `<span class="qty-badge">Qty in Qtl</span><span class="avg-badge">Avg in ₹/Qtl</span><span class="monthly-badge">Monthly Avg (3 Mo)</span><span class="days-badge">Days Stock</span>`;
-				}
+		// ── No group active: optionally show overall Inventory Health ─────────
+		if (active_arr.length === 0) {
+			if (show_ih) {
+				const $ihc = $('<div class="ih-outer-container"></div>').appendTo(this.$detail_panels);
+				this.load_and_render_inv_health($ihc, null);
+			}
+			return;
+		}
 
-				const rm_button = (label === 'Raw Material')
-					? `<button class="btn btn-sm rm-plantwise-btn" id="rm-plantwise-toggle-btn">
-							🏭 Plant Wise Report
-						</button>`
-					: '';
+		// ── One group active ──────────────────────────────────────────────────
+		active_arr.forEach((label) => {
+			const cls = GROUP_CLASS[label] || '';
 
-				const $card = $(`
-					<div class="detail-panel-card group-${cls}" id="detail-panel-${cls}">
-						<div class="detail-panel-title">
-							${frappe.utils.escape_html(label)} — Group Wise Detail
-							<span class="unit-badge">₹ in Lakhs</span>
-							${extra_badge}
-							<span class="sort-badge">↓ Sorted by Value</span>
-							${rm_button}
-						</div>
-						<div class="detail-panel-body">
-							<div class="detail-loading">Loading…</div>
-						</div>
+			let extra_badge = '';
+			if (label === 'Fuel') {
+				extra_badge = `<span class="qty-badge">Qty in Qtl</span><span class="avg-badge">Avg in ₹/Qtl</span>`;
+			} else if (label === 'Finished Goods') {
+				extra_badge = `<span class="avg-badge">Avg Rate in ₹</span>`;
+			} else if (label === 'Raw Material') {
+				extra_badge = `<span class="qty-badge">Qty in Qtl</span><span class="avg-badge">Avg in ₹/Qtl</span><span class="monthly-badge">Monthly Avg (3 Mo)</span><span class="days-badge">Days Stock</span>`;
+			}
+
+			const rm_button = (label === 'Raw Material')
+				? `<button class="btn btn-sm rm-plantwise-btn" id="rm-plantwise-toggle-btn">
+						🏭 Plant Wise Report
+					</button>`
+				: '';
+
+			const click_hint = ITEM_DETAIL_METHOD[label]
+				? `<span class="click-hint-badge">Click a row for item-wise detail</span>`
+				: '';
+
+			const $card = $(`
+				<div class="detail-panel-card group-${cls}" id="detail-panel-${cls}">
+					<div class="detail-panel-title">
+						${frappe.utils.escape_html(label)} — Group Wise Detail
+						<span class="unit-badge">₹ in Lakhs</span>
+						${extra_badge}
+						${click_hint}
+						<span class="sort-badge">↓ Sorted by Value</span>
+						${rm_button}
 					</div>
-				`);
+					<div class="detail-panel-body">
+						<div class="detail-loading">Loading…</div>
+					</div>
+				</div>
+			`);
 
-				this.$detail_panels.append($card);
-				this.load_detail(label, $card.find('.detail-panel-body'));
+			this.$detail_panels.append($card);
+			this.load_detail(label, $card.find('.detail-panel-body'));
 
-				if (label === 'Raw Material') {
-					$card.find('#rm-plantwise-toggle-btn').on('click', () => {
-						this.toggle_rm_plantwise_report();
-					});
-				}
-			});
+			if (label === 'Raw Material') {
+				$card.find('#rm-plantwise-toggle-btn').on('click', () => {
+					this.toggle_rm_plantwise_report();
+				});
+			}
+
+			// Inventory Health panel for this group (appended after the group card;
+			// RM plant-wise card will be inserted between via .after() so the order
+			// becomes: [group card] → [RM plantwise card] → [IH card]).
+			if (show_ih) {
+				const $ihc = $('<div class="ih-outer-container"></div>').appendTo(this.$detail_panels);
+				this.load_and_render_inv_health($ihc, label);
+			}
+		});
 
 		if (this._rm_plantwise_visible && this.active_groups.has('Raw Material') && this.detail_cache['Raw Material']) {
 			this._append_rm_plantwise_card(this.detail_cache['Raw Material']);
 		}
+	}
+
+	// ── Inventory Health ────────────────────────────────────────────────────
+	load_and_render_inv_health($container, item_group) {
+		const cache_key = 'inv_health_' + (item_group || '__all__');
+
+		$container.html(`
+			<div class="detail-panel-card ih-panel-card ih-loading-placeholder">
+				<div class="detail-loading">⏳ Loading Inventory Health…</div>
+			</div>
+		`);
+
+		if (this.detail_cache[cache_key]) {
+			this.render_inv_health_card($container, this.detail_cache[cache_key], item_group);
+			return;
+		}
+
+		frappe.call({
+			method: `${this.method_path}.get_inventory_health`,
+			args:   { ...this.get_query_filters(), item_group: item_group || '' },
+			callback: (r) => {
+				if (r.message) {
+					this.detail_cache[cache_key] = r.message;
+					this.render_inv_health_card($container, r.message, item_group);
+				} else {
+					$container.html(`
+						<div class="detail-panel-card ih-panel-card">
+							<div class="detail-loading">No inventory health data found.</div>
+						</div>
+					`);
+				}
+			},
+			error: () => {
+				$container.html(`
+					<div class="detail-panel-card ih-panel-card">
+						<div class="detail-loading">Failed to load inventory health.</div>
+					</div>
+				`);
+			},
+		});
+	}
+
+	render_inv_health_card($container, data, item_group) {
+		const { rows } = data;
+
+		const title = item_group
+			? `${item_group} — Inventory Health`
+			: 'Inventory Health — All Groups';
+
+		const head = `
+			<tr>
+				<th class="row-label-col ih-corner-header">Plant</th>
+				<th class="ih-col ih-total-inv">Total Inventory Value</th>
+				<th class="ih-col ih-slow">Slow Moving<br><small>90–180 days</small></th>
+				<th class="ih-col ih-nonmoving">Non Moving<br><small>180–365 days</small></th>
+				<th class="ih-col ih-dead">Dead Stock<br><small>&gt;365 days</small></th>
+			</tr>
+		`;
+
+		let body = '';
+		let grand_total     = 0;
+		let grand_slow      = 0;
+		let grand_nonmoving = 0;
+		let grand_dead      = 0;
+
+		(rows || []).forEach((r) => {
+			grand_total     += r.total_value  || 0;
+			grand_slow      += r.slow_moving  || 0;
+			grand_nonmoving += r.non_moving   || 0;
+			grand_dead      += r.dead_stock   || 0;
+
+			// ── Store raw numeric values as data-* attributes so the click
+			//    handler can pass them directly into the drilldown dialog.
+			//    This ensures the stat cards in the dialog always match the
+			//    values shown in this summary table row exactly.
+			body += `
+				<tr class="ih-data-row"
+				    data-plant="${frappe.utils.escape_html(r.plant)}"
+				    data-total="${r.total_value  || 0}"
+				    data-slow="${r.slow_moving   || 0}"
+				    data-nonmoving="${r.non_moving || 0}"
+				    data-dead="${r.dead_stock    || 0}">
+					<td class="row-label-col">
+						${frappe.utils.escape_html(r.plant)}
+						<span class="click-chevron">›</span>
+					</td>
+					<td class="num-cell ih-col ih-total-inv">${this.format_value(r.total_value)}</td>
+					<td class="num-cell ih-col ih-slow">${this.format_value(r.slow_moving)}</td>
+					<td class="num-cell ih-col ih-nonmoving">${this.format_value(r.non_moving)}</td>
+					<td class="num-cell ih-col ih-dead">${this.format_value(r.dead_stock)}</td>
+				</tr>
+			`;
+		});
+
+		body += `
+			<tr class="ih-total-row">
+				<td class="row-label-col">Total</td>
+				<td class="num-cell ih-col ih-total-inv">${this.format_value(Math.round(grand_total     * 100) / 100)}</td>
+				<td class="num-cell ih-col ih-slow">${this.format_value(Math.round(grand_slow       * 100) / 100)}</td>
+				<td class="num-cell ih-col ih-nonmoving">${this.format_value(Math.round(grand_nonmoving  * 100) / 100)}</td>
+				<td class="num-cell ih-col ih-dead">${this.format_value(Math.round(grand_dead       * 100) / 100)}</td>
+			</tr>
+		`;
+
+		$container.html(`
+			<div class="detail-panel-card ih-panel-card">
+				<div class="detail-panel-title">
+					📊 ${frappe.utils.escape_html(title)}
+					<span class="unit-badge">₹ in Lakhs</span>
+					<span class="click-hint-badge">Click a plant for item-wise detail</span>
+					<span class="ih-legend-slow">● Slow 90–180d</span>
+					<span class="ih-legend-nonmoving">● Non-Moving 180–365d</span>
+					<span class="ih-legend-dead">● Dead &gt;365d</span>
+				</div>
+				<div class="table-responsive">
+					<table class="stock-summary-table ih-table">
+						<thead>${head}</thead>
+						<tbody>${body}</tbody>
+					</table>
+				</div>
+			</div>
+		`);
+
+		// ── Read the raw values stored on the row and pass them into the
+		//    dialog so its stat cards are guaranteed to match this table.
+		$container.find('tr.ih-data-row').on('click', (ev) => {
+			const $row     = $(ev.currentTarget);
+			const plant_name = $row.data('plant');
+			const known = {
+				total_value: parseFloat($row.data('total'))      || 0,
+				slow:        parseFloat($row.data('slow'))       || 0,
+				non_moving:  parseFloat($row.data('nonmoving'))  || 0,
+				dead:        parseFloat($row.data('dead'))       || 0,
+			};
+			this.open_inv_health_item_dialog(plant_name, item_group, known);
+		});
+	}
+
+	// ── Inventory Health item-wise drilldown popup ──────────────────────────
+	// `known` carries the exact totals shown in the parent IH summary row so
+	// the four stat cards in the dialog always match that row, regardless of
+	// any difference in how the backend aggregates the item-level detail.
+	open_inv_health_item_dialog(plant_name, item_group, known = null) {
+		if (!plant_name) return;
+
+		const dialog = new frappe.ui.Dialog({
+			title: `${plant_name} — Inventory Ageing Detail${item_group ? ' (' + item_group + ')' : ''}`,
+			size: 'extra-large',
+			fields: [{ fieldtype: 'HTML', fieldname: 'ih_item_detail_html' }],
+		});
+
+		dialog.$wrapper.addClass('stock-summary-item-dialog');
+		dialog.fields_dict.ih_item_detail_html.$wrapper.html(`<div class="detail-loading">Loading…</div>`);
+		dialog.show();
+
+		frappe.call({
+			method:   `${this.method_path}.get_inventory_health_item_detail`,
+			args:     { ...this.get_query_filters(), item_group: item_group || '', target_plant: plant_name },
+			callback: (r) => {
+				if (!r.message || !r.message.items || !r.message.items.length) {
+					dialog.fields_dict.ih_item_detail_html.$wrapper.html(
+						`<div class="detail-loading">No item-wise data found for "${frappe.utils.escape_html(plant_name)}".</div>`
+					);
+					return;
+				}
+
+				// Override the backend-computed totals with the values from the
+				// parent IH summary row so the dialog stat cards match exactly.
+				if (known) {
+					r.message.total_value   = known.total_value;
+					r.message.bucket_totals = r.message.bucket_totals || {};
+					r.message.bucket_totals.slow       = known.slow;
+					r.message.bucket_totals.non_moving = known.non_moving;
+					r.message.bucket_totals.dead       = known.dead;
+				}
+
+				dialog.fields_dict.ih_item_detail_html.$wrapper.html(this.build_ih_item_table_html(r.message));
+			},
+			error: () => {
+				dialog.fields_dict.ih_item_detail_html.$wrapper.html(
+					`<div class="detail-loading">Failed to load inventory health detail.</div>`
+				);
+			},
+		});
+	}
+
+	build_ih_item_table_html(data) {
+		const { items, bucket_totals, total_value } = data;
+
+		const bucket_meta = {
+			fresh:      { label: 'Moving (<90d)', cls: 'days-badge-green',    row_cls: '' },
+			slow:       { label: 'Slow Moving',   cls: 'days-badge-amber',   row_cls: 'ih-row-slow' },
+			non_moving: { label: 'Non Moving',    cls: 'ih-badge-nonmoving', row_cls: 'ih-row-nonmoving' },
+			dead:       { label: 'Dead Stock',    cls: 'days-badge-red',     row_cls: 'ih-row-dead' },
+		};
+
+		const item_count = items.length;
+
+		// Order by days since last movement descending — longest-idle first.
+		const sorted_items = [...items].sort((a, b) => {
+			const da = (a.days_since_movement === null || a.days_since_movement === undefined) ? Infinity : a.days_since_movement;
+			const db = (b.days_since_movement === null || b.days_since_movement === undefined) ? Infinity : b.days_since_movement;
+			return db - da;
+		});
+
+		const summary = `
+			<div class="ih-dialog-summary">
+				<div class="ih-stat-card ih-stat-total">
+					<div class="ih-stat-label">Total Inventory · ${item_count} item${item_count === 1 ? '' : 's'}</div>
+					<div class="ih-stat-value"><span class="ih-stat-currency">₹</span>${this.format_value(total_value)}<span class="ih-stat-unit">L</span></div>
+				</div>
+				<div class="ih-stat-card ih-stat-slow">
+					<div class="ih-stat-label">Slow Moving</div>
+					<div class="ih-stat-value"><span class="ih-stat-currency">₹</span>${this.format_value(bucket_totals.slow)}<span class="ih-stat-unit">L</span></div>
+				</div>
+				<div class="ih-stat-card ih-stat-nonmoving">
+					<div class="ih-stat-label">Non-Moving</div>
+					<div class="ih-stat-value"><span class="ih-stat-currency">₹</span>${this.format_value(bucket_totals.non_moving)}<span class="ih-stat-unit">L</span></div>
+				</div>
+				<div class="ih-stat-card ih-stat-dead">
+					<div class="ih-stat-label">Dead Stock</div>
+					<div class="ih-stat-value"><span class="ih-stat-currency">₹</span>${this.format_value(bucket_totals.dead)}<span class="ih-stat-unit">L</span></div>
+				</div>
+			</div>
+		`;
+
+		const head = `
+			<tr>
+				<th class="row-label-col gs-corner-header">Item</th>
+				<th class="ih-item-col">Qty</th>
+				<th class="ih-item-col">UOM</th>
+				<th class="ih-item-col">Value (Lakh)</th>
+				<th class="ih-item-col ih-item-col-wide">Last Movement</th>
+				<th class="ih-item-col ih-item-col-wide">Status</th>
+			</tr>
+		`;
+
+		let body = '';
+		sorted_items.forEach((it) => {
+			const meta = bucket_meta[it.bucket] || bucket_meta.fresh;
+			const days_label = (it.days_since_movement === null || it.days_since_movement === undefined)
+				? 'No movement on record'
+				: `${it.days_since_movement} days ago`;
+
+			body += `
+				<tr class="ih-item-row ${meta.row_cls}">
+					<td class="row-label-col">
+						<strong>${frappe.utils.escape_html(it.item_name || it.item_code)}</strong>
+						<div class="item-name-sub">${frappe.utils.escape_html(it.item_code)}</div>
+					</td>
+					<td class="num-cell ih-item-col">${this.format_value(it.qty)}</td>
+					<td class="num-cell ih-item-col">${frappe.utils.escape_html(it.uom || '-')}</td>
+					<td class="num-cell ih-item-col">${this.format_value(it.value)}</td>
+					<td class="num-cell ih-item-col ih-item-col-wide">${days_label}</td>
+					<td class="num-cell ih-item-col ih-item-col-wide"><span class="days-pill ${meta.cls}">${meta.label}</span></td>
+				</tr>
+			`;
+		});
+
+		body += `
+			<tr class="gs-grand-total-row">
+				<td class="row-label-col">Total (${item_count} Item${item_count === 1 ? '' : 's'})</td>
+				<td class="num-cell ih-item-col"></td>
+				<td class="num-cell ih-item-col"></td>
+				<td class="num-cell ih-item-col">${this.format_value(total_value)}</td>
+				<td class="num-cell ih-item-col ih-item-col-wide"></td>
+				<td class="num-cell ih-item-col ih-item-col-wide"></td>
+			</tr>
+		`;
+
+		return `
+			<div class="ih-dialog-content">
+				${summary}
+				<div class="table-responsive">
+					<table class="stock-summary-table group-detail-table item-detail-table ih-item-table">
+						<thead>${head}</thead>
+						<tbody>${body}</tbody>
+					</table>
+				</div>
+			</div>
+		`;
 	}
 
 	load_detail(label, $body) {
@@ -280,9 +604,9 @@ class StockSummary {
 		} else if (label === 'Raw Material') {
 			this.render_rm_detail($body, data);
 		} else if (label === 'General Store') {
-			this.render_gs_detail($body, data);
+			this.render_gs_detail($body, data, label);
 		} else {
-			this.render_detail($body, data);
+			this.render_detail($body, data, label);
 		}
 	}
 
@@ -325,7 +649,7 @@ class StockSummary {
 				<th class="row-label-col">Plant</th>
 				<th class="pwrm-col pwrm-qty">Stock Qty (Qtl)</th>
 				<th class="pwrm-col pwrm-value">Stock Value (Lakh)</th>
-				<th class="pwrm-col pwrm-monthly">Avg of 3 Months Consumption</th>
+				<th class="pwrm-col pwrm-monthly">Monthly Avg<br>(Last 3 Mo)</th>
 				<th class="pwrm-col pwrm-days">Days Stock</th>
 			</tr>
 		`;
@@ -396,8 +720,9 @@ class StockSummary {
 		});
 	}
 
-	render_detail($body, data) {
+	render_detail($body, data, group_label) {
 		const { plants, groups } = data;
+		const clickable = !!ITEM_DETAIL_METHOD[group_label];
 
 		const head = `
 			<tr>
@@ -431,10 +756,13 @@ class StockSummary {
 					row_total = avg_vals.length ? avg_vals.reduce((s, v) => s + v, 0) / avg_vals.length : 0;
 				}
 
-				body += `<tr>`;
+				body += `<tr${clickable ? ` class="detail-item-row" data-sublabel="${frappe.utils.escape_html(g.label)}"` : ''}>`;
 
 				if (i === 0) {
-					body += `<td class="row-label-col" rowspan="3">${frappe.utils.escape_html(g.label)}</td>`;
+					body += `<td class="row-label-col" rowspan="3">
+						${frappe.utils.escape_html(g.label)}
+						${clickable ? '<span class="click-chevron">›</span>' : ''}
+					</td>`;
 				}
 
 				body += `<td class="metric-col">${metric_label}</td>`;
@@ -460,6 +788,13 @@ class StockSummary {
 				</table>
 			</div>
 		`);
+
+		if (clickable) {
+			$body.find('tr.detail-item-row').on('click', (ev) => {
+				const sub_label = $(ev.currentTarget).data('sublabel');
+				this.open_item_detail_dialog(group_label, sub_label);
+			});
+		}
 	}
 
 	render_fuel_detail($body, data) {
@@ -546,7 +881,7 @@ class StockSummary {
 			<th class="metric-sub-col ${extra_class}">Qty (Qtl)</th>
 			<th class="metric-sub-col ${extra_class}">Value (Lakh)</th>
 			<th class="metric-sub-col ${extra_class}">Avg (₹/Qtl)</th>
-			<th class="metric-sub-col ${extra_class}">Monthly Consumption(Avg. of Last 3 Months)</th>
+			<th class="metric-sub-col metric-sub-col-monthly ${extra_class}">Monthly Avg<br>(Last 3 Mo)</th>
 			<th class="metric-sub-col last-sub-col ${extra_class}">Days Stock</th>
 		`;
 
@@ -600,8 +935,9 @@ class StockSummary {
 		`);
 	}
 
-	render_gs_detail($body, data) {
+	render_gs_detail($body, data, group_label) {
 		const { plants, groups } = data;
+		const clickable = !!ITEM_DETAIL_METHOD[group_label];
 
 		const head = `
 			<tr>
@@ -629,12 +965,16 @@ class StockSummary {
 			}).join('');
 
 			const is_pesticide = g.label === 'Pesticides';
-			const row_cls = is_pesticide ? 'gs-pesticide-row' : '';
+			const row_cls = [
+				is_pesticide ? 'gs-pesticide-row' : '',
+				clickable ? 'gs-detail-row' : '',
+			].filter(Boolean).join(' ');
 
 			body += `
-				<tr class="${row_cls}">
+				<tr class="${row_cls}"${clickable ? ` data-sublabel="${frappe.utils.escape_html(g.label)}"` : ''}>
 					<td class="row-label-col">
 						${is_pesticide ? '<span class="pesticide-warn-icon">⚠</span>' : ''}${frappe.utils.escape_html(g.label)}
+						${clickable ? '<span class="click-chevron">›</span>' : ''}
 					</td>
 					${plant_cells}
 					<td class="num-cell total-col">${this.format_value(g.total_value)}</td>
@@ -659,6 +999,192 @@ class StockSummary {
 				</table>
 			</div>
 		`);
+
+		if (clickable) {
+			$body.find('tr.gs-detail-row').on('click', (ev) => {
+				const sub_label = $(ev.currentTarget).data('sublabel');
+				this.open_item_detail_dialog(group_label, sub_label);
+			});
+		}
+	}
+
+	// ── Item Code + Item Name wise drill-down popup ─────────────────────────
+	open_item_detail_dialog(group_label, sub_label) {
+		const method_name = ITEM_DETAIL_METHOD[group_label];
+		if (!method_name || !sub_label) return;
+
+		const dialog = new frappe.ui.Dialog({
+			title: `${sub_label} — Item Wise Detail`,
+			size: 'extra-large',
+			fields: [{ fieldtype: 'HTML', fieldname: 'item_detail_html' }],
+		});
+
+		dialog.$wrapper.addClass('stock-summary-item-dialog');
+
+		dialog.fields_dict.item_detail_html.$wrapper.html(`<div class="detail-loading">Loading…</div>`);
+		dialog.show();
+
+		frappe.call({
+			method:   `${this.method_path}.${method_name}`,
+			args:     { ...this.get_query_filters(), label: sub_label },
+			callback: (r) => {
+				if (!r.message || !r.message.items || !r.message.items.length) {
+					dialog.fields_dict.item_detail_html.$wrapper.html(
+						`<div class="detail-loading">No item-wise data found for "${frappe.utils.escape_html(sub_label)}".</div>`
+					);
+					return;
+				}
+				const html = (group_label === 'Finished Goods')
+					? this.build_fg_item_table_html(r.message)
+					: this.build_gs_item_table_html(r.message);
+				dialog.fields_dict.item_detail_html.$wrapper.html(html);
+			},
+			error: () => {
+				dialog.fields_dict.item_detail_html.$wrapper.html(
+					`<div class="detail-loading">Failed to load item-wise detail.</div>`
+				);
+			},
+		});
+	}
+
+	build_fg_item_table_html(data) {
+		const { plants, items, total, uom } = data;
+
+		const head_row1 = `
+			<tr class="fuel-header-row1">
+				<th class="row-label-col fuel-corner-header" rowspan="2">Item</th>
+				${plants.map((p, idx) => `
+					<th colspan="3" class="plant-group-header plant-col-${idx % 4}">
+						${frappe.utils.escape_html(p)}
+					</th>
+				`).join('')}
+				<th colspan="3" class="plant-group-header total-col">Total</th>
+			</tr>
+		`;
+
+		const metric_trio = (extra_class) => `
+			<th class="metric-sub-col ${extra_class}">Qty${uom ? ' (' + frappe.utils.escape_html(uom) + ')' : ''}</th>
+			<th class="metric-sub-col ${extra_class}">Value (Lakh)</th>
+			<th class="metric-sub-col last-sub-col ${extra_class}">Avg Rate (₹)</th>
+		`;
+
+		const head_row2 = `
+			<tr class="fuel-header-row2">
+				${plants.map((p, idx) => metric_trio(`plant-col-${idx % 4}`)).join('')}
+				${metric_trio('total-col')}
+			</tr>
+		`;
+
+		let body = '';
+		items.forEach((it) => {
+			const plant_cells = plants.map((p, idx) => {
+				const qty   = it.qty[p]   || 0;
+				const value = it.value[p] || 0;
+				const avg   = it.avg[p]   || 0;
+				const cls = `plant-col plant-col-${idx % 4}`;
+				return `
+					<td class="num-cell ${cls}">${this.format_value(qty)}</td>
+					<td class="num-cell ${cls}">${this.format_value(value)}</td>
+					<td class="num-cell ${cls} last-sub">${this.format_value(avg)}</td>
+				`;
+			}).join('');
+
+			body += `
+				<tr>
+					<td class="row-label-col">
+						<strong>${frappe.utils.escape_html(it.item_name || it.item_code)}</strong>
+						<div class="item-name-sub">${frappe.utils.escape_html(it.item_code)}</div>
+					</td>
+					${plant_cells}
+					<td class="num-cell total-col">${this.format_value(it.total_qty)}</td>
+					<td class="num-cell total-col">${this.format_value(it.total_value)}</td>
+					<td class="num-cell total-col">${this.format_value(it.total_avg)}</td>
+				</tr>
+			`;
+		});
+
+		const total_plant_cells = plants.map((p, idx) => {
+			const qty   = (total.qty   && total.qty[p])   || 0;
+			const value = (total.value && total.value[p]) || 0;
+			const avg   = (total.avg   && total.avg[p])   || 0;
+			const cls = `plant-col plant-col-${idx % 4}`;
+			return `
+				<td class="num-cell ${cls}">${this.format_value(qty)}</td>
+				<td class="num-cell ${cls}">${this.format_value(value)}</td>
+				<td class="num-cell ${cls} last-sub">${this.format_value(avg)}</td>
+			`;
+		}).join('');
+
+		body += `
+			<tr class="gs-grand-total-row">
+				<td class="row-label-col">Total (All Items)</td>
+				${total_plant_cells}
+				<td class="num-cell total-col">${this.format_value(total.total_qty)}</td>
+				<td class="num-cell total-col">${this.format_value(total.total_value)}</td>
+				<td class="num-cell total-col">${this.format_value(total.total_avg)}</td>
+			</tr>
+		`;
+
+		return `
+			<div class="table-responsive">
+				<table class="stock-summary-table group-detail-table fuel-flat-table item-detail-table">
+					<thead>${head_row1}${head_row2}</thead>
+					<tbody>${body}</tbody>
+				</table>
+			</div>
+		`;
+	}
+
+	build_gs_item_table_html(data) {
+		const { plants, items, total } = data;
+
+		const head = `
+			<tr>
+				<th class="row-label-col gs-corner-header">Item</th>
+				${plants.map((p, idx) => `
+					<th class="plant-col plant-col-${idx % 4}">
+						${frappe.utils.escape_html(p)}
+					</th>
+				`).join('')}
+				<th class="total-col">Total</th>
+			</tr>
+		`;
+
+		let body = '';
+		items.forEach((it) => {
+			const plant_cells = plants.map((p, idx) => {
+				const value = it.value[p] || 0;
+				return `<td class="num-cell plant-col plant-col-${idx % 4}">${this.format_value(value)}</td>`;
+			}).join('');
+
+			body += `
+				<tr>
+					<td class="row-label-col">
+						<strong>${frappe.utils.escape_html(it.item_name || it.item_code)}</strong>
+						<div class="item-name-sub">${frappe.utils.escape_html(it.item_code)}</div>
+					</td>
+					${plant_cells}
+					<td class="num-cell total-col">${this.format_value(it.total_value)}</td>
+				</tr>
+			`;
+		});
+
+		body += `
+			<tr class="gs-grand-total-row">
+				<td class="row-label-col">Total (All Items)</td>
+				${plants.map((p, idx) => `<td class="num-cell plant-col plant-col-${idx % 4}">${this.format_value((total.value && total.value[p]) || 0)}</td>`).join('')}
+				<td class="num-cell total-col">${this.format_value(total.total_value)}</td>
+			</tr>
+		`;
+
+		return `
+			<div class="table-responsive">
+				<table class="stock-summary-table group-detail-table gs-flat-table item-detail-table">
+					<thead>${head}</thead>
+					<tbody>${body}</tbody>
+				</table>
+			</div>
+		`;
 	}
 
 	format_value(v) {
@@ -729,6 +1255,16 @@ class StockSummary {
 			color: #75621a;
 			border: 1px solid #eadfa6;
 			margin-left: auto;
+		}
+
+		.click-hint-badge {
+			font-size: 12px;
+			padding: 3px 10px;
+			border-radius: 30px;
+			font-weight: 600;
+			background: #e6f0ff;
+			color: #1d4f9e;
+			border: 1px solid #b9d2f5;
 		}
 
 		.qty-badge {
@@ -837,6 +1373,17 @@ class StockSummary {
 			position: sticky;
 			left: 0;
 			z-index: 2;
+			transform: translateZ(0);
+			-webkit-transform: translateZ(0);
+			backface-visibility: hidden;
+		}
+
+		.item-name-sub {
+			font-size: 12px;
+			font-weight: 500;
+			color: #697884;
+			margin-top: 2px;
+			white-space: normal;
 		}
 
 		.metric-col {
@@ -893,8 +1440,12 @@ class StockSummary {
 			transition: background .15s;
 		}
 
-		.summary-row:hover td {
+		.summary-row:hover td:not(.row-label-col) {
 			filter: brightness(0.96);
+		}
+
+		.summary-row:hover td.row-label-col {
+			background: #eef2f6 !important;
 		}
 
 		.summary-row-active td {
@@ -961,6 +1512,14 @@ class StockSummary {
 			border-right: 1px solid #c3cfd8 !important;
 		}
 
+		.metric-sub-col-monthly {
+			min-width: 92px !important;
+			max-width: 110px !important;
+			white-space: normal !important;
+			text-align: center !important;
+			line-height: 1.25;
+		}
+
 		.last-sub-col {
 			border-right: 3px solid #9cb0bf !important;
 		}
@@ -969,21 +1528,32 @@ class StockSummary {
 			border-right: 3px solid #b8c8d4 !important;
 		}
 
-		.fuel-flat-table tbody tr:hover td,
-		.rm-flat-table tbody tr:hover td,
-		.gs-flat-table tbody tr:hover td {
+		.fuel-flat-table tbody tr:hover td:not(.row-label-col),
+		.rm-flat-table tbody tr:hover td:not(.row-label-col),
+		.gs-flat-table tbody tr:hover td:not(.row-label-col) {
 			filter: brightness(0.96);
 		}
 
-		.fuel-flat-table tbody tr:nth-child(even) td,
-		.rm-flat-table tbody tr:nth-child(even) td,
-		.gs-flat-table tbody tr:nth-child(even) td {
+		.fuel-flat-table tbody tr:hover td.row-label-col,
+		.rm-flat-table tbody tr:hover td.row-label-col,
+		.gs-flat-table tbody tr:hover td.row-label-col {
+			background: #eef2f6 !important;
+		}
+
+		.fuel-flat-table tbody tr:nth-child(even) td:not(.row-label-col),
+		.rm-flat-table tbody tr:nth-child(even) td:not(.row-label-col),
+		.gs-flat-table tbody tr:nth-child(even) td:not(.row-label-col) {
 			filter: brightness(0.985);
 		}
 
-		.rm-flat-table .metric-sub-col:nth-child(4),
-		.rm-flat-table .metric-sub-col:nth-child(5) {
-			min-width: 110px;
+		.fuel-flat-table tbody tr:nth-child(even) td.row-label-col,
+		.rm-flat-table tbody tr:nth-child(even) td.row-label-col,
+		.gs-flat-table tbody tr:nth-child(even) td.row-label-col {
+			background: #eef1f4 !important;
+		}
+
+		.rm-flat-table .metric-sub-col-monthly {
+			min-width: 92px !important;
 		}
 
 		.gs-flat-table .gs-corner-header {
@@ -1009,6 +1579,11 @@ class StockSummary {
 
 		.gs-pesticide-row:hover td {
 			filter: brightness(0.97);
+		}
+
+		.gs-pesticide-row:hover td.row-label-col {
+			filter: none;
+			background-color: #ffd699 !important;
 		}
 
 		.pesticide-warn-icon {
@@ -1056,19 +1631,33 @@ class StockSummary {
 
 		.pwrm-qty     { background-color: #f0fff5 !important; border-left: 3px solid #9ed8b8 !important; }
 		.pwrm-value   { background-color: #f0f7ff !important; border-left: 3px solid #b3d4f0 !important; }
-		.pwrm-monthly { background-color: #f5f0ff !important; border-left: 3px solid #c9b0f0 !important; min-width: 180px !important; }
+		.pwrm-monthly {
+			background-color: #f5f0ff !important;
+			border-left: 3px solid #c9b0f0 !important;
+			min-width: 96px !important;
+			max-width: 120px !important;
+		}
 		.pwrm-days    { background-color: #fff8f0 !important; border-left: 3px solid #e8bb95 !important; }
 
 		th.pwrm-qty     { background-color: #d8f5e4 !important; }
 		th.pwrm-value   { background-color: #ddeeff !important; }
-		th.pwrm-monthly { background-color: #ebe0ff !important; }
+		th.pwrm-monthly {
+			background-color: #ebe0ff !important;
+			white-space: normal !important;
+			text-align: center !important;
+			line-height: 1.25;
+		}
 		th.pwrm-days    { background-color: #ffebd9 !important; }
 
-		.pwrm-table tbody .pwrm-data-row:hover td {
+		.pwrm-table tbody .pwrm-data-row:hover td:not(.row-label-col) {
 			filter: brightness(0.96);
 		}
 
-		.pwrm-table tbody .pwrm-data-row:nth-child(even) td {
+		.pwrm-table tbody .pwrm-data-row:hover td.row-label-col {
+			background: #eef2f6 !important;
+		}
+
+		.pwrm-table tbody .pwrm-data-row:nth-child(even) td:not(.row-label-col) {
 			filter: brightness(0.985);
 		}
 
@@ -1082,6 +1671,283 @@ class StockSummary {
 		.pwrm-total-row .row-label-col {
 			background: #c8e6c9 !important;
 			color: #1b5e20 !important;
+		}
+
+		/* ── Item-wise drill-down (Finished Goods / General Store) ───────── */
+
+		.detail-item-row,
+		.gs-detail-row {
+			cursor: pointer;
+		}
+
+		.detail-item-row:hover td:not(.row-label-col),
+		.gs-detail-row:hover td:not(.row-label-col) {
+			background-color: rgba(43, 122, 212, 0.08) !important;
+			filter: none;
+		}
+
+		.detail-item-row:hover td.row-label-col,
+		.gs-detail-row:hover td.row-label-col {
+			background-color: #e3edf9 !important;
+		}
+
+		.click-chevron {
+			float: right;
+			color: #93a4b0;
+			font-weight: 800;
+			margin-left: 8px;
+		}
+
+		.item-detail-table .row-label-col {
+			min-width: 230px;
+		}
+
+		/* ── Item-wise drill-down dialog ────────────────────────────────────── */
+		.stock-summary-item-dialog .modal-body {
+			padding: 0 !important;
+			max-height: 80vh !important;
+			overflow: auto !important;
+		}
+
+		.stock-summary-item-dialog .table-responsive {
+			max-height: 78vh !important;
+			overflow-y: auto !important;
+			overflow-x: auto !important;
+			position: relative;
+		}
+
+		.stock-summary-item-dialog .item-detail-table thead th {
+			position: sticky !important;
+			top: 0;
+			background: #edf2f7 !important;
+			z-index: 20;
+		}
+
+		.stock-summary-item-dialog .item-detail-table .row-label-col {
+			position: sticky !important;
+			left: 0;
+			background: #f6f8fb !important;
+			z-index: 30;
+		}
+
+		.stock-summary-item-dialog .item-detail-table thead .row-label-col {
+			top: 0;
+			left: 0;
+			z-index: 40 !important;
+		}
+
+		.stock-summary-item-dialog .modal-dialog {
+			width: 96vw !important;
+			max-width: 1680px !important;
+			margin: 10px auto !important;
+		}
+
+		.stock-summary-item-dialog .modal-content {
+			height: 92vh !important;
+		}
+
+		.stock-summary-item-dialog .modal-body {
+			max-height: calc(92vh - 60px) !important;
+			overflow: auto !important;
+		}
+
+		/* ── Inventory Health table ──────────────────────────────────────────── */
+
+		.ih-panel-card {
+			border-left: 6px solid #e11d48 !important;
+			background: #fff8f9 !important;
+		}
+
+		.ih-corner-header {
+			background: #fdf0f3 !important;
+			font-weight: 800;
+			vertical-align: middle !important;
+		}
+
+		.ih-col {
+			min-width: 150px;
+			text-align: right !important;
+		}
+
+		.ih-total-inv {
+			background-color: #eff6ff !important;
+			border-left: 4px solid #6aace8 !important;
+			font-weight: 700 !important;
+			color: #1e3a6e !important;
+		}
+
+		th.ih-total-inv { background-color: #dbeafe !important; }
+
+		.ih-slow {
+			background-color: #fffbeb !important;
+			border-left: 3px solid #fcd34d !important;
+			color: #78350f !important;
+		}
+
+		th.ih-slow { background-color: #fef3c7 !important; }
+
+		.ih-nonmoving {
+			background-color: #fff7ed !important;
+			border-left: 3px solid #fb923c !important;
+			color: #7c2d12 !important;
+		}
+
+		th.ih-nonmoving { background-color: #ffedd5 !important; }
+
+		.ih-dead {
+			background-color: #fef2f2 !important;
+			border-left: 3px solid #f87171 !important;
+			color: #7f1d1d !important;
+		}
+
+		th.ih-dead { background-color: #fee2e2 !important; }
+
+		.ih-data-row { cursor: pointer; }
+
+		.ih-data-row:hover td:not(.row-label-col) { filter: brightness(0.96); }
+		.ih-data-row:hover td.row-label-col { background: #f5e7ea !important; }
+		.ih-data-row:nth-child(even) td:not(.row-label-col) { filter: brightness(0.985); }
+
+		.ih-total-row td {
+			background: #fce7eb !important;
+			font-weight: 800 !important;
+			color: #881337 !important;
+			border-top: 3px solid #e11d48 !important;
+		}
+
+		.ih-total-row .row-label-col {
+			background: #fbd5dc !important;
+			color: #881337 !important;
+		}
+
+		.ih-legend-slow, .ih-legend-nonmoving, .ih-legend-dead {
+			font-size: 12px;
+			padding: 3px 10px;
+			border-radius: 30px;
+			font-weight: 600;
+		}
+
+		.ih-legend-slow      { background: #fef3c7; color: #78350f; border: 1px solid #fcd34d; }
+		.ih-legend-nonmoving { background: #ffedd5; color: #7c2d12; border: 1px solid #fb923c; }
+		.ih-legend-dead      { background: #fee2e2; color: #7f1d1d; border: 1px solid #f87171; }
+
+		.ih-table thead th small {
+			display: block;
+			font-weight: 500;
+			font-size: 11px;
+			opacity: 0.8;
+			margin-top: 2px;
+		}
+
+		.ih-item-col {
+			min-width: 130px;
+			text-align: right !important;
+		}
+
+		.ih-item-col-wide {
+			min-width: 170px;
+		}
+
+		.ih-badge-nonmoving {
+			background: #ffedd5;
+			color: #7c2d12;
+			border: 1px solid #fb923c;
+		}
+
+		/* ── IH item-wise dialog: stat cards ─────────────────────────────────── */
+
+		.ih-dialog-content {
+			padding: 20px 22px 22px;
+		}
+
+		.ih-dialog-summary {
+			display: flex;
+			gap: 12px;
+			flex-wrap: nowrap;
+			margin-bottom: 20px;
+		}
+
+		.ih-stat-card {
+			flex: 1 1 0;
+			min-width: 0;
+			background: #f8fafc;
+			border: 1.5px solid #e2e8f0;
+			border-left: 5px solid #94a3b8;
+			border-radius: 12px;
+			padding: 12px 16px;
+			display: flex;
+			flex-direction: column;
+			gap: 6px;
+		}
+
+		.ih-stat-label {
+			font-size: 11px;
+			font-weight: 700;
+			text-transform: uppercase;
+			letter-spacing: 0.04em;
+			color: #64748b;
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+
+		.ih-stat-value {
+			font-size: 20px;
+			font-weight: 800;
+			color: #1f2937;
+			white-space: nowrap;
+			display: flex;
+			align-items: baseline;
+			gap: 3px;
+		}
+
+		.ih-stat-currency {
+			font-size: 13px;
+			font-weight: 700;
+			opacity: 0.7;
+		}
+
+		.ih-stat-unit {
+			font-size: 12px;
+			font-weight: 600;
+			opacity: 0.6;
+			margin-left: 2px;
+		}
+
+		.ih-stat-total     { border-left-color: #6aace8; background: #eff6ff; }
+		.ih-stat-total .ih-stat-value { color: #1e3a6e; }
+
+		.ih-stat-slow      { border-left-color: #fcd34d; background: #fffbeb; }
+		.ih-stat-slow .ih-stat-value { color: #92400e; }
+
+		.ih-stat-nonmoving { border-left-color: #fb923c; background: #fff7ed; }
+		.ih-stat-nonmoving .ih-stat-value { color: #7c2d12; }
+
+		.ih-stat-dead      { border-left-color: #f87171; background: #fef2f2; }
+		.ih-stat-dead .ih-stat-value { color: #991b1b; }
+
+		.ih-item-table .row-label-col {
+			min-width: 260px;
+		}
+
+		.ih-item-row:hover td:not(.row-label-col) {
+			filter: brightness(0.96);
+		}
+		.ih-item-row:hover td.row-label-col {
+			background-color: #f1f5f9 !important;
+		}
+		.ih-item-row:nth-child(even) td:not(.row-label-col) {
+			filter: brightness(0.99);
+		}
+
+		.ih-row-slow td.row-label-col {
+			border-left: 4px solid #fcd34d !important;
+		}
+		.ih-row-nonmoving td.row-label-col {
+			border-left: 4px solid #fb923c !important;
+		}
+		.ih-row-dead td.row-label-col {
+			border-left: 4px solid #f87171 !important;
 		}
 
 		</style>`).appendTo('head');

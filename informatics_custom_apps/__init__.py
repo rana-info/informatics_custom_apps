@@ -1,10 +1,10 @@
-__version__ = "2.0.1"
+__version__ = "2.0.2"
 import frappe
 import erpnext.accounts.doctype.accounting_period.accounting_period as ap_module
 
 from frappe import _
 from erpnext.accounts.doctype.accounting_period.accounting_period import (
-    ClosedAccountingPeriod,
+    ClosedAccountingPeriod,AccountingPeriod,OverlapError
 )
 
 def custom_validate_accounting_period_on_doc_save(doc, method=None):
@@ -85,3 +85,40 @@ def custom_validate_accounting_period_on_doc_save(doc, method=None):
 ap_module.validate_accounting_period_on_doc_save = (
     custom_validate_accounting_period_on_doc_save
 )
+
+def custom_validate_overlap(self):
+    existing_accounting_period = frappe.db.sql(
+        """
+        SELECT name
+        FROM `tabAccounting Period`
+        WHERE (
+            (%(start_date)s BETWEEN start_date AND end_date)
+            OR (%(end_date)s BETWEEN start_date AND end_date)
+            OR (start_date BETWEEN %(start_date)s AND %(end_date)s)
+            OR (end_date BETWEEN %(start_date)s AND %(end_date)s)
+        )
+        AND name != %(name)s
+        AND company = %(company)s
+        AND IFNULL(segment, '') = IFNULL(%(segment)s, '')
+        AND IFNULL(branch, '') = IFNULL(%(plant)s, '')
+        """,
+        {
+            "start_date": self.start_date,
+            "end_date": self.end_date,
+            "name": self.name,
+            "company": self.company,
+            "plant": self.branch,
+            "segment": self.segment
+        },
+        as_dict=True,
+    )
+
+    if existing_accounting_period:
+        frappe.throw(
+            _("Accounting Period overlaps with {0}").format(
+                existing_accounting_period[0].get("name")
+            ),
+            OverlapError,
+        )
+
+AccountingPeriod.validate_overlap = custom_validate_overlap
