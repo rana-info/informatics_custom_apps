@@ -1,0 +1,290 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "VLB.-.{abbr}.-.######",
+ "creation": "2026-06-26 11:02:43.344337",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "section_break_4em3",
+  "entry_type",
+  "purpose",
+  "vehicle_type",
+  "in_time",
+  "in_km",
+  "out_time",
+  "out_km",
+  "column_break_znbj",
+  "plant",
+  "vehicle_number",
+  "abbr",
+  "from",
+  "to",
+  "distance",
+  "in_progress",
+  "is_completed",
+  "section_break_rjec",
+  "person",
+  "column_break_bxdz",
+  "reason",
+  "visitor_details_section",
+  "person_v",
+  "column_break_lvld",
+  "reason_v",
+  "diesel_details_section",
+  "required_diesel",
+  "allocated_diesel",
+  "column_break_vgao",
+  "slip_number",
+  "amount",
+  "date",
+  "section_break_nvjy",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_break_4em3",
+   "fieldtype": "Section Break",
+   "label": "Cab Details"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Vehicle Log Book",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "vehicle_number",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Vehicle Number",
+   "reqd": 1
+  },
+  {
+   "fieldname": "vehicle_type",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Vehicle Type",
+   "options": "Vehicle Type",
+   "reqd": 1
+  },
+  {
+   "depends_on": "eval:doc.entry_type==\"In\" || doc.entry_type==\"Out\";",
+   "fieldname": "purpose",
+   "fieldtype": "Select",
+   "label": "Purpose",
+   "mandatory_depends_on": "eval:doc.entry_type==\"In\" || doc.entry_type==\"Out\";",
+   "options": "\nShift\nCo-Work\nVisitor"
+  },
+  {
+   "fieldname": "column_break_znbj",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "from",
+   "fieldtype": "Data",
+   "label": "From"
+  },
+  {
+   "fieldname": "to",
+   "fieldtype": "Data",
+   "label": "To"
+  },
+  {
+   "depends_on": "eval:doc.entry_type==\"Out\" || doc.is_completed;",
+   "fieldname": "out_time",
+   "fieldtype": "Datetime",
+   "label": "Out Time"
+  },
+  {
+   "depends_on": "eval:(doc.entry_type==\"Out\" || doc.is_completed) && doc.purpose!=\"Visitor\";",
+   "fieldname": "out_km",
+   "fieldtype": "Int",
+   "label": "Out Km",
+   "mandatory_depends_on": "eval:doc.entry_type==\"Out\" && doc.purpose!=\"Visitor\";",
+   "non_negative": 1
+  },
+  {
+   "depends_on": "eval:doc.entry_type==\"In\" || doc.is_completed;",
+   "fieldname": "in_time",
+   "fieldtype": "Datetime",
+   "label": "In Time",
+   "mandatory_depends_on": "eval:doc.entry_type==\"In\";"
+  },
+  {
+   "depends_on": "eval:(doc.entry_type==\"In\" || doc.is_completed) && doc.purpose!=\"Visitor\";",
+   "fieldname": "in_km",
+   "fieldtype": "Int",
+   "label": "In km",
+   "mandatory_depends_on": "eval:doc.entry_type==\"In\" && doc.purpose!=\"Visitor\";",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "section_break_nvjy",
+   "fieldtype": "Section Break"
+  },
+  {
+   "depends_on": "eval:doc.in_km && doc.out_km;",
+   "fieldname": "distance",
+   "fieldtype": "Int",
+   "label": "Distance",
+   "non_negative": 1
+  },
+  {
+   "depends_on": "eval:doc.purpose==\"Shift\" || doc.purpose==\"Co-Work\";",
+   "fieldname": "section_break_rjec",
+   "fieldtype": "Section Break",
+   "label": "Ride Details"
+  },
+  {
+   "fieldname": "person",
+   "fieldtype": "Data",
+   "label": "Person"
+  },
+  {
+   "fieldname": "column_break_bxdz",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "reason",
+   "fieldtype": "Data",
+   "label": "Reason"
+  },
+  {
+   "depends_on": "eval:doc.entry_type==\"Diesel Issue\";",
+   "fieldname": "diesel_details_section",
+   "fieldtype": "Section Break",
+   "label": "Diesel Details"
+  },
+  {
+   "fieldname": "required_diesel",
+   "fieldtype": "Float",
+   "label": "Required Diesel(In Lt.)",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Int",
+   "label": "Amount",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "column_break_vgao",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "allocated_diesel",
+   "fieldtype": "Float",
+   "label": "Allocated Diesel(In Lt.)",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "slip_number",
+   "fieldtype": "Data",
+   "label": "Slip Number"
+  },
+  {
+   "fieldname": "date",
+   "fieldtype": "Date",
+   "label": "Date"
+  },
+  {
+   "depends_on": "eval:doc.purpose==\"Visitor\";",
+   "fieldname": "visitor_details_section",
+   "fieldtype": "Section Break",
+   "label": "Visitor Details"
+  },
+  {
+   "fieldname": "person_v",
+   "fieldtype": "Data",
+   "label": "Person",
+   "mandatory_depends_on": "eval:doc.purpose==\"Visitor\";"
+  },
+  {
+   "fieldname": "column_break_lvld",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "reason_v",
+   "fieldtype": "Data",
+   "label": "Reason",
+   "mandatory_depends_on": "eval:doc.purpose==\"Visitor\";"
+  },
+  {
+   "fieldname": "entry_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Entry Type",
+   "options": "\nIn\nOut\nDiesel Issue",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "in_progress",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "In Progress",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "is_completed",
+   "fieldtype": "Check",
+   "label": "Is Completed",
+   "read_only": 1
+  },
+  {
+   "fieldname": "plant",
+   "fieldtype": "Link",
+   "label": "Plant",
+   "options": "Branch",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "plant.custom_invoice_abbr",
+   "fieldname": "abbr",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Abbr",
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-06-26 16:02:18.740975",
+ "modified_by": "Administrator",
+ "module": "RIPL Customized Apps",
+ "name": "Vehicle Log Book",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "select": 1,
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
