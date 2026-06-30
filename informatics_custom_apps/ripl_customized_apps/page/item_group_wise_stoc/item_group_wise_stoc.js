@@ -839,9 +839,18 @@ class StockSummary {
 				`;
 			}).join('');
 
+			// ── FIX (#3): show the underlying Item Code under the row label
+			//    for Fuel rows, when the backend has supplied one.
+			const item_code_html = g.item_code
+				? `<div class="item-name-sub">${frappe.utils.escape_html(g.item_code)}</div>`
+				: '';
+
 			body += `
 				<tr>
-					<td class="row-label-col">${frappe.utils.escape_html(g.label)}</td>
+					<td class="row-label-col">
+						${frappe.utils.escape_html(g.label)}
+						${item_code_html}
+					</td>
 					${plant_cells}
 					<td class="num-cell total-col">${this.format_value(g.total_qty)}</td>
 					<td class="num-cell total-col">${this.format_value(g.total_value)}</td>
@@ -912,9 +921,18 @@ class StockSummary {
 				`;
 			}).join('');
 
+			// ── FIX (#3): show the underlying Item Code under the row label
+			//    for Raw Material rows.
+			const item_code_html = g.item_code
+				? `<div class="item-name-sub">${frappe.utils.escape_html(g.item_code)}</div>`
+				: '';
+
 			body += `
 				<tr>
-					<td class="row-label-col">${frappe.utils.escape_html(g.label)}</td>
+					<td class="row-label-col">
+						${frappe.utils.escape_html(g.label)}
+						${item_code_html}
+					</td>
 					${plant_cells}
 					<td class="num-cell total-col">${this.format_value(g.total_qty)}</td>
 					<td class="num-cell total-col">${this.format_value(g.total_value)}</td>

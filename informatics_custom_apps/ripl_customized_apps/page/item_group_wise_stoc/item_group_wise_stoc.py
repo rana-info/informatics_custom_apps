@@ -25,7 +25,7 @@ FINISHED_GOODS_ROW_ORDER = [
 
 FUEL_MAP = {
 	"100093": "Bagasse-Cane-Mfg",
-	"135009": "Bagasse-Cane-Mfg (Non Weightment)",
+	"135009": "Bagasse-Cane-Mfg (Non Weighment)",
 	"100094": "Bagasse-Cane-Trd",
 	"132087": "Bagasse-Cane-Trd (Non Weighment)",
 	"106439": "Bio Mass",
@@ -127,21 +127,25 @@ GENERAL_STORE_ROW_ORDER = GENERAL_STORE_GROUPS[:]
 
 VALUE_DIVISOR = 100000
 
-# ── Pre-computed sets used by IH filters (avoids rebuilding in every call) ───
 _FG_ITEM_GROUPS     = set(FINISHED_GOODS_MAP.keys())
 _FUEL_ITEM_CODES    = set(FUEL_MAP.keys())
 _FUEL_ITEM_GROUPS   = set(FUEL_GROUP_MAP.keys())
 _RM_ITEM_CODES      = set(RAW_MATERIAL_MAP.keys())
 _GS_ITEM_GROUPS     = set(GENERAL_STORE_GROUPS)
 
-# Union of every item code / group explicitly listed in the maps above.
-# Used to gate the "all groups" IH query so that no unlisted items
-# can ever appear in Inventory Health results.
 _ALL_FUEL_CODES     = list(_FUEL_ITEM_CODES)
 _ALL_FUEL_GROUPS    = list(_FUEL_ITEM_GROUPS)
 _ALL_RM_CODES       = list(_RM_ITEM_CODES)
 _ALL_FG_GROUPS      = list(_FG_ITEM_GROUPS)
 _ALL_GS_GROUPS      = list(_GS_ITEM_GROUPS)
+
+
+def _wh_exclude_clause(alias="wh"):
+	clause = (
+		" AND {a}.disabled = 0"
+		" AND {a}.name NOT LIKE %s"
+	).format(a=alias)
+	return clause, ["%Return%Rejection%"]
 
 
 def _get_rana_plants():
@@ -167,6 +171,15 @@ def _as_list(value):
 	if isinstance(value, str):
 		return frappe.parse_json(value) if value.startswith("[") else [value]
 	return list(value)
+
+
+def _format_item_codes(codes):
+	codes = sorted({c for c in codes if c})
+	if not codes:
+		return ""
+	if len(codes) <= 3:
+		return ", ".join(codes)
+	return ", ".join(codes[:3]) + " +{} more".format(len(codes) - 3)
 
 
 def _batch_uom_conversions(item_codes):
@@ -244,6 +257,10 @@ def _get_sle_current_value(
 		where  += " AND wh.custom_branch IN ({})".format(", ".join(["%s"] * len(plant_list)))
 		params += plant_list
 
+	wh_clause, wh_params = _wh_exclude_clause("wh")
+	where  += wh_clause
+	params += wh_params
+
 	if extra_where:
 		where  += " " + extra_where
 		params += list(extra_params)
@@ -264,9 +281,10 @@ def _get_sle_current_value(
 		FROM `tabStock Ledger Entry` sle
 		INNER JOIN `tabItem` i       ON i.name  = sle.item_code
 		INNER JOIN `tabWarehouse` wh ON wh.name = sle.warehouse
+		INNER JOIN `tabBin` b        ON b.warehouse = sle.warehouse AND b.item_code = sle.item_code AND b.actual_qty > 0
 		WHERE {}
 		GROUP BY wh.custom_branch, sle.item_code{}
-		HAVING SUM(sle.actual_qty) > 0.009
+		HAVING SUM(sle.actual_qty) > 0
 	""".format(select_extra, where, group_extra), params, as_dict=True)
 
 
@@ -311,6 +329,9 @@ def _get_fuel_rows(company_list, plant_list, as_on_date=None):
 		if plant_list:
 			w += " AND wh.custom_branch IN ({})".format(", ".join(["%s"] * len(plant_list)))
 			p += plant_list
+		wh_clause, wh_params = _wh_exclude_clause("wh")
+		w += wh_clause
+		p += wh_params
 		return w, p
 
 	ph1    = ", ".join(["%s"] * len(fuel_codes))
@@ -388,7 +409,7 @@ def _fetch_rm_qtl_factors(rm_item_codes):
 			SELECT parent AS item_code, MAX(conversion_factor) AS factor
 			FROM `tabUOM Conversion Detail`
 			WHERE parent IN ({})
-			  AND uom LIKE '%uintal%'
+			  AND uom LIKE '%%uintal%%'
 			GROUP BY parent
 		""".format(conv_ph), need_conv, as_dict=True)
 
@@ -428,6 +449,10 @@ def _get_rm_monthly_consumption(company_list, plant_list, qtl_factors, as_on_dat
 		where  += " AND wh.custom_branch IN ({})".format(", ".join(["%s"] * len(plant_list)))
 		params += plant_list
 
+	wh_clause, wh_params = _wh_exclude_clause("wh")
+	where  += wh_clause
+	params += wh_params
+
 	rows = frappe.db.sql("""
 		SELECT
 			wh.custom_branch            AS plant,
@@ -442,6 +467,8 @@ def _get_rm_monthly_consumption(company_list, plant_list, qtl_factors, as_on_dat
 
 	consumption = {}
 	for r in rows:
+		if not r.plant:
+			continue
 		factor  = qtl_factors.get(r.item_code, 1.0)
 		qty_qtl = _to_qtl(flt(r.total_issued), factor)
 		consumption[(r.plant, r.item_code)] = round(qty_qtl / 3, 2)
@@ -449,7 +476,8 @@ def _get_rm_monthly_consumption(company_list, plant_list, qtl_factors, as_on_dat
 	return consumption
 
 
-def _finalise_groups(row_order, bucket, plants, sort_by_value=True):
+def _finalise_groups(row_order, bucket, plants, sort_by_value=True, item_code_map=None):
+	item_code_map = item_code_map or {}
 	groups = []
 	for label in row_order:
 		plant_cells = bucket.get(label, {})
@@ -478,6 +506,7 @@ def _finalise_groups(row_order, bucket, plants, sort_by_value=True):
 
 		groups.append({
 			"label":       label,
+			"item_code":   item_code_map.get(label, ""),
 			"uom":         uom,
 			"qty":         qty_row,
 			"value":       value_row,
@@ -543,6 +572,7 @@ def _finalise_rm_groups(row_order, bucket, plants, consumption_map, sort_by_valu
 
 		groups.append({
 			"label":               label,
+			"item_code":           item_code_key or "",
 			"uom":                 uom,
 			"qty":                 qty_row,
 			"value":               value_row,
@@ -566,17 +596,7 @@ def _finalise_rm_groups(row_order, bucket, plants, consumption_map, sort_by_valu
 	return groups
 
 
-# ── FIX: shared helper that computes RM value-by-plant using the exact same
-#    per-item aggregation logic as get_raw_material_detail.  Both the
-#    collapsed summary and the detail view now call this single function,
-#    guaranteeing their numbers always match.
 def _get_rm_value_by_plant(company_list, plant_list, as_on_date=None):
-	"""
-	Returns a dict  {plant: total_raw_value_in_rupees}  for all RM items.
-
-	Uses the same per-item query path as get_raw_material_detail so that
-	the collapsed summary and the detail panel are always consistent.
-	"""
 	rm_item_codes = list(RAW_MATERIAL_MAP.keys())
 	placeholders  = ", ".join(["%s"] * len(rm_item_codes))
 
@@ -589,6 +609,7 @@ def _get_rm_value_by_plant(company_list, plant_list, as_on_date=None):
 	else:
 		comp_clause  = " AND wh.company IN ({})".format(", ".join(["%s"] * len(company_list))) if company_list else ""
 		plant_clause = " AND wh.custom_branch IN ({})".format(", ".join(["%s"] * len(plant_list))) if plant_list else ""
+		wh_clause, wh_params = _wh_exclude_clause("wh")
 
 		rows = frappe.db.sql("""
 			SELECT
@@ -602,19 +623,18 @@ def _get_rm_value_by_plant(company_list, plant_list, as_on_date=None):
 			INNER JOIN `tabWarehouse` wh ON wh.name = b.warehouse
 			WHERE b.actual_qty > 0
 				AND b.item_code IN ({ph})
-				{comp} {plant_f}
+				{comp} {plant_f} {wh_excl}
 		""".format(
 			ph=placeholders,
 			comp=comp_clause,
 			plant_f=plant_clause,
-		), rm_item_codes + company_list + plant_list, as_dict=True)
+			wh_excl=wh_clause,
+		), rm_item_codes + company_list + plant_list + wh_params, as_dict=True)
 
-	# ── Accumulate value per plant using += so no row is ever lost ──────────
 	rm_by_plant_raw = {}
 	for r in rows:
 		if not r.plant:
 			continue
-		# Only include items that are in the RM map (mirrors detail view filter)
 		if r.item_code not in RAW_MATERIAL_MAP:
 			continue
 		rm_by_plant_raw[r.plant] = rm_by_plant_raw.get(r.plant, 0.0) + flt(r.value)
@@ -638,6 +658,7 @@ def get_collapsed_summary(company=None, plant=None, as_on_date=None):
 			group_by_item_group=True,
 		)
 	else:
+		wh_clause, wh_params = _wh_exclude_clause("wh")
 		fg_data = frappe.db.sql("""
 			SELECT
 				wh.custom_branch AS plant,
@@ -648,30 +669,28 @@ def get_collapsed_summary(company=None, plant=None, as_on_date=None):
 			INNER JOIN `tabWarehouse` wh ON wh.name = b.warehouse
 			WHERE b.actual_qty > 0
 				AND i.item_group IN ({fg_ph})
-				{comp} {plant_f}
-			GROUP BY wh.custom_branch, i.item_group
+				{comp} {plant_f} {wh_excl}
 		""".format(
 			fg_ph=fg_ph,
 			comp=" AND wh.company IN ({})".format(", ".join(["%s"] * len(company_list))) if company_list else "",
 			plant_f=" AND wh.custom_branch IN ({})".format(", ".join(["%s"] * len(plant_list))) if plant_list else "",
-		), fg_item_groups + company_list + plant_list, as_dict=True)
+			wh_excl=wh_clause,
+		), fg_item_groups + company_list + plant_list + wh_params, as_dict=True)
 
 	fuel_rows         = _get_fuel_rows(company_list, plant_list, as_on_date)
 	fuel_by_plant_raw = {}
 	for r in fuel_rows:
+		if not r.plant:
+			continue
 		fuel_by_plant_raw[r.plant] = fuel_by_plant_raw.get(r.plant, 0) + flt(r.value)
 
-	# ── FIX: use the shared helper that mirrors get_raw_material_detail exactly.
-	#    Previously this used a simple grouped SUM with a dict-comprehension
-	#    accumulator that could silently drop duplicate plant rows.  The helper
-	#    below iterates every per-item row and accumulates with +=, guaranteeing
-	#    the collapsed total always matches the detail panel total.
 	rm_by_plant_raw = _get_rm_value_by_plant(company_list, plant_list, as_on_date)
 
 	gs_ph           = ", ".join(["%s"] * len(GENERAL_STORE_GROUPS))
 	gs_group_params = GENERAL_STORE_GROUPS[:] + GENERAL_STORE_GROUPS[:]
 	comp_clause     = " AND wh.company IN ({})".format(", ".join(["%s"] * len(company_list))) if company_list else ""
 	plant_clause    = " AND wh.custom_branch IN ({})".format(", ".join(["%s"] * len(plant_list))) if plant_list else ""
+	wh_clause, wh_params = _wh_exclude_clause("wh")
 
 	if as_on_date:
 		gs_data = frappe.db.sql("""
@@ -685,11 +704,11 @@ def get_collapsed_summary(company=None, plant=None, as_on_date=None):
 			WHERE sle.is_cancelled = 0
 				AND sle.posting_date <= %s
 				AND (i.item_group IN ({ph}) OR ig.parent_item_group IN ({ph}))
-				{comp} {plant_f}
+				{comp} {plant_f} {wh_excl}
 			GROUP BY wh.custom_branch
-			HAVING SUM(sle.actual_qty) > 0.009
-		""".format(ph=gs_ph, comp=comp_clause, plant_f=plant_clause),
-		[as_on_date] + gs_group_params + company_list + plant_list, as_dict=True)
+			HAVING SUM(sle.actual_qty) > 0
+		""".format(ph=gs_ph, comp=comp_clause, plant_f=plant_clause, wh_excl=wh_clause),
+		[as_on_date] + gs_group_params + company_list + plant_list + wh_params, as_dict=True)
 	else:
 		gs_data = frappe.db.sql("""
 			SELECT wh.custom_branch AS plant, SUM(b.stock_value) AS value
@@ -699,12 +718,10 @@ def get_collapsed_summary(company=None, plant=None, as_on_date=None):
 			INNER JOIN `tabWarehouse` wh  ON wh.name = b.warehouse
 			WHERE b.actual_qty > 0
 				AND (i.item_group IN ({ph}) OR ig.parent_item_group IN ({ph}))
-				{comp} {plant_f}
-			GROUP BY wh.custom_branch
-		""".format(ph=gs_ph, comp=comp_clause, plant_f=plant_clause),
-		gs_group_params + company_list + plant_list, as_dict=True)
+				{comp} {plant_f} {wh_excl}
+		""".format(ph=gs_ph, comp=comp_clause, plant_f=plant_clause, wh_excl=wh_clause),
+		gs_group_params + company_list + plant_list + wh_params, as_dict=True)
 
-	# ── FIX: accumulate GS values with += as well (same defensive pattern) ──
 	gs_by_plant_raw = {}
 	for d in gs_data:
 		if d.plant:
@@ -771,6 +788,7 @@ def get_finished_goods_detail(company=None, plant=None, as_on_date=None):
 			as_on_date, company_list, plant_list,
 		)
 	else:
+		wh_clause, wh_params = _wh_exclude_clause("wh")
 		rows = frappe.db.sql("""
 			SELECT
 				wh.custom_branch AS plant,
@@ -784,12 +802,13 @@ def get_finished_goods_detail(company=None, plant=None, as_on_date=None):
 			INNER JOIN `tabWarehouse` wh ON wh.name = b.warehouse
 			WHERE b.actual_qty > 0
 				AND i.item_group IN ({ph})
-				{comp} {plant_f}
+				{comp} {plant_f} {wh_excl}
 		""".format(
 			ph=placeholders,
 			comp=" AND wh.company IN ({})".format(", ".join(["%s"] * len(company_list))) if company_list else "",
 			plant_f=" AND wh.custom_branch IN ({})".format(", ".join(["%s"] * len(plant_list))) if plant_list else "",
-		), fg_item_groups + company_list + plant_list, as_dict=True)
+			wh_excl=wh_clause,
+		), fg_item_groups + company_list + plant_list + wh_params, as_dict=True)
 
 	plants = _sort_plants({r.plant for r in rows if r.plant})
 	bucket = {label: {} for label in FINISHED_GOODS_ROW_ORDER}
@@ -813,35 +832,50 @@ def get_finished_goods_detail(company=None, plant=None, as_on_date=None):
 
 @frappe.whitelist()
 def get_fuel_detail(company=None, plant=None, as_on_date=None):
-	company_list = _as_list(company)
-	plant_list   = _as_list(plant)
+    company_list = _as_list(company)
+    plant_list   = _as_list(plant)
 
-	rows   = _get_fuel_rows(company_list, plant_list, as_on_date)
-	plants = _sort_plants({r.plant for r in rows if r.plant})
+    rows   = _get_fuel_rows(company_list, plant_list, as_on_date)
+    plants = _sort_plants({r.plant for r in rows if r.plant})
 
-	extra_labels = []
-	for r in rows:
-		lbl = _label_for_fuel_row(r)
-		if lbl and lbl not in FUEL_ROW_ORDER and lbl not in extra_labels:
-			extra_labels.append(lbl)
+    extra_labels = []
+    for r in rows:
+        lbl = _label_for_fuel_row(r)
+        if lbl and lbl not in FUEL_ROW_ORDER and lbl not in extra_labels:
+            extra_labels.append(lbl)
 
-	effective_order = FUEL_ROW_ORDER + extra_labels
-	bucket = {label: {} for label in effective_order}
+    effective_order = FUEL_ROW_ORDER + extra_labels
+    bucket = {label: {} for label in effective_order}
 
-	for r in rows:
-		label = _label_for_fuel_row(r)
-		if not label:
-			continue
-		qty_conv, uom_conv = convert_to_quintal(r.item_code, flt(r.qty_raw), r.stock_uom)
-		cell = bucket.setdefault(label, {}).setdefault(
-			r.plant, {"qty": 0, "value": 0, "uom": uom_conv}
-		)
-		cell["qty"]   += qty_conv
-		cell["value"] += flt(r.value)
-		cell["uom"]    = uom_conv
+    # ── Pre-populate item_code_map from static FUEL_MAP so that even
+    #    zero-stock rows show their item code(s).
+    static_item_code_map = {}
+    for code, label in FUEL_MAP.items():
+        static_item_code_map.setdefault(label, set()).add(code)
 
-	groups = _finalise_groups(effective_order, bucket, plants)
-	return {"plants": plants, "groups": groups}
+    label_item_codes = {}   # overrides from live rows (same codes, but keeps the pattern)
+
+    for r in rows:
+        label = _label_for_fuel_row(r)
+        if not label:
+            continue
+        qty_conv, uom_conv = convert_to_quintal(r.item_code, flt(r.qty_raw), r.stock_uom)
+        cell = bucket.setdefault(label, {}).setdefault(
+            r.plant, {"qty": 0, "value": 0, "uom": uom_conv}
+        )
+        cell["qty"]   += qty_conv
+        cell["value"] += flt(r.value)
+        cell["uom"]    = uom_conv
+        label_item_codes.setdefault(label, set()).add(r.item_code)
+
+    # Merge: live codes take priority; fall back to static map for zero-stock rows
+    merged_item_code_map = {}
+    for label in effective_order:
+        codes = label_item_codes.get(label) or static_item_code_map.get(label) or set()
+        merged_item_code_map[label] = _format_item_codes(codes)
+
+    groups = _finalise_groups(effective_order, bucket, plants, item_code_map=merged_item_code_map)
+    return {"plants": plants, "groups": groups}
 
 
 @frappe.whitelist()
@@ -859,6 +893,7 @@ def get_raw_material_detail(company=None, plant=None, as_on_date=None):
 			as_on_date, company_list, plant_list,
 		)
 	else:
+		wh_clause, wh_params = _wh_exclude_clause("wh")
 		rows = frappe.db.sql("""
 			SELECT
 				wh.custom_branch AS plant,
@@ -872,18 +907,21 @@ def get_raw_material_detail(company=None, plant=None, as_on_date=None):
 			INNER JOIN `tabWarehouse` wh ON wh.name = b.warehouse
 			WHERE b.actual_qty > 0
 				AND b.item_code IN ({ph})
-				{comp} {plant_f}
+				{comp} {plant_f} {wh_excl}
 		""".format(
 			ph=placeholders,
 			comp=" AND wh.company IN ({})".format(", ".join(["%s"] * len(company_list))) if company_list else "",
 			plant_f=" AND wh.custom_branch IN ({})".format(", ".join(["%s"] * len(plant_list))) if plant_list else "",
-		), rm_item_codes + company_list + plant_list, as_dict=True)
+			wh_excl=wh_clause,
+		), rm_item_codes + company_list + plant_list + wh_params, as_dict=True)
 
 	plants      = _sort_plants({r.plant for r in rows if r.plant})
 	bucket      = {label: {} for label in RAW_MATERIAL_ROW_ORDER}
 	qtl_factors = _fetch_rm_qtl_factors(rm_item_codes)
 
 	for r in rows:
+		if not r.plant:
+			continue
 		label = RAW_MATERIAL_MAP.get(r.item_code)
 		if not label:
 			continue
@@ -908,6 +946,7 @@ def get_general_store_detail(company=None, plant=None, as_on_date=None):
 	gs_group_params = GENERAL_STORE_GROUPS[:] + GENERAL_STORE_GROUPS[:]
 	comp_clause     = " AND wh.company IN ({})".format(", ".join(["%s"] * len(company_list))) if company_list else ""
 	plant_clause    = " AND wh.custom_branch IN ({})".format(", ".join(["%s"] * len(plant_list))) if plant_list else ""
+	wh_clause, wh_params = _wh_exclude_clause("wh")
 
 	if as_on_date:
 		rows = frappe.db.sql("""
@@ -926,11 +965,11 @@ def get_general_store_detail(company=None, plant=None, as_on_date=None):
 			WHERE sle.is_cancelled = 0
 				AND sle.posting_date <= %s
 				AND (i.item_group IN ({ph}) OR ig.parent_item_group IN ({ph}))
-				{comp} {plant_f}
+				{comp} {plant_f} {wh_excl}
 			GROUP BY wh.custom_branch, i.name
-			HAVING SUM(sle.actual_qty) > 0.009
-		""".format(ph=gs_ph, comp=comp_clause, plant_f=plant_clause),
-		[as_on_date] + gs_group_params + company_list + plant_list, as_dict=True)
+			HAVING SUM(sle.actual_qty) > 0
+		""".format(ph=gs_ph, comp=comp_clause, plant_f=plant_clause, wh_excl=wh_clause),
+		[as_on_date] + gs_group_params + company_list + plant_list + wh_params, as_dict=True)
 	else:
 		rows = frappe.db.sql("""
 			SELECT
@@ -947,15 +986,17 @@ def get_general_store_detail(company=None, plant=None, as_on_date=None):
 			INNER JOIN `tabWarehouse` wh  ON wh.name = b.warehouse
 			WHERE b.actual_qty > 0
 				AND (i.item_group IN ({ph}) OR ig.parent_item_group IN ({ph}))
-				{comp} {plant_f}
-		""".format(ph=gs_ph, comp=comp_clause, plant_f=plant_clause),
-		gs_group_params + company_list + plant_list, as_dict=True)
+				{comp} {plant_f} {wh_excl}
+		""".format(ph=gs_ph, comp=comp_clause, plant_f=plant_clause, wh_excl=wh_clause),
+		gs_group_params + company_list + plant_list + wh_params, as_dict=True)
 
 	plants      = _sort_plants({r.plant for r in rows if r.plant})
 	bucket      = {label: {} for label in GENERAL_STORE_ROW_ORDER}
 	gs_group_set = set(GENERAL_STORE_GROUPS)
 
 	for r in rows:
+		if not r.plant:
+			continue
 		if r.item_group in gs_group_set:
 			label = r.item_group
 		elif (r.parent_item_group or "") in gs_group_set:
@@ -992,6 +1033,7 @@ def get_finished_goods_item_detail(company=None, plant=None, as_on_date=None, la
 			as_on_date, company_list, plant_list,
 		)
 	else:
+		wh_clause, wh_params = _wh_exclude_clause("wh")
 		rows = frappe.db.sql("""
 			SELECT
 				wh.custom_branch AS plant,
@@ -1006,12 +1048,13 @@ def get_finished_goods_item_detail(company=None, plant=None, as_on_date=None, la
 			INNER JOIN `tabWarehouse` wh ON wh.name = b.warehouse
 			WHERE b.actual_qty > 0
 				AND i.item_group IN ({ph})
-				{comp} {plant_f}
+				{comp} {plant_f} {wh_excl}
 		""".format(
 			ph=placeholders,
 			comp=" AND wh.company IN ({})".format(", ".join(["%s"] * len(company_list))) if company_list else "",
 			plant_f=" AND wh.custom_branch IN ({})".format(", ".join(["%s"] * len(plant_list))) if plant_list else "",
-		), item_groups + company_list + plant_list, as_dict=True)
+			wh_excl=wh_clause,
+		), item_groups + company_list + plant_list + wh_params, as_dict=True)
 
 	plants = _sort_plants({r.plant for r in rows if r.plant})
 
@@ -1020,6 +1063,8 @@ def get_finished_goods_item_detail(company=None, plant=None, as_on_date=None, la
 
 	item_bucket = {}
 	for r in rows:
+		if not r.plant:
+			continue
 		qty_conv, uom_conv = _apply_uom(r.item_code, flt(r.qty_raw), r.stock_uom, conv_map)
 		entry = item_bucket.setdefault(r.item_code, {
 			"item_name": r.item_name,
@@ -1124,6 +1169,7 @@ def get_general_store_item_detail(company=None, plant=None, as_on_date=None, lab
 
 	comp_clause  = " AND wh.company IN ({})".format(", ".join(["%s"] * len(company_list))) if company_list else ""
 	plant_clause = " AND wh.custom_branch IN ({})".format(", ".join(["%s"] * len(plant_list))) if plant_list else ""
+	wh_clause, wh_params = _wh_exclude_clause("wh")
 
 	if as_on_date:
 		rows = frappe.db.sql("""
@@ -1141,11 +1187,11 @@ def get_general_store_item_detail(company=None, plant=None, as_on_date=None, lab
 			WHERE sle.is_cancelled = 0
 				AND sle.posting_date <= %s
 				AND (i.item_group = %s OR ig.parent_item_group = %s)
-				{comp} {plant_f}
+				{comp} {plant_f} {wh_excl}
 			GROUP BY wh.custom_branch, i.name
-			HAVING SUM(sle.actual_qty) > 0.009
-		""".format(comp=comp_clause, plant_f=plant_clause),
-		[as_on_date, label, label] + company_list + plant_list, as_dict=True)
+			HAVING SUM(sle.actual_qty) > 0
+		""".format(comp=comp_clause, plant_f=plant_clause, wh_excl=wh_clause),
+		[as_on_date, label, label] + company_list + plant_list + wh_params, as_dict=True)
 	else:
 		rows = frappe.db.sql("""
 			SELECT
@@ -1161,14 +1207,16 @@ def get_general_store_item_detail(company=None, plant=None, as_on_date=None, lab
 			INNER JOIN `tabWarehouse` wh  ON wh.name = b.warehouse
 			WHERE b.actual_qty > 0
 				AND (i.item_group = %s OR ig.parent_item_group = %s)
-				{comp} {plant_f}
-		""".format(comp=comp_clause, plant_f=plant_clause),
-		[label, label] + company_list + plant_list, as_dict=True)
+				{comp} {plant_f} {wh_excl}
+		""".format(comp=comp_clause, plant_f=plant_clause, wh_excl=wh_clause),
+		[label, label] + company_list + plant_list + wh_params, as_dict=True)
 
 	plants = _sort_plants({r.plant for r in rows if r.plant})
 
 	item_bucket = {}
 	for r in rows:
+		if not r.plant:
+			continue
 		entry = item_bucket.setdefault(r.item_code, {"item_name": r.item_name, "plants": {}})
 		entry["plants"][r.plant] = entry["plants"].get(r.plant, 0.0) + flt(r.value)
 
@@ -1207,22 +1255,12 @@ def get_general_store_item_detail(company=None, plant=None, as_on_date=None, lab
 
 
 def _build_ih_item_filter(item_group):
-	"""
-	Returns (clause_str, params_list) restricting IH queries to ONLY the
-	items that appear in the four defined maps above.  No unlisted item can
-	ever appear in Inventory Health results.
-
-	The query already JOINs `tabItem` AS i and LEFT JOINs `tabItem Group` AS ig.
-	"""
 	if item_group == "Finished Goods":
 		fg_groups = list(FINISHED_GOODS_MAP.keys())
 		ph = ", ".join(["%s"] * len(fg_groups))
 		return "i.item_group IN ({})".format(ph), fg_groups
 
 	elif item_group == "Fuel":
-		# Only the explicit item codes in FUEL_MAP + item groups in FUEL_GROUP_MAP.
-		# Items matched by group are further restricted to codes NOT already in
-		# FUEL_MAP so there is no double-counting (mirrors _get_fuel_rows logic).
 		fuel_codes    = list(FUEL_MAP.keys())
 		fuel_grp_keys = list(FUEL_GROUP_MAP.keys())
 		ph_c = ", ".join(["%s"] * len(fuel_codes))
@@ -1230,7 +1268,6 @@ def _build_ih_item_filter(item_group):
 		clause = "(sle.item_code IN ({pc}) OR (i.item_group IN ({pg}) AND sle.item_code NOT IN ({pc})))".format(
 			pc=ph_c, pg=ph_g
 		)
-		# params: fuel_codes for first IN, fuel_grp_keys, fuel_codes again for NOT IN
 		return clause, fuel_codes + fuel_grp_keys + fuel_codes
 
 	elif item_group == "Raw Material":
@@ -1241,12 +1278,10 @@ def _build_ih_item_filter(item_group):
 	elif item_group == "General Store":
 		gs = GENERAL_STORE_GROUPS[:]
 		ph = ", ".join(["%s"] * len(gs))
-		# item_group directly in list OR parent_item_group in list (for sub-groups)
 		clause = "(i.item_group IN ({ph}) OR IFNULL(ig.parent_item_group,'') IN ({ph}))".format(ph=ph)
 		return clause, gs + gs
 
 	else:
-		# ── All 4 groups: union of every allowed code / group ─────────────────
 		fg_groups     = list(FINISHED_GOODS_MAP.keys())
 		fuel_codes    = list(FUEL_MAP.keys())
 		fuel_grp_keys = list(FUEL_GROUP_MAP.keys())
@@ -1259,7 +1294,6 @@ def _build_ih_item_filter(item_group):
 		rm_ph     = ", ".join(["%s"] * len(rm_codes))
 		gs_ph     = ", ".join(["%s"] * len(gs))
 
-		# Fuel group items are allowed only when not already covered by FUEL_MAP
 		clause = """(
 			i.item_group IN ({fg_ph})
 			OR sle.item_code IN ({fuel_ph})
@@ -1271,22 +1305,17 @@ def _build_ih_item_filter(item_group):
 			fg_ph=fg_ph, fuel_ph=fuel_ph, fuel_g_ph=fuel_g_ph,
 			rm_ph=rm_ph, gs_ph=gs_ph,
 		)
-		# params order matches placeholders above
 		params = (
 			fg_groups
 			+ fuel_codes
-			+ fuel_grp_keys + fuel_codes   # group IN + NOT IN fuel_codes
+			+ fuel_grp_keys + fuel_codes
 			+ rm_codes
-			+ gs + gs                      # direct group + parent group
+			+ gs + gs
 		)
 		return clause, params
 
 
 def _build_ih_bin_filter(item_group):
-	"""
-	Same as _build_ih_item_filter but for the Bin fast-path where the
-	column name is `b.item_code` (not `sle.item_code`).
-	"""
 	if item_group == "Finished Goods":
 		fg_groups = list(FINISHED_GOODS_MAP.keys())
 		ph = ", ".join(["%s"] * len(fg_groups))
@@ -1349,16 +1378,6 @@ def _build_ih_bin_filter(item_group):
 
 @frappe.whitelist()
 def get_inventory_health(company=None, plant=None, as_on_date=None, item_group=None):
-	"""
-	Plant-wise Inventory Health: classifies current stock value by how long
-	ago each item last moved.  Only items that appear in one of the four
-	defined maps (FG / Fuel / RM / GS) are included — no unlisted items.
-
-	  Slow Moving  : 90–180 days since last movement
-	  Non Moving   : 181–365 days
-	  Dead Stock   : > 365 days
-	  Total Value  : all on-hand stock (₹ in Lakhs)
-	"""
 	company_list = _as_list(company)
 	plant_list   = _as_list(plant)
 	item_group   = item_group or None
@@ -1368,9 +1387,9 @@ def get_inventory_health(company=None, plant=None, as_on_date=None, item_group=N
 
 	comp_clause  = " AND wh.company IN ({})".format(", ".join(["%s"] * len(company_list))) if company_list else ""
 	plant_clause = " AND wh.custom_branch IN ({})".format(", ".join(["%s"] * len(plant_list))) if plant_list else ""
+	wh_clause, wh_params = _wh_exclude_clause("wh")
 
 	if use_bin:
-		# ── Fast path: Bin for stock values, one SLE GROUP-BY for last movement ─
 		bin_clause, bin_params = _build_ih_bin_filter(item_group)
 
 		stock_rows = frappe.db.sql("""
@@ -1383,9 +1402,9 @@ def get_inventory_health(company=None, plant=None, as_on_date=None, item_group=N
 			LEFT  JOIN `tabItem Group` ig ON ig.name = i.item_group
 			INNER JOIN `tabWarehouse` wh  ON wh.name = b.warehouse
 			WHERE b.actual_qty > 0
-			  AND {item_f} {comp} {plant_f}
-		""".format(item_f=bin_clause, comp=comp_clause, plant_f=plant_clause),
-		bin_params + company_list + plant_list, as_dict=True)
+			  AND {item_f} {comp} {plant_f} {wh_excl}
+		""".format(item_f=bin_clause, comp=comp_clause, plant_f=plant_clause, wh_excl=wh_clause),
+		bin_params + company_list + plant_list + wh_params, as_dict=True)
 
 		if not stock_rows:
 			return {"plants": [], "rows": []}
@@ -1402,10 +1421,10 @@ def get_inventory_health(company=None, plant=None, as_on_date=None, item_group=N
 			INNER JOIN `tabWarehouse` wh ON wh.name = sle.warehouse
 			WHERE sle.is_cancelled = 0
 			  AND sle.item_code IN ({ic_ph})
-			  {comp} {plant_f}
+			  {comp} {plant_f} {wh_excl}
 			GROUP BY wh.custom_branch, sle.item_code
-		""".format(ic_ph=ic_ph, comp=comp_clause, plant_f=plant_clause),
-		bin_item_codes + company_list + plant_list, as_dict=True)
+		""".format(ic_ph=ic_ph, comp=comp_clause, plant_f=plant_clause, wh_excl=wh_clause),
+		bin_item_codes + company_list + plant_list + wh_params, as_dict=True)
 
 		last_movement = {(r.plant, r.item_code): r.last_movement_date for r in lm_rows}
 
@@ -1434,7 +1453,6 @@ def get_inventory_health(company=None, plant=None, as_on_date=None, item_group=N
 				plant_data[p]["dead"]       += val
 
 	else:
-		# ── Historical path: full SLE scan ────────────────────────────────────
 		sle_clause, sle_params = _build_ih_item_filter(item_group)
 
 		where_parts = ["sle.is_cancelled = 0", "sle.posting_date <= %s"]
@@ -1450,7 +1468,8 @@ def get_inventory_health(company=None, plant=None, as_on_date=None, item_group=N
 		where_parts.append(sle_clause)
 		params.extend(sle_params)
 
-		where_sql = " AND ".join(where_parts)
+		where_sql = " AND ".join(where_parts) + wh_clause
+		params    = params + wh_params
 
 		sle_rows = frappe.db.sql("""
 			SELECT
@@ -1464,7 +1483,7 @@ def get_inventory_health(company=None, plant=None, as_on_date=None, item_group=N
 			INNER JOIN `tabWarehouse` wh  ON wh.name = sle.warehouse
 			WHERE {where}
 			GROUP BY wh.custom_branch, sle.item_code
-			HAVING SUM(sle.actual_qty) > 0.009
+			HAVING SUM(sle.actual_qty) > 0
 		""".format(where=where_sql), params, as_dict=True)
 
 		plant_data = {}
@@ -1511,10 +1530,6 @@ def get_inventory_health_item_detail(
 	company=None, plant=None, as_on_date=None,
 	item_group=None, target_plant=None,
 ):
-	"""
-	Item-wise breakup for ONE plant row of the Inventory Health table.
-	Only items defined in the four maps (FG / Fuel / RM / GS) are included.
-	"""
 	if not target_plant:
 		frappe.throw("target_plant is required")
 
@@ -1525,6 +1540,7 @@ def get_inventory_health_item_detail(
 	ref          = frappe.utils.getdate(ref_date)
 
 	comp_clause = " AND wh.company IN ({})".format(", ".join(["%s"] * len(company_list))) if company_list else ""
+	wh_clause, wh_params = _wh_exclude_clause("wh")
 
 	def _bucket_for(days_since):
 		if days_since is None:
@@ -1542,7 +1558,7 @@ def get_inventory_health_item_detail(
 	if use_bin:
 		bin_clause, bin_params = _build_ih_bin_filter(item_group)
 
-		params = bin_params + company_list + [target_plant]
+		params = bin_params + company_list + [target_plant] + wh_params
 		rows = frappe.db.sql("""
 			SELECT
 				b.item_code,
@@ -1555,23 +1571,23 @@ def get_inventory_health_item_detail(
 			LEFT  JOIN `tabItem Group` ig ON ig.name = i.item_group
 			INNER JOIN `tabWarehouse` wh  ON wh.name = b.warehouse
 			WHERE b.actual_qty > 0
-			  AND {item_f} {comp} AND wh.custom_branch = %s
-		""".format(item_f=bin_clause, comp=comp_clause), params, as_dict=True)
+			  AND {item_f} {comp} AND wh.custom_branch = %s {wh_excl}
+		""".format(item_f=bin_clause, comp=comp_clause, wh_excl=wh_clause), params, as_dict=True)
 
 		item_codes = list({r.item_code for r in rows})
 		last_movement = {}
 		if item_codes:
 			ic_ph = ", ".join(["%s"] * len(item_codes))
-			lm_params = item_codes + company_list + [target_plant]
+			lm_params = item_codes + company_list + [target_plant] + wh_params
 			lm_rows = frappe.db.sql("""
 				SELECT sle.item_code, MAX(sle.posting_date) AS last_movement_date
 				FROM `tabStock Ledger Entry` sle
 				INNER JOIN `tabWarehouse` wh ON wh.name = sle.warehouse
 				WHERE sle.is_cancelled = 0
 				  AND sle.item_code IN ({ic_ph})
-				  {comp} AND wh.custom_branch = %s
+				  {comp} AND wh.custom_branch = %s {wh_excl}
 				GROUP BY sle.item_code
-			""".format(ic_ph=ic_ph, comp=comp_clause), lm_params, as_dict=True)
+			""".format(ic_ph=ic_ph, comp=comp_clause, wh_excl=wh_clause), lm_params, as_dict=True)
 			last_movement = {r.item_code: r.last_movement_date for r in lm_rows}
 
 		for r in rows:
@@ -1609,7 +1625,8 @@ def get_inventory_health_item_detail(
 		where_parts.append(sle_clause)
 		params.extend(sle_params)
 
-		where_sql = " AND ".join(where_parts)
+		where_sql = " AND ".join(where_parts) + wh_clause
+		params    = params + wh_params
 
 		rows = frappe.db.sql("""
 			SELECT
@@ -1625,7 +1642,7 @@ def get_inventory_health_item_detail(
 			INNER JOIN `tabWarehouse` wh  ON wh.name = sle.warehouse
 			WHERE {where}
 			GROUP BY sle.item_code
-			HAVING SUM(sle.actual_qty) > 0.009
+			HAVING SUM(sle.actual_qty) > 0
 		""".format(where=where_sql), params, as_dict=True)
 
 		for r in rows:
@@ -1675,6 +1692,10 @@ def debug_fuel_items(company=None, plant=None):
 	if plant_list:
 		where  += " AND wh.custom_branch IN ({})".format(", ".join(["%s"] * len(plant_list)))
 		params += plant_list
+
+	wh_clause, wh_params = _wh_exclude_clause("wh")
+	where  += wh_clause
+	params += wh_params
 
 	rows = frappe.db.sql("""
 		SELECT DISTINCT

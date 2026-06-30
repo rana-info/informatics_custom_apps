@@ -69,80 +69,95 @@ def get_data(filters):
 
 	data = frappe.db.sql(f"""
 		SELECT
-			po.transaction_date AS po_date,
-			po.name AS po_no,
-			po.company,
-			po.status AS po_status,
-			po.supplier,
-			po.supplier_name,
+    po.transaction_date AS po_date,
+    po.name AS po_no,
+    po.company,
+    po.status AS po_status,
+    po.supplier,
+    po.supplier_name,
 
-			poi.item_code,
-			poi.item_name,
-			i.item_group,
-			poi.uom,
+    poi.item_code,
+    poi.item_name,
+    i.item_group,
+    poi.uom,
 
-			poi.warehouse,
-			wh.custom_branch AS plant,
-			wh.custom_segment AS segment,
+    poi.warehouse,
+    wh.custom_branch AS plant,
+    wh.custom_segment AS segment,
 
-			poi.qty AS ordered_qty,
+    poi.qty AS ordered_qty,
 
-			IFNULL(pri.received_qty, 0) AS received_qty,
+    IFNULL(pri.received_qty, 0) AS received_qty,
 
-			(poi.qty - IFNULL(pri.received_qty, 0)) AS pending_qty,
+    GREATEST(
+        poi.qty - IFNULL(pri.received_qty, 0),
+        0
+    ) AS pending_qty,
 
-			po.grand_total AS po_value,
+    po.grand_total AS po_value,
 
-			GROUP_CONCAT(DISTINCT pri_sub.parent) AS purchase_receipts,
+    GROUP_CONCAT(DISTINCT pri_sub.parent) AS purchase_receipts,
 
-			CASE
-				WHEN IFNULL(pri.received_qty, 0) = 0 THEN 'Not Received'
-				WHEN IFNULL(pri.received_qty, 0) < poi.qty THEN 'Partially Received'
-				ELSE 'Fully Received'
-			END AS receipt_status
+    CASE
+        WHEN IFNULL(pri.received_qty, 0) = 0 THEN 'Not Received'
+        WHEN IFNULL(pri.received_qty, 0) < poi.qty THEN 'Partially Received'
+        ELSE 'Fully Received'
+    END AS receipt_status
 
-		FROM `tabPurchase Order` po
-		JOIN `tabPurchase Order Item` poi ON po.name = poi.parent
+FROM `tabPurchase Order` po
 
-		LEFT JOIN (
-			SELECT
-				purchase_order_item,
-				SUM(qty) AS received_qty
-			FROM `tabPurchase Receipt Item`
-			WHERE docstatus = 1
-			GROUP BY purchase_order_item
-		) pri ON pri.purchase_order_item = poi.name
+JOIN `tabPurchase Order Item` poi
+    ON po.name = poi.parent
 
-		LEFT JOIN `tabPurchase Receipt Item` pri_sub
-			ON pri_sub.purchase_order_item = poi.name
-			AND pri_sub.docstatus = 1
+LEFT JOIN (
+    SELECT
+        purchase_order_item,
+        SUM(qty) AS received_qty
+    FROM `tabPurchase Receipt Item`
+    WHERE docstatus = 1
+    GROUP BY purchase_order_item
+) pri
+    ON pri.purchase_order_item = poi.name
 
-		LEFT JOIN `tabWarehouse` wh ON poi.warehouse = wh.name
-		LEFT JOIN `tabItem` i ON poi.item_code = i.name
+LEFT JOIN `tabPurchase Receipt Item` pri_sub
+    ON pri_sub.purchase_order_item = poi.name
+    AND pri_sub.docstatus = 1
 
-		WHERE
-			po.docstatus = 1
-			AND po.status NOT IN ('Closed', 'Completed')
-			AND (
-                poi.item_code IN ('106448','106446','106444')
-                OR i.item_group IN (
-                    '020301-Fuel-Trd',
-                    '020302-Fuel-Trd Non Weightment',
-                    '020104-Bagasse-Trd',
-                    '020104-Bagasse-Trd (Non Weighment)',
-                    '010108-Bagasse-Mfg (Non Weighment)',
-                    '010102-Bagasse-Mfg'
-                )
-            )
-			{conditions}
+LEFT JOIN `tabWarehouse` wh
+    ON poi.warehouse = wh.name
 
-		GROUP BY
-            po.name,
-            poi.name
+LEFT JOIN `tabItem` i
+    ON poi.item_code = i.name
 
-        ORDER BY
-            po.transaction_date DESC,
-            po.name DESC
+WHERE
+    po.docstatus = 1
+    AND po.status NOT IN ('Closed', 'Completed')
+
+    AND (
+        poi.item_code IN (
+            '106448',
+            '106446',
+            '106444'
+        )
+        OR i.item_group IN (
+            '020301-Fuel-Trd',
+            '020302-Fuel-Trd Non Weightment',
+            '020104-Bagasse-Trd',
+            '020104-Bagasse-Trd (Non Weighment)',
+            '010108-Bagasse-Mfg (Non Weighment)',
+            '010102-Bagasse-Mfg'
+        )
+    )
+
+    {conditions}
+
+GROUP BY
+    po.name,
+    poi.name
+
+ORDER BY
+    po.transaction_date DESC,
+    po.name DESC
 	""", values, as_dict=True)
 
 	previous_po = None

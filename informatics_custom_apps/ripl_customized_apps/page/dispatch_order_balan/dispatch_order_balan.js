@@ -9,1021 +9,1076 @@ frappe.pages['dispatch-order-balan'].on_page_load = function (wrapper) {
 
 class DispatchOrderBalancePage {
 	constructor(page) {
-		this.page   = page;
-		this.last_data    = null;
-		this._refresh_timer = null;
-		this.inject_styles();
-		this.make_layout();
-		this.make_filters();
-		this.make_menu();
+		this.page       = page;
+		this.data       = null;
+		this._timer     = null;
+		this.view_mode  = 'quarter';
+		this.show_zero  = true;
+		this.active_key = null;
+		this.selected_quarter = null;
+		this.expanded_quarters = new Set(); // NEW: tracks which quarter blocks are expanded
+
+		this._inject_styles();
+		this._build_layout();
+		this._build_filters();
+		this._build_menu();
 		this.refresh();
 	}
 
-	inject_styles() {
-		if ($('#dob-style').length) return;
-		$(`<style id="dob-style">
-			@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+	_inject_styles() {
+		if ($('#dob3-style').length) return;
+		$(`<style id="dob3-style">
+		.dob3-wrap * { font-family: 'Inter', system-ui, sans-serif; box-sizing: border-box; }
+		.dob3-wrap { padding: 16px 20px 60px; background: #F2F5FA; min-height: 100vh; }
 
-			.dob-page-wrap * { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+		.dob3-fb {
+			background: #fff; border: 1px solid #DDE3EE; border-radius: 10px;
+			padding: 14px 18px; margin-bottom: 18px;
+			display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 14px;
+			box-shadow: 0 1px 6px rgba(15,27,60,.05);
+		}
+		.dob3-fi { display: flex; flex-direction: column; min-width: 130px; max-width: 185px; flex: 1 1 130px; }
+		.dob3-fi > label {
+			font-size: 10px; font-weight: 700; letter-spacing: .7px;
+			text-transform: uppercase; color: #8796A8; margin-bottom: 4px; display: block;
+		}
+		.dob3-fi .form-control, .dob3-fi .input-with-feedback {
+			height: 32px !important; font-size: 13px !important; padding: 3px 9px !important;
+			border-radius: 6px !important; border: 1.5px solid #DDE3EE !important; background: #F8FAFD !important;
+		}
+		.dob3-fi .form-control:focus, .dob3-fi .input-with-feedback:focus {
+			border-color: #3B6FE0 !important; box-shadow: 0 0 0 3px rgba(59,111,224,.1) !important;
+			background: #fff !important; outline: none !important;
+		}
+		.dob3-fi .link-btn { display: none !important; }
 
-			.dob-page-wrap {
-				padding: 20px 24px 60px;
-				background: #F4F7FB;
-				min-height: 100vh;
-			}
+		.dob3-mode { display: inline-flex; border: 1.5px solid #DDE3EE; border-radius: 7px; overflow: hidden; }
+		.dob3-mode button {
+			height: 32px; padding: 0 13px; font-size: 12px; font-weight: 600;
+			border: none; cursor: pointer; background: #F8FAFD; color: #6B7A8D; white-space: nowrap;
+		}
+		.dob3-mode button + button { border-left: 1.5px solid #DDE3EE; }
+		.dob3-mode button.dob3-active { background: #3B6FE0; color: #fff; }
 
-			.dob-filter-bar {
-				display: flex;
-				flex-wrap: wrap;
-				align-items: flex-end;
-				gap: 12px 18px;
-				background: #ffffff;
-				border: 1px solid #DDE3EE;
-				border-radius: 12px;
-				padding: 16px 20px 14px;
-				margin-bottom: 24px;
-				box-shadow: 0 2px 10px rgba(15,27,60,.06);
-			}
-			.dob-filter-item {
-				display: flex;
-				flex-direction: column;
-				min-width: 150px;
-				max-width: 210px;
-				flex: 1 1 150px;
-			}
-			.dob-filter-item label {
-				font-size: 11px;
-				font-weight: 700;
-				letter-spacing: .6px;
-				text-transform: uppercase;
-				color: #7A8AA0;
-				margin-bottom: 5px;
-			}
-			.dob-filter-item .form-control,
-			.dob-filter-item .input-with-feedback {
-				height: 34px !important;
-				font-size: 13.5px !important;
-				padding: 4px 10px !important;
-				border-radius: 6px !important;
-				border: 1.5px solid #DDE3EE !important;
-				background: #F8FAFD !important;
-				transition: border-color .15s, box-shadow .15s;
-			}
-			.dob-filter-item .form-control:focus,
-			.dob-filter-item .input-with-feedback:focus {
-				border-color: #3B6FE0 !important;
-				box-shadow: 0 0 0 3px rgba(59,111,224,.12) !important;
-				background: #fff !important;
-				outline: none !important;
-			}
-			.dob-filter-item .link-btn { display: none !important; }
+		.dob3-qpills { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+		.dob3-qpill {
+			height: 28px; padding: 0 12px; border-radius: 20px; border: 1.5px solid #C8D4E4;
+			background: #F0F4FA; color: #4A6080; font-size: 11.5px; font-weight: 600;
+			cursor: pointer; transition: all .12s; white-space: nowrap;
+		}
+		.dob3-qpill:hover { border-color: #7AAAE0; background: #E6EEFA; color: #2050A0; }
+		.dob3-qpill.dob3-active { background: #1B3D6E; border-color: #1B3D6E; color: #C8DEFF; }
+		.dob3-qpill-all { background: #3B6FE0; border-color: #3B6FE0; color: #fff; }
+		.dob3-qpill-all:hover { background: #2A5FD8; }
 
-			/* ── Show Zero Pending toggle ────────────────────────────────── */
-			.dob-filter-item.dob-filter-check {
-				flex: 0 0 auto;
-				min-width: auto;
-				flex-direction: row;
-				align-items: center;
-				padding-bottom: 7px;
-			}
-			.dob-toggle {
-				display: flex;
-				align-items: center;
-				gap: 9px;
-				cursor: pointer;
-				user-select: none;
-			}
-			.dob-toggle input[type="checkbox"] {
-				position: absolute;
-				opacity: 0;
-				width: 0;
-				height: 0;
-			}
-			.dob-toggle-track {
-				position: relative;
-				width: 36px;
-				height: 20px;
-				background: #DDE3EE;
-				border-radius: 20px;
-				transition: background .15s;
-				flex-shrink: 0;
-			}
-			.dob-toggle-thumb {
-				position: absolute;
-				top: 2px;
-				left: 2px;
-				width: 16px;
-				height: 16px;
-				background: #fff;
-				border-radius: 50%;
-				box-shadow: 0 1px 3px rgba(15,27,60,.25);
-				transition: transform .15s;
-			}
-			.dob-toggle input:checked + .dob-toggle-track {
-				background: #3B6FE0;
-			}
-			.dob-toggle input:checked + .dob-toggle-track .dob-toggle-thumb {
-				transform: translateX(16px);
-			}
-			.dob-toggle-label {
-				font-size: 11px;
-				font-weight: 700;
-				letter-spacing: .6px;
-				text-transform: uppercase;
-				color: #7A8AA0;
-			}
+		.dob3-toggle { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+		.dob3-toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
+		.dob3-track {
+			position: relative; width: 32px; height: 18px; background: #DDE3EE;
+			border-radius: 18px; flex-shrink: 0; transition: background .13s;
+		}
+		.dob3-thumb {
+			position: absolute; top: 2px; left: 2px; width: 14px; height: 14px;
+			background: #fff; border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,.2); transition: transform .13s;
+		}
+		.dob3-toggle input:checked + .dob3-track { background: #3B6FE0; }
+		.dob3-toggle input:checked + .dob3-track .dob3-thumb { transform: translateX(14px); }
+		.dob3-toggle-lbl { font-size: 10px; font-weight: 700; letter-spacing: .7px; text-transform: uppercase; color: #8796A8; }
 
-			.dob-filter-actions {
-				display: flex;
-				gap: 8px;
-				align-items: flex-end;
-				padding-bottom: 1px;
-			}
-			.dob-btn {
-				height: 34px;
-				padding: 0 18px;
-				font-size: 13px;
-				font-weight: 600;
-				border-radius: 6px;
-				border: none;
-				cursor: pointer;
-				white-space: nowrap;
-				letter-spacing: .1px;
-				transition: all .15s;
-			}
-			.dob-btn-primary {
-				background: linear-gradient(135deg, #2A5FD8 0%, #3B6FE0 100%);
-				color: #fff;
-				box-shadow: 0 2px 8px rgba(42,95,216,.30);
-			}
-			.dob-btn-primary:hover {
-				background: linear-gradient(135deg, #2050C0 0%, #2A5FD8 100%);
-				box-shadow: 0 4px 14px rgba(42,95,216,.38);
-				transform: translateY(-1px);
-			}
-			.dob-btn-primary:active { transform: translateY(0); }
-			.dob-btn-default {
-				background: #fff;
-				color: #4A5568;
-				border: 1.5px solid #DDE3EE;
-			}
-			.dob-btn-default:hover {
-				background: #F4F7FB;
-				border-color: #B0BECC;
-			}
+		.dob3-btn { height: 32px; padding: 0 16px; font-size: 12.5px; font-weight: 600; border-radius: 6px; border: none; cursor: pointer; transition: all .12s; }
+		.dob3-btn-primary { background: #3B6FE0; color: #fff; box-shadow: 0 1px 6px rgba(59,111,224,.3); }
+		.dob3-btn-primary:hover { background: #2A5FD8; transform: translateY(-1px); }
+		.dob3-btn-default { background: #fff; color: #4A5568; border: 1.5px solid #DDE3EE; }
+		.dob3-btn-default:hover { background: #F4F7FB; }
 
-			.dob-section-title {
-				font-size: 11.5px;
-				font-weight: 700;
-				letter-spacing: .8px;
-				text-transform: uppercase;
-				color: #8796A8;
-				margin: 28px 0 14px;
-				display: flex;
-				align-items: center;
-				gap: 10px;
-			}
-			.dob-section-title::after {
-				content: '';
-				flex: 1;
-				height: 1.5px;
-				background: linear-gradient(90deg, #DDE3EE 0%, transparent 100%);
-				border-radius: 2px;
-			}
+		.dob3-sec {
+			font-size: 10.5px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase;
+			color: #8796A8; display: flex; align-items: center; gap: 10px; margin: 20px 0 10px;
+		}
+		.dob3-sec::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, #DDE3EE 0%, transparent 100%); }
 
-			.dob-item-block {
-				margin-bottom: 24px;
-				border-radius: 12px;
-				overflow: hidden;
-				box-shadow: 0 2px 14px rgba(15,27,60,.08);
-				border: 1px solid #DDE3EE;
-			}
+		.dob3-card {
+			background: #fff; border: 2px solid #d5dde5; border-radius: 14px; padding: 18px;
+			box-shadow: 0 3px 10px rgba(31,39,46,.06); margin-bottom: 18px; overflow-x: auto;
+		}
+		.dob3-card-title {
+			font-size: 15px; font-weight: 700; margin-bottom: 12px; color: #24313b;
+			display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+		}
+		.dob3-badge { font-size: 11px; padding: 3px 10px; border-radius: 30px; font-weight: 600; white-space: nowrap; }
+		.dob3-badge-hint { background:#e6f0ff; color:#1d4f9e; border:1px solid #b9d2f5; }
+		.dob3-badge-sort { background:#fdf5dc; color:#75621a; border:1px solid #eadfa6; margin-left:auto; }
 
-			.dob-item-heading {
-				display: flex;
-				align-items: center;
-				gap: 10px;
-				font-weight: 700;
-				font-size: 15px;
-				background: linear-gradient(135deg, #0F2750 0%, #1A3E72 100%);
-				padding: 13px 18px;
-				color: #EEF4FF;
-				border-left: 5px solid #4A90E2;
-			}
-			.dob-badge {
-				display: inline-block;
-				background: rgba(255,255,255,.18);
-				color: #C8DEFF;
-				font-size: 11px;
-				font-weight: 600;
-				padding: 2px 10px;
-				border-radius: 20px;
-				border: 1px solid rgba(255,255,255,.22);
-				letter-spacing: .3px;
-			}
+		.dob3-table-wrap { overflow-x: auto; border-radius: 10px; border: 2px solid #aab8c3; }
+		.dob3-sumtbl { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13.5px; min-width: 460px; }
+		.dob3-sumtbl th, .dob3-sumtbl td {
+			padding: 9px 14px; border-right: 1px solid #d0dbe4; border-bottom: 1px solid #dde5ec;
+			text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums;
+		}
+		.dob3-sumtbl th:last-child, .dob3-sumtbl td:last-child { border-right: none; }
+		.dob3-sumtbl th {
+			background: #e8eef4; color: #36474f; font-weight: 700; border-bottom: 2px solid #aab8c3;
+			font-size: 10.5px; letter-spacing: .3px; text-transform: uppercase;
+		}
+		.dob3-rowlabel {
+			text-align: left !important; min-width: 220px; font-weight: 700; color: #1f2b34;
+			background: #f5f7fa !important; border-right: 3px solid #8fa8bb !important;
+			position: sticky; left: 0; z-index: 2;
+		}
+		.dob3-rowlabel .dob3-sub { font-size: 11px; font-weight: 500; color: #697884; margin-top: 2px; white-space: normal; }
+		.dob3-col-ord  { background-color:#f0f7ff; border-left:3px solid #b3d4f0 !important; }
+		.dob3-col-supt { background-color:#f0fff5; border-left:3px solid #9ed8b8 !important; }
+		.dob3-col-pend { background-color:#fff8f0; border-left:3px solid #e8bb95 !important; }
+		th.dob3-col-ord  { background-color:#ddeeff !important; border-left:3px solid #6aace8 !important; }
+		th.dob3-col-supt { background-color:#d8f5e4 !important; border-left:3px solid #5dc483 !important; }
+		th.dob3-col-pend { background-color:#ffebd9 !important; border-left:3px solid #e09055 !important; }
+		.dob3-val-pend-pos  { color:#C0392B; font-weight:700; }
+		.dob3-val-pend-neg  { color:#D35400; font-weight:700; }
+		.dob3-val-pend-zero { color:#27AE60; }
 
-			.dob-card {
-				overflow: hidden;
-			}
-			.dob-card .table { margin-bottom: 0; }
+		.dob3-sumrow { cursor: pointer; transition: background .15s; }
+		.dob3-sumrow:hover td:not(.dob3-rowlabel) { filter: brightness(0.96); }
+		.dob3-sumrow:hover td.dob3-rowlabel { background: #eef2f6 !important; }
+		.dob3-sumrow-active td { border-top: 2px solid #2b7ad4 !important; border-bottom: 2px solid #2b7ad4 !important; }
+		.dob3-sumrow-active td.dob3-rowlabel { color:#2367b1; background:#eaf2fc !important; }
+		.dob3-chev { float:right; color:#93a4b0; font-weight:800; margin-left:8px; transition: transform .18s; }
+		.dob3-sumrow-active .dob3-chev { transform: rotate(90deg); color:#2367b1; }
+		.dob3-totalrow td { background: #d8e5ef !important; font-weight: 800 !important; border-top: 3px solid #7a9bb5 !important; }
+		.dob3-totalrow td.dob3-rowlabel { background:#cddce8 !important; }
 
-			.dob-table {
-				width: 100%;
-				border-collapse: collapse;
-			}
-			.dob-table th, .dob-table td {
-				border: 1px solid #E4EAF2 !important;
-				padding: 8px 13px !important;
-				font-size: 14px;
-				white-space: nowrap;
-				vertical-align: middle !important;
-			}
-			.dob-table thead th {
-				background: #EEF2FA !important;
-				font-weight: 700;
-				font-size: 11.5px;
-				letter-spacing: .5px;
-				text-transform: uppercase;
-				color: #3A4A60;
-				border-bottom: 2px solid #C8D4E4 !important;
-				position: sticky;
-				top: 0;
-				z-index: 2;
-			}
-			.dob-table tbody tr:hover td {
-				background: #F5F8FF !important;
-			}
-			.dob-total-row td {
-				background: #EEF2FA !important;
-				font-weight: 700;
-				border-top: 2px solid #C8D4E4 !important;
-				font-size: 14px;
-			}
+		.dob3-panel { border-left: 6px solid #3B6FE0; }
+		.dob3-subrow { cursor: pointer; }
+		.dob3-subrow:hover td:not(.dob3-rowlabel) { background-color: rgba(43,122,212,.08) !important; filter:none; }
+		.dob3-subrow:hover td.dob3-rowlabel { background-color:#e3edf9 !important; }
 
-			.dob-qtr-head { background: #D0E4F8 !important; color: #154E8C !important; }
-			.dob-qtr-cell { background: #EAF2FC; color: #1E5FA0; font-weight: 600; }
+		/* Quarter-mode 3-level layout */
+		.dob3-qblock {
+			background: #fff; border: 2px solid #d5dde5; border-radius: 12px;
+			box-shadow: 0 3px 10px rgba(31,39,46,.06); margin-bottom: 18px; overflow: hidden;
+		}
+		.dob3-qhdr {
+			display: flex; align-items: center; gap: 10px;
+			background: #1B3D6E; color: #C8DEFF;
+			padding: 11px 18px; font-size: 13px; font-weight: 700;
+			cursor: pointer; user-select: none;
+		}
+		.dob3-qhdr:hover { background: #234b85; }
+		.dob3-qhdr .dob3-qchev {
+			display: inline-block; font-size: 14px; font-weight: 800;
+			transition: transform .15s; color:#C8DEFF; flex-shrink:0;
+		}
+		.dob3-qhdr.dob3-qhdr-open .dob3-qchev { transform: rotate(90deg); }
+		.dob3-qhdr .dob3-qhdr-right { margin-left: auto; display:flex; gap:6px; align-items:center; }
+		.dob3-qhdr .dob3-badge { font-size:10.5px; }
+		.dob3-itemrow { cursor: pointer; transition: background .12s; }
+		.dob3-itemrow:hover td:not(.dob3-rowlabel) { filter: brightness(0.95); }
+		.dob3-itemrow:hover td.dob3-rowlabel { background:#eef5f0 !important; }
+		.dob3-itemrow-active td { border-top: 2px solid #27AE60 !important; border-bottom: 2px solid #27AE60 !important; }
+		.dob3-itemrow-active td.dob3-rowlabel { color:#1a7a48; background:#eafaf2 !important; }
+		.dob3-custpanel { border-left: 5px solid #27AE60; background:#f8fdf9; }
+		.dob3-custpanel .dob3-sumtbl { font-size:13px; }
+		.dob3-custrow { cursor: pointer; }
+		.dob3-custrow:hover td:not(.dob3-rowlabel) { background-color:rgba(39,174,96,.1) !important; filter:none; }
+		.dob3-custrow:hover td.dob3-rowlabel { background-color:#ddf5e8 !important; }
+		.dob3-custpanel .dob3-rowlabel { background:#f0faf4 !important; }
 
-			.dob-mo-head  { background: #DBF0FF !important; color: #1A6EA8 !important; }
-			.dob-mo-cell  { background: #F0F8FF; color: #3A7DC0; }
+		.dob3-tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 600px; }
+		.dob3-tbl th {
+			background: #EEF2FA; color: #3A4A60; font-weight: 700; font-size: 10px;
+			letter-spacing: .4px; text-transform: uppercase; padding: 7px 10px;
+			border: 1px solid #E0E7F0; text-align: right; white-space: nowrap;
+		}
+		.dob3-tbl th:first-child, .dob3-tbl th.tl { text-align: left; }
+		.dob3-tbl td { padding: 7px 10px; border: 1px solid #EBF0F8; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; vertical-align: middle; }
+		.dob3-tbl td.tl { text-align: left; }
+		.dob3-tbl tr:hover td { background: #F2F6FF; }
+		.dob3-tbl tr.dob3-total td { background: #EEF2FA; font-weight: 700; border-top: 2px solid #C8D4E4; }
+		.cv-pend-pos  { color: #C0392B; font-weight: 700; background: #FFF0F0; }
+		.cv-pend-neg  { color: #D35400; font-weight: 700; background: #FFF6EE; }
+		.cv-pend-zero { color: #27AE60; }
+		.cv-sup       { color: #2055A0; background: #EBF3FF; }
+		.cv-uom       { color: #8796A8; font-style: italic; text-align: center !important; }
 
-			.dob-supplied { background: #EBF3FF !important; color: #2055A0 !important; font-weight: 600; }
+		.dob3-item-dialog .modal-body { padding: 0 !important; max-height: 80vh !important; overflow: auto !important; }
+		.dob3-item-dialog .table-responsive { max-height: 78vh !important; overflow: auto !important; }
+		.dob3-item-dialog .modal-dialog { width: 96vw !important; max-width: 1200px !important; margin: 10px auto !important; }
+		.dob3-item-dialog .dob3-tbl thead th { position: sticky !important; top: 0; z-index: 10; }
+		.dob3-item-dialog .dob3-dialog-pad { padding: 16px 18px 18px; }
 
-			.dob-pending-pos  {
-				background: #FFF0F0 !important;
-				color: #C0392B !important;
-				font-weight: 700;
-			}
-			.dob-pending-zero { color: #27AE60 !important; font-weight: 600; }
+		.dob3-summary { max-width: 520px; }
+		.dob3-sum-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+		.dob3-sum-tbl th {
+			background: #EEF2FA; color: #3A4A60; font-weight: 700; font-size: 10px;
+			letter-spacing: .4px; text-transform: uppercase; padding: 8px 12px; border: 1px solid #E0E7F0; text-align: right;
+		}
+		.dob3-sum-tbl th:first-child { text-align: left; }
+		.dob3-sum-tbl td { padding: 8px 12px; border: 1px solid #EBF0F8; text-align: right; font-variant-numeric: tabular-nums; }
+		.dob3-sum-tbl td:first-child { text-align: left; font-weight: 500; }
+		.dob3-sum-tbl tr.dob3-total td { background: #EEF2FA; font-weight: 700; border-top: 2px solid #C8D4E4; }
+		.cv-bal-neg  { color: #C0392B; font-weight: 700; background: #FFF0F0; }
+		.cv-bal-pos  { color: #1E8449; font-weight: 700; background: #EDFAF2; }
+		.cv-bal-zero { color: #9AA3AF; }
 
-			.dob-bal-neg  { background: #FFF0F0 !important; color: #C0392B !important; font-weight: 700; }
-			.dob-bal-pos  { background: #EDFAF2 !important; color: #1E8449 !important; font-weight: 700; }
-			.dob-bal-zero { color: #9AA3AF !important; }
-
-			.dob-dash { color: #C8D0DA; font-size: 15px; }
-			.dob-uom  { color: #6B7A8D; font-size: 12.5px; font-style: italic; }
-
-			.dob-summary-wrap { max-width: 580px; }
-
-			.dob-num { font-variant-numeric: tabular-nums; letter-spacing: .2px; }
-
-			.dob-skeleton {
-				background: linear-gradient(90deg,#EEF2FA 25%,#DDE6F2 50%,#EEF2FA 75%);
-				background-size: 200% 100%;
-				animation: dob-shimmer 1.3s infinite;
-				height: 18px;
-				border-radius: 6px;
-				margin: 10px 0;
-			}
-			@keyframes dob-shimmer {
-				0%  { background-position: 200% 0 }
-				100%{ background-position: -200% 0 }
-			}
-			.dob-empty {
-				text-align: center;
-				padding: 48px 20px;
-				color: #8796A8;
-				font-size: 15px;
-			}
-			.dob-empty i { font-size: 32px; margin-bottom: 10px; display: block; opacity: .4; }
+		.dob3-skel {
+			background: linear-gradient(90deg,#EEF2FA 25%,#DDE6F2 50%,#EEF2FA 75%);
+			background-size: 200% 100%; animation: dob3-shimmer 1.3s infinite;
+			height: 18px; border-radius: 6px; margin: 10px 0;
+		}
+		@keyframes dob3-shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+		.dob3-empty { text-align: center; padding: 44px 20px; color: #8796A8; font-size: 15px; }
+		.dob3-empty i { font-size: 28px; margin-bottom: 8px; display: block; opacity: .4; }
 		</style>`).appendTo('head');
 	}
 
-	make_layout() {
+	_build_layout() {
 		this.page.body.empty();
-		this.$wrap = $(`<div class="dob-page-wrap"></div>`).appendTo(this.page.body);
-		this.$filter_bar = $(`<div class="dob-filter-bar"></div>`).appendTo(this.$wrap);
-		$(`<div class="dob-section-title">Item-wise Dispatch Balance</div>`).appendTo(this.$wrap);
-		this.$item_wrap = $(`<div></div>`).appendTo(this.$wrap);
-		this.$summary_title = $(`<div class="dob-section-title" style="margin-top:32px;"></div>`).appendTo(this.$wrap);
-		this.$summary_wrap  = $(`<div class="dob-summary-wrap"></div>`).appendTo(this.$wrap);
+		this.$w        = $(`<div class="dob3-wrap"></div>`).appendTo(this.page.body);
+		this.$fb       = $(`<div class="dob3-fb"></div>`).appendTo(this.$w);
+		this.$sec_main = $(`<div class="dob3-sec">Dispatch Balance</div>`).appendTo(this.$w);
+		this.$main     = $(`<div></div>`).appendTo(this.$w);
+		this.$sec_sum  = $(`<div class="dob3-sec" style="margin-top:26px;"></div>`).appendTo(this.$w);
+		this.$summary  = $(`<div class="dob3-summary"></div>`).appendTo(this.$w);
 	}
 
-	make_filters() {
-		const make_slot = (label, extra_class) => {
-			const $item = $(`<div class="dob-filter-item${extra_class ? ' ' + extra_class : ''}"></div>`).appendTo(this.$filter_bar);
-			$(`<label>${label}</label>`).appendTo($item);
-			const $ctrl_wrap = $(`<div></div>`).appendTo($item);
-			return $ctrl_wrap;
+	_build_filters() {
+		const fi = (label, flex_override) => {
+			const $d = $(`<div class="dob3-fi"></div>`);
+			if (flex_override) $d.css(flex_override);
+			$(`<label>${label}</label>`).appendTo($d);
+			const $inner = $(`<div></div>`).appendTo($d);
+			$d.appendTo(this.$fb);
+			return $inner;
 		};
 
 		this.f_date = frappe.ui.form.make_control({
-			parent: make_slot('As on Date')[0],
-			df: {
-				fieldname: 'dob_date',
-				fieldtype: 'Date',
-				onchange: () => this.schedule_refresh(),
-			},
+			parent: fi('As on Date')[0],
+			df: { fieldname:'dob_date', fieldtype:'Date', onchange: () => this._sched() },
 			render_input: true,
 		});
 		this.f_date.set_value(frappe.datetime.get_today());
 
 		this.f_company = frappe.ui.form.make_control({
-			parent: make_slot('Company')[0],
-			df: {
-				fieldname: 'dob_company',
-				fieldtype: 'Link',
-				options: 'Company',
-				only_select: 1,
-
-				onchange: () => {
-					this.f_plant.set_value("");
-					this.schedule_refresh();
-				},
-			},
+			parent: fi('Company')[0],
+			df: { fieldname:'dob_co', fieldtype:'Link', options:'Company', only_select:1,
+				  onchange: () => { this.f_plant.set_value(''); this._sched(); } },
 			render_input: true,
 		});
 
 		this.f_plant = frappe.ui.form.make_control({
-			parent: make_slot('Plant')[0],
-			df: {
-				fieldname: 'dob_plant',
-				fieldtype: 'Link',
-				options: 'Branch',
-				only_select: 1,
-
-				get_query: () => {
-					const company = this.f_company.get_value();
-
-					if (!company) return {};
-
-					return {
-						filters: {
-							company: company
-						}
-					};
-				},
-
-				onchange: () => this.schedule_refresh(),
-			},
+			parent: fi('Plant')[0],
+			df: { fieldname:'dob_plant', fieldtype:'Link', options:'Branch', only_select:1,
+				  get_query: () => { const co = this.f_company.get_value(); return co ? { filters:{ company:co } } : {}; },
+				  onchange: () => this._sched() },
 			render_input: true,
 		});
 
 		this.f_customer = frappe.ui.form.make_control({
-			parent: make_slot('Customer')[0],
-			df: {
-				fieldname: 'dob_customer',
-				fieldtype: 'Link',
-				options: 'Customer',
-				onchange: () => this.schedule_refresh(),
-			},
+			parent: fi('Customer')[0],
+			df: { fieldname:'dob_cust', fieldtype:'Link', options:'Customer', onchange: () => this._sched() },
 			render_input: true,
 		});
 
 		this.f_item = frappe.ui.form.make_control({
-			parent: make_slot('Item')[0],
-			df: {
-				fieldname: 'dob_item',
-				fieldtype: 'Link',
-				options: 'Item',
-				onchange: () => this.schedule_refresh(),
-			},
+			parent: fi('Item')[0],
+			df: { fieldname:'dob_item', fieldtype:'Link', options:'Item', onchange: () => this._sched() },
 			render_input: true,
 		});
 
-		this.f_po_no = frappe.ui.form.make_control({
-			parent: make_slot('P.O. No')[0],
-			df: {
-				fieldname: 'dob_po_no',
-				fieldtype: 'Data',
-				onchange: () => this.schedule_refresh(),
-			},
+		this.f_pono = frappe.ui.form.make_control({
+			parent: fi('P.O. No')[0],
+			df: { fieldname:'dob_pono', fieldtype:'Data', onchange: () => this._sched() },
 			render_input: true,
 		});
-		this.f_po_no.$input.on('input', () => this.schedule_refresh());
+		this.f_pono.$input.on('input', () => this._sched());
 
-		// ── Show Zero Pending — plain native toggle, not a Frappe Check
-		// control, so we fully control the markup/layout ourselves.
-		const $check_item = $(`<div class="dob-filter-item dob-filter-check"></div>`).appendTo(this.$filter_bar);
-		const $toggle = $(`
-			<label class="dob-toggle">
-				<input type="checkbox" />
-				<span class="dob-toggle-track"><span class="dob-toggle-thumb"></span></span>
-				<span class="dob-toggle-label">Show Zero Pending</span>
-			</label>
-		`).appendTo($check_item);
-		this.f_show_zero_pending = $toggle.find('input[type=checkbox]');
-		this.f_show_zero_pending.on('change', () => this.schedule_refresh());
+		const $mode_wrap = fi('View Mode', { flex:'0 0 auto', minWidth:'auto' });
+		const $mode = $(`<div class="dob3-mode"></div>`).appendTo($mode_wrap);
+		this.$btn_qtr  = $(`<button class="dob3-active">By Quarter</button>`).appendTo($mode);
+		this.$btn_item = $(`<button>By Item</button>`).appendTo($mode);
+		this.$btn_qtr.on('click',  () => this._set_mode('quarter'));
+		this.$btn_item.on('click', () => this._set_mode('item'));
 
-		const $actions = $(`<div class="dob-filter-actions"></div>`).appendTo(this.$filter_bar);
-		$(`<button class="dob-btn dob-btn-primary"><i class="fa fa-refresh"></i>&nbsp; Refresh</button>`)
-			.appendTo($actions).on('click', () => this.refresh());
-		$(`<button class="dob-btn dob-btn-default">Clear</button>`)
-			.appendTo($actions).on('click', () => this.clear_filters());
+		const $tog_wrap = fi('Options', { flex:'0 0 auto', minWidth:'auto' });
+		$(`<label class="dob3-toggle">
+			<input type="checkbox" checked/>
+			<span class="dob3-track"><span class="dob3-thumb"></span></span>
+			<span class="dob3-toggle-lbl">Show Zero Pending</span>
+		</label>`).appendTo($tog_wrap).find('input').on('change', (e) => {
+			this.show_zero = $(e.target).is(':checked');
+			this._render_main();
+		});
+
+		const $acts = $(`<div style="display:flex;gap:8px;"></div>`).appendTo(
+			fi('&nbsp;', { flex:'0 0 auto', minWidth:'auto' })
+		);
+		$(`<button class="dob3-btn dob3-btn-primary"><i class="fa fa-refresh"></i> Refresh</button>`)
+			.appendTo($acts).on('click', () => this.refresh());
+		$(`<button class="dob3-btn dob3-btn-default">Clear</button>`)
+			.appendTo($acts).on('click', () => this._clear());
+
+		this.$qpill_row = $(`
+			<div style="width:100%;padding-top:6px;border-top:1px solid #EEF2F7;margin-top:2px;">
+				<div style="font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:#8796A8;margin-bottom:6px;">Filter Quarter</div>
+				<div class="dob3-qpills"></div>
+			</div>`).appendTo(this.$fb).hide();
+		this.$qpills = this.$qpill_row.find('.dob3-qpills');
 	}
 
-	schedule_refresh() {
-		clearTimeout(this._refresh_timer);
-		this._refresh_timer = setTimeout(() => this.refresh(), 400);
+	_build_quarter_pills(quarters) {
+		this.$qpills.empty();
+		if (!quarters || !quarters.length) { this.$qpill_row.hide(); return; }
+		const $all = $(`<button class="dob3-qpill dob3-qpill-all dob3-active">All Quarters</button>`)
+			.appendTo(this.$qpills).on('click', () => {
+				this.selected_quarter = null;
+				this.$qpills.find('.dob3-qpill').removeClass('dob3-active');
+				$all.addClass('dob3-active');
+				this._render_main();
+			});
+		for (const q of quarters) {
+			const $p = $(`<button class="dob3-qpill">${_esc(q.quarter)}</button>`)
+				.appendTo(this.$qpills).on('click', () => {
+					this.selected_quarter = q.quarter;
+					this.expanded_quarters.add(q.quarter); // NEW: auto-expand the quarter being filtered to
+					this.$qpills.find('.dob3-qpill').removeClass('dob3-active');
+					$p.addClass('dob3-active');
+					this._render_main();
+				});
+		}
+		this.$qpill_row.show();
 	}
 
-	clear_filters() {
+	_set_mode(mode) {
+		this.view_mode = mode;
+		this.active_key = null;
+		this.$btn_qtr.toggleClass('dob3-active',  mode === 'quarter');
+		this.$btn_item.toggleClass('dob3-active', mode === 'item');
+		this.$sec_main.text(mode === 'quarter' ? 'Dispatch Balance — By Quarter' : 'Dispatch Balance — By Item');
+		this._render_main();
+	}
+
+	_sched() { clearTimeout(this._timer); this._timer = setTimeout(() => this.refresh(), 400); }
+
+	_clear() {
 		this.f_date.set_value(frappe.datetime.get_today());
-		this.f_company.set_value('');
-		this.f_plant.set_value('');
-		this.f_customer.set_value('');
-		this.f_item.set_value('');
-		this.f_po_no.set_value('');
-		this.f_show_zero_pending.prop('checked', false);
+		[this.f_company, this.f_plant, this.f_customer, this.f_item, this.f_pono]
+			.forEach(f => f.set_value(''));
+		this.show_zero = true;
+		this.$fb.find('input[type=checkbox]').prop('checked', true);
+		this.selected_quarter = null;
+		this.$qpills.find('.dob3-qpill').removeClass('dob3-active');
+		this.$qpills.find('.dob3-qpill-all').addClass('dob3-active');
 		this.refresh();
 	}
 
-	make_menu() {
-		this.page.add_menu_item('Export Excel', () => this.export_excel());
-		this.page.add_menu_item('Export PDF', () => this.export_pdf());
-	}
-
-	get_filter_values() {
+	_get_filters() {
 		return {
-			date:      this.f_date.get_value()      || frappe.datetime.get_today(),
-			company:   this.f_company.get_value()   || '',
-			plant:     this.f_plant.get_value()     || '',
-			customer:  this.f_customer.get_value()  || '',
-			item_code: this.f_item.get_value()      || '',
-			po_no:     this.f_po_no.get_value()     || '',
-			show_zero_pending: this.f_show_zero_pending.is(':checked') ? 1 : 0,
+			date:      this.f_date.get_value()     || frappe.datetime.get_today(),
+			company:   this.f_company.get_value()  || '',
+			plant:     this.f_plant.get_value()    || '',
+			customer:  this.f_customer.get_value() || '',
+			item_code: this.f_item.get_value()     || '',
+			po_no:     this.f_pono.get_value()     || '',
 		};
 	}
 
-	get_user_meta() {
-		const full_name = (frappe.user && typeof frappe.user.full_name === 'function')
-			? frappe.user.full_name()
-			: (frappe.session.user_fullname || frappe.session.user);
-		const timestamp = frappe.datetime.str_to_user(frappe.datetime.now_datetime());
-		return { user: full_name || frappe.session.user || 'Unknown User', timestamp };
+	_build_menu() {
+		this.page.add_menu_item('Export Excel', () => this._export_excel());
+		this.page.add_menu_item('Export PDF',   () => this._export_pdf());
 	}
 
 	refresh() {
-		this.show_skeleton();
+		this._show_skeleton();
 		frappe.call({
 			method: 'informatics_custom_apps.ripl_customized_apps.page.dispatch_order_balan.dispatch_order_balan.get_page_data',
-			args:   { filters: this.get_filter_values() },
+			args:   { filters: this._get_filters() },
 			callback: (r) => {
-				this.last_data = r.message || {};
-				this.render_item_tables(this.last_data.item_tables);
-				this.render_summary(this.last_data.today_summary, this.last_data.as_on);
+				this.data = r.message || {};
+				this.active_key = null;
+
+				// NEW: default-expand the most recent (current) quarter so its
+				// items are visible without an extra click; other quarters stay collapsed.
+				const quarters = this.data.quarters || [];
+				this.expanded_quarters = quarters.length
+					? new Set([quarters[quarters.length - 1].quarter])
+					: new Set();
+
+				this._build_quarter_pills(this.data.quarters);
+				this._set_mode(this.view_mode);
+				this._render_summary(this.data.today_summary, this.data.as_on);
 			},
 			error: () => {
-				this.$item_wrap.html(
-					`<div class="dob-empty">
-						<i class="fa fa-exclamation-triangle"></i>
-						Failed to load data. Please try again.
-					</div>`
-				);
-				this.$summary_wrap.empty();
+				this.$main.html(`<div class="dob3-empty"><i class="fa fa-exclamation-triangle"></i>Failed to load data.</div>`);
 			},
 		});
 	}
 
-	show_skeleton() {
-		const sk = () => `<div class="dob-skeleton" style="width:${60 + (Math.random()*35|0)}%;"></div>`;
-		this.$item_wrap.html(`<div style="padding:10px 0">${sk()}${sk()}${sk()}${sk()}</div>`);
-		this.$summary_wrap.empty();
-		this.$summary_title.text('');
+	_show_skeleton() {
+		const sk = () => `<div class="dob3-skel" style="width:${55+(Math.random()*38|0)}%"></div>`;
+		this.$main.html(`<div>${sk()}${sk()}${sk()}</div>`);
+		this.$summary.empty(); this.$sec_sum.text('');
 	}
 
-	render_item_tables(item_data) {
-		const items = (item_data && item_data.items)           || [];
-		const qcols = (item_data && item_data.quarter_columns) || [];
-		const mcols = (item_data && item_data.month_columns)   || [];
-
-		if (!items.length) {
-			this.$item_wrap.html(
-				`<div class="dob-empty">
-					<i class="fa fa-inbox"></i>
-					No dispatch orders found for the selected filters.
-				</div>`
-			);
-			return;
-		}
-		const html = items.map(item => this.render_item_block(item, qcols, mcols)).join('');
-		this.$item_wrap.html(html);
-	}
-
-	render_item_block(item, qcols, mcols) {
-		const q_heads = qcols.map(c =>
-			`<th class="text-right dob-qtr-head">${esc(c.label)}</th>`).join('');
-		const m_heads = mcols.map(c =>
-			`<th class="text-right dob-mo-head">${esc(c.label)}</th>`).join('');
-
-		const rows  = item.rows.map(r => this.render_row(r, qcols, mcols, false)).join('');
-		const total = this.render_row(item.total, qcols, mcols, true);
-
-		return `
-		<div class="dob-item-block">
-			<div class="dob-item-heading">
-				${esc(item.item_name || item.item_code)}
-				<span class="dob-badge">${esc(item.item_code)}</span>
-			</div>
-			<div class="dob-card">
-				<div style="overflow-x:auto;">
-					<table class="table dob-table" style="min-width:740px;">
-						<thead>
-							<tr>
-								<th>OMC / Customer</th>
-								${q_heads}
-								${m_heads}
-								<th class="text-right">Order Qty</th>
-								<th class="text-right">Supplied Qty</th>
-								<th class="text-center">UOM</th>
-								<th class="text-right">Pending Qty</th>
-								<th>P.O. No</th>
-								<th>P.O. Date</th>
-							</tr>
-						</thead>
-						<tbody>${rows}${total}</tbody>
-					</table>
-				</div>
-			</div>
-		</div>`;
-	}
-
-	render_row(row, qcols, mcols, is_total) {
-		const label_html = is_total ? '<strong>Total</strong>' : esc(row.customer_name || '');
-		const q_cells    = qcols.map(c => this.val_cell(row[c.fieldname], 'q')).join('');
-		const m_cells    = mcols.map(c => this.val_cell(row[c.fieldname], 'm')).join('');
-		const pending    = parseFloat(row.pending_qty) || 0;
-		const pend_cls   = pending > 0 ? 'dob-pending-pos' : 'dob-pending-zero';
-		const uom        = is_total ? '' : esc(row.uom || '');
-
-		return `
-		<tr${is_total ? ' class="dob-total-row"' : ''}>
-			<td>${label_html}</td>
-			${q_cells}
-			${m_cells}
-			<td class="text-right dob-num">${raw_num(row.order_qty)}</td>
-			<td class="text-right dob-supplied dob-num">${raw_num(row.supplied_qty)}</td>
-			<td class="text-center dob-uom">${uom}</td>
-			<td class="text-right dob-num ${pend_cls}">${raw_num(pending)}</td>
-			<td>${is_total ? '' : esc(row.po_no || '')}</td>
-			<td>${is_total ? '' : (row.po_date ? frappe.datetime.str_to_user(row.po_date) : '')}</td>
+	/* ── MAIN TABLE HEADERS (3 columns: Ordered / Supplied / Pending) ── */
+	_th(first_label) {
+		return `<tr>
+			<th class="dob3-rowlabel" style="text-align:left;background:#e8eef4 !important;border-right:3px solid #8fa8bb !important;">${first_label}</th>
+			<th class="dob3-col-ord">Ordered</th>
+			<th class="dob3-col-supt">Supplied</th>
+			<th class="dob3-col-pend">Pending</th>
 		</tr>`;
 	}
 
-	val_cell(value, type) {
-		if (value === '' || value === null || value === undefined)
-			return `<td class="text-right dob-dash">—</td>`;
-		const num = parseFloat(value) || 0;
-		if (num === 0)
-			return `<td class="text-right dob-num" style="color:#9AA3AF;">0.000</td>`;
-		const cls = type === 'q' ? 'dob-qtr-cell' : 'dob-mo-cell';
-		return `<td class="text-right dob-num ${cls}">${raw_num(value)}</td>`;
-	}
-
-	render_summary(data, as_on) {
-		if (!data || !data.length) {
-			this.$summary_title.text("Today's Stock & Dispatch");
-			this.$summary_wrap.html(`<div class="dob-empty" style="padding:20px;">No stock/dispatch data found.</div>`);
+	_render_main() {
+		if (!this.data || !this.data.rows) return;
+		const all_rows = this.data.rows;
+		if (!all_rows.length) {
+			this.$main.html(`<div class="dob3-empty"><i class="fa fa-inbox"></i>No dispatch orders found.</div>`);
 			return;
 		}
-		const date_lbl = (data[0] && data[0].as_on) || as_on || frappe.datetime.get_today();
-		this.$summary_title.html(
-			`Today&#39;s Stock &amp; Dispatch
-			<span style="font-weight:500;font-size:12px;color:#8796A8;text-transform:none;letter-spacing:0;">
-				&nbsp;as on ${frappe.datetime.str_to_user(date_lbl)}
-			</span>`
-		);
+		if (this.view_mode === 'quarter') {
+			this._render_quarter_mode(all_rows);
+		} else {
+			this._render_item_mode(all_rows);
+		}
+	}
 
-		const rows = data.map(d => {
-			const is_t    = d.item_code === 'TOTAL';
-			const lbl     = is_t ? '<strong>Total</strong>' : esc(d.item_name || d.item_code);
-			const b       = parseFloat(d.balance_qty) || 0;
-			const bal_cls = b < 0 ? 'dob-bal-neg' : b > 0 ? 'dob-bal-pos' : 'dob-bal-zero';
-			return `
-			<tr${is_t ? ' class="dob-total-row"' : ''}>
-				<td>${lbl}</td>
-				<td class="text-right dob-num">${raw_num(d.stock_qty)}</td>
-				<td class="text-right dob-num">${raw_num(d.dispatch_qty)}</td>
-				<td class="text-right dob-num ${bal_cls}">${raw_num(b)}</td>
+	_visible_quarters() {
+		const quarters = this.data.quarters || [];
+		return this.selected_quarter
+			? quarters.filter(q => q.quarter === this.selected_quarter)
+			: quarters;
+	}
+
+	/* ═══════════════════════════════════════════════════
+	   QUARTER MODE  — 3-level inline drill
+	   Quarter block (click header to expand/collapse)
+	     └─ Item rows (click to expand Customer panel)
+	          └─ Customer rows (click to open PO dialog)
+	═══════════════════════════════════════════════════ */
+	_render_quarter_mode(all_rows) {
+		const quarters = this._visible_quarters();
+		const $wrap = $(`<div></div>`);
+
+		if (!quarters.length) {
+			$wrap.html(`<div class="dob3-empty"><i class="fa fa-inbox"></i>No quarters found.</div>`);
+			this.$main.empty().append($wrap);
+			return;
+		}
+
+		for (const q of quarters) {
+			const q_rows = all_rows.filter(r => r.po_date && r.po_date >= q.start_date && r.po_date <= q.effective_end);
+			if (!q_rows.length && !this.show_zero) continue;
+			this._render_quarter_block($wrap, q, q_rows);
+		}
+
+		this.$main.empty().append($wrap);
+	}
+
+	_render_quarter_block($wrap, q, q_rows) {
+		const agg = _agg(q_rows);
+		const expanded = this.expanded_quarters.has(q.quarter); // NEW
+
+		const $block = $(`<div class="dob3-qblock"></div>`).appendTo($wrap);
+
+		// Quarter header bar — now clickable to expand/collapse
+		const $hdr = $(`<div class="dob3-qhdr${expanded ? ' dob3-qhdr-open' : ''}">
+			<span class="dob3-qchev">›</span>
+			<i class="fa fa-calendar" style="opacity:.7;"></i>
+			<span>${_esc(q.quarter)}</span>
+			<span style="font-size:11px;opacity:.7;">${q.start_date} → ${q.effective_end}</span>
+			<div class="dob3-qhdr-right">
+				<span class="dob3-badge dob3-badge-hint">Ordered: ${_n(agg.order)}</span>
+				<span class="dob3-badge dob3-badge-sort">Supplied: ${_n(agg.supplied)}</span>
+				<span class="dob3-badge dob3-badge-pend" style="background:#fff0f0;color:#a02020;border:1px solid #f0b4b4;">Pending: ${_n(agg.pending)}</span>
+			</div>
+		</div>`).appendTo($block);
+
+		$hdr.on('click', () => {
+			if (this.expanded_quarters.has(q.quarter)) {
+				this.expanded_quarters.delete(q.quarter);
+			} else {
+				this.expanded_quarters.add(q.quarter);
+			}
+			this._render_main();
+		});
+
+		if (!expanded) return; // collapsed — don't render the items table
+
+		// Item table inside this quarter
+		const item_map = _group(q_rows, r => r.item_code);
+		const item_entries = Object.entries(item_map).map(([ic, i_rows]) => ({
+			key: ic, label: i_rows[0].item_name || ic, rows: i_rows, agg: _agg(i_rows),
+		}));
+		const visible_items = this.show_zero ? item_entries : item_entries.filter(e => e.agg.pending > 0);
+
+		if (!visible_items.length) {
+			$(`<div class="dob3-empty" style="padding:18px;"><i class="fa fa-inbox"></i>No items.</div>`).appendTo($block);
+			return;
+		}
+
+		const $tbl_wrap = $(`<div class="dob3-table-wrap" style="border-radius:0;border:none;border-top:2px solid #aab8c3;"></div>`).appendTo($block);
+		const $tbody = $(`<table class="dob3-sumtbl"><thead>${this._th('Item')}</thead><tbody></tbody></table>`).appendTo($tbl_wrap).find('tbody');
+
+		const q_key = q.quarter;
+		visible_items.forEach(e => {
+			const a   = e.agg;
+			const epc = _pend_cls(a.pending);
+			const composite_key = q_key + '|||' + e.key;
+			const is_active = this.active_key === composite_key;
+
+			const $row = $(`<tr class="dob3-itemrow${is_active ? ' dob3-itemrow-active' : ''}" data-ckey="${_esc(composite_key)}">
+				<td class="dob3-rowlabel">
+					${_esc(e.label)}
+					<div class="dob3-sub">${_esc(e.key)}</div>
+					<span class="dob3-chev">›</span>
+				</td>
+				<td class="dob3-col-ord">${_n(a.order)}</td>
+				<td class="dob3-col-supt">${_n(a.supplied)}</td>
+				<td class="dob3-col-pend ${epc}">${_n(a.pending)}</td>
+			</tr>`).appendTo($tbody);
+
+			// If this item is active, render customer panel as a full-width row below
+			if (is_active) {
+				const $panel_row = $(`<tr><td colspan="4" style="padding:0;border-top:none;"></td></tr>`).appendTo($tbody);
+				this._render_customer_panel($panel_row.find('td'), e.rows, q_key, e.label);
+			}
+
+			$row.on('click', () => {
+				this.active_key = (this.active_key === composite_key) ? null : composite_key;
+				this._render_main();
+			});
+		});
+
+		// Quarter total row
+		const ta = _agg(visible_items.map(e => e.rows).flat());
+		$(`<tr class="dob3-totalrow">
+			<td class="dob3-rowlabel">Total</td>
+			<td class="dob3-col-ord">${_n(ta.order)}</td>
+			<td class="dob3-col-supt">${_n(ta.supplied)}</td>
+			<td class="dob3-col-pend ${_pend_cls(ta.pending)}">${_n(ta.pending)}</td>
+		</tr>`).appendTo($tbody);
+	}
+
+	_render_customer_panel($container, item_rows, q_label, item_label) {
+		const cust_map = _group(item_rows, r => r.customer_name);
+		const cust_entries = Object.entries(cust_map).map(([cust, c_rows]) => ({
+			key: cust, label: cust, rows: c_rows, agg: _agg(c_rows),
+		}));
+		const visible = this.show_zero ? cust_entries : cust_entries.filter(e => e.agg.pending > 0);
+
+		const $card = $(`<div class="dob3-card dob3-custpanel" style="margin:0;border-radius:0;box-shadow:none;border-left:5px solid #27AE60;border-right:none;border-bottom:none;"></div>`).appendTo($container);
+
+		if (!visible.length) {
+			$card.html(`<div class="dob3-empty" style="padding:14px;"><i class="fa fa-inbox"></i>No customers.</div>`);
+			return;
+		}
+
+		// FIX: build the title block and the table-wrap as two SEPARATE appends
+		// directly onto $card, instead of creating both as sibling root nodes in
+		// one jQuery-parsed multi-root string and then trying to `.find()` one
+		// out of the other. `.find()` only searches descendants — siblings
+		// inside the same parsed collection are never descendants of each other —
+		// so the previous code's `$tbl_wrap` was always empty and the table was
+		// being appended to nothing. That's why the customer panel never showed.
+		$(`<div style="padding:12px 16px 4px;">
+			<div class="dob3-card-title" style="font-size:13px;margin-bottom:8px;">
+				<i class="fa fa-users" style="color:#27AE60;"></i>
+				Customer Wise — ${_esc(item_label)}
+				<span class="dob3-badge dob3-badge-hint" style="font-size:10px;">Click customer for PO detail</span>
+			</div>
+		</div>`).appendTo($card);
+
+		const $tbl_wrap = $(`<div class="dob3-table-wrap" style="margin:0 16px 14px;"></div>`).appendTo($card);
+		const $tbody = $(`<table class="dob3-sumtbl"><thead>${this._th('Customer')}</thead><tbody></tbody></table>`)
+			.appendTo($tbl_wrap).find('tbody');
+
+		visible.forEach(e => {
+			const a  = e.agg;
+			const pc = _pend_cls(a.pending);
+			$(`<tr class="dob3-custrow">
+				<td class="dob3-rowlabel">${_esc(e.label)}<span class="dob3-chev">›</span></td>
+				<td class="dob3-col-ord">${_n(a.order)}</td>
+				<td class="dob3-col-supt">${_n(a.supplied)}</td>
+				<td class="dob3-col-pend ${pc}">${_n(a.pending)}</td>
+			</tr>`).appendTo($tbody).on('click', () => {
+				this._open_customer_po_dialog(item_label, e.label, e.rows);
+			});
+		});
+
+		const ta = _agg(visible.map(e => e.rows).flat());
+		$(`<tr class="dob3-totalrow">
+			<td class="dob3-rowlabel">Total</td>
+			<td class="dob3-col-ord">${_n(ta.order)}</td>
+			<td class="dob3-col-supt">${_n(ta.supplied)}</td>
+			<td class="dob3-col-pend ${_pend_cls(ta.pending)}">${_n(ta.pending)}</td>
+		</tr>`).appendTo($tbody);
+	}
+
+	/* ═══════════════════════════════════════════════════
+	   ITEM MODE  — same as before:
+	   Item summary → Customer panel → PO dialog
+	═══════════════════════════════════════════════════ */
+	_render_item_mode(all_rows) {
+		const filter_rows = this.selected_quarter
+			? (() => {
+				const q = (this.data.quarters || []).find(x => x.quarter === this.selected_quarter);
+				return q ? all_rows.filter(r => r.po_date && r.po_date >= q.start_date && r.po_date <= q.effective_end) : all_rows;
+			  })()
+			: all_rows;
+
+		const item_entries = Object.entries(_group(filter_rows, r => r.item_code)).map(([ic, i_rows]) => ({
+			key: ic, label: i_rows[0].item_name || ic, sub: ic, rows: i_rows, agg: _agg(i_rows),
+		}));
+		const visible = this.show_zero ? item_entries : item_entries.filter(e => e.agg.pending > 0);
+
+		const $wrap = $(`<div></div>`);
+		if (!visible.length) {
+			$wrap.html(`<div class="dob3-empty"><i class="fa fa-inbox"></i>No pending balance.</div>`);
+			this.$main.empty().append($wrap);
+			return;
+		}
+
+		this._render_item_summary_table($wrap, visible);
+		const active = visible.find(e => e.key === this.active_key);
+		if (active) this._render_item_customer_panel($wrap, active);
+		this.$main.empty().append($wrap);
+	}
+
+	_render_item_summary_table($wrap, entries) {
+		let totals = { order:0, supplied:0, pending:0 };
+		let body = '';
+
+		entries.forEach(e => {
+			const a = e.agg;
+			totals.order    += a.order;
+			totals.supplied += a.supplied;
+			totals.pending  += a.pending;
+			const pc        = _pend_cls(a.pending);
+			const is_active = this.active_key === e.key;
+			body += `<tr class="dob3-sumrow${is_active ? ' dob3-sumrow-active' : ''}" data-key="${_esc(e.key)}">
+				<td class="dob3-rowlabel">
+					${_esc(e.label)}
+					<div class="dob3-sub">${_esc(e.sub)}</div>
+					<span class="dob3-chev">›</span>
+				</td>
+				<td class="dob3-col-ord">${_n(a.order)}</td>
+				<td class="dob3-col-supt">${_n(a.supplied)}</td>
+				<td class="dob3-col-pend ${pc}">${_n(a.pending)}</td>
+			</tr>`;
+		});
+
+		body += `<tr class="dob3-totalrow">
+			<td class="dob3-rowlabel">Total</td>
+			<td class="dob3-col-ord">${_n(totals.order)}</td>
+			<td class="dob3-col-supt">${_n(totals.supplied)}</td>
+			<td class="dob3-col-pend ${_pend_cls(totals.pending)}">${_n(totals.pending)}</td>
+		</tr>`;
+
+		const $card = $(`
+			<div class="dob3-card">
+				<div class="dob3-card-title">
+					Item Summary
+					<span class="dob3-badge dob3-badge-hint">Click a row for customer detail</span>
+					<span class="dob3-badge dob3-badge-sort">Qty in base UOM</span>
+				</div>
+				<div class="dob3-table-wrap">
+					<table class="dob3-sumtbl">
+						<thead>${this._th('Item')}</thead>
+						<tbody>${body}</tbody>
+					</table>
+				</div>
+			</div>`).appendTo($wrap);
+
+		$card.find('tr.dob3-sumrow').on('click', ev => {
+			const key = $(ev.currentTarget).data('key');
+			this.active_key = (this.active_key === key) ? null : String(key);
+			this._render_main();
+		});
+	}
+
+	_render_item_customer_panel($wrap, active_entry) {
+		const cust_entries = Object.entries(_group(active_entry.rows, r => r.customer_name)).map(([cust, c_rows]) => ({
+			key: cust, label: cust, rows: c_rows, agg: _agg(c_rows),
+		}));
+		const visible = this.show_zero ? cust_entries : cust_entries.filter(e => e.agg.pending > 0);
+
+		const $card = $(`<div class="dob3-card dob3-panel"></div>`).appendTo($wrap);
+		const title = `${_esc(active_entry.label)} — Customer Wise Detail`;
+
+		if (!visible.length) {
+			$card.html(`<div class="dob3-card-title">${title}</div>
+				<div class="dob3-empty" style="padding:20px;"><i class="fa fa-inbox"></i>No customers.</div>`);
+			return;
+		}
+
+		let body = '';
+		visible.forEach(e => {
+			const a = e.agg, pc = _pend_cls(a.pending);
+			body += `<tr class="dob3-subrow" data-key="${_esc(e.key)}">
+				<td class="dob3-rowlabel">${_esc(e.label)}<span class="dob3-chev">›</span></td>
+				<td class="dob3-col-ord">${_n(a.order)}</td>
+				<td class="dob3-col-supt">${_n(a.supplied)}</td>
+				<td class="dob3-col-pend ${pc}">${_n(a.pending)}</td>
+			</tr>`;
+		});
+
+		$card.html(`
+			<div class="dob3-card-title">
+				${title}
+				<span class="dob3-badge dob3-badge-hint">Click a customer for PO detail</span>
+			</div>
+			<div class="dob3-table-wrap">
+				<table class="dob3-sumtbl">
+					<thead>${this._th('Customer')}</thead>
+					<tbody>${body}</tbody>
+				</table>
+			</div>`);
+
+		$card.find('tr.dob3-subrow').on('click', ev => {
+			const key = $(ev.currentTarget).data('key');
+			const sub = visible.find(e => String(e.key) === String(key));
+			if (sub) this._open_customer_po_dialog(active_entry.label, sub.label, sub.rows);
+		});
+	}
+
+	_open_customer_po_dialog(item_label, customer_name, rows) {
+		const dialog = new frappe.ui.Dialog({
+			title: `${item_label} — ${customer_name} — PO Wise Detail`,
+			size:  'extra-large',
+			fields: [{ fieldtype:'HTML', fieldname:'dob3_po_html' }],
+		});
+		dialog.$wrapper.addClass('dob3-item-dialog');
+		dialog.fields_dict.dob3_po_html.$wrapper.html(
+			`<div class="dob3-dialog-pad">${this._po_table(rows)}</div>`
+		);
+		dialog.show();
+	}
+
+	_po_table(rows) {
+		/* Group by PO No → aggregate per PO */
+		const po_map = _group(rows, r => r.po_no || '—');
+		const po_entries = Object.entries(po_map).map(([po_no, po_rows]) => ({
+			po_no, rows: po_rows, agg: _agg(po_rows),
+			po_date: po_rows[0].po_date,
+			plant:   po_rows[0].plant,
+		})).sort((a, b) => (b.po_date||'').localeCompare(a.po_date||''));
+
+		let h = `<div class="table-responsive"><table class="dob3-tbl">
+		<thead><tr>
+			<th class="tl">P.O. No</th>
+			<th class="tl">P.O. Date</th>
+			<th class="tl">Plant</th>
+			<th>Order Qty</th>
+			<th>Supplied Qty</th>
+			<th>Pending Qty</th>
+			<th class="tl">Dispatch Orders</th>
+		</tr></thead><tbody>`;
+
+		for (const pe of po_entries) {
+			const a = pe.agg;
+			const pc = _pend_cls(a.pending).replace('dob3-val-pend-', 'cv-pend-');
+			const do_links = pe.rows.map(r =>
+				`<a href="/app/dispatch-order/${_esc(r.dispatch_order)}" target="_blank">${_esc(r.dispatch_order)}</a>`
+			).join(', ');
+			h += `<tr>
+				<td class="tl"><strong>${_esc(pe.po_no)}</strong></td>
+				<td class="tl">${pe.po_date ? frappe.datetime.str_to_user(pe.po_date) : ''}</td>
+				<td class="tl">${_esc(pe.plant)}</td>
+				<td>${_n(a.order)}</td>
+				<td class="cv-sup">${_n(a.supplied)}</td>
+				<td class="${pc}">${_n(a.pending)}</td>
+				<td class="tl" style="font-size:11px;">${do_links}</td>
+			</tr>`;
+		}
+
+		const ta = _agg(rows);
+		const tc = _pend_cls(ta.pending).replace('dob3-val-pend-', 'cv-pend-');
+		h += `<tr class="dob3-total">
+			<td colspan="3" class="tl"><strong>Total</strong></td>
+			<td>${_n(ta.order)}</td>
+			<td class="cv-sup">${_n(ta.supplied)}</td>
+			<td class="${tc}">${_n(ta.pending)}</td>
+			<td></td>
+		</tr>`;
+		return h + `</tbody></table></div>`;
+	}
+
+	_open_order_dialog(title, rows) {
+		const dialog = new frappe.ui.Dialog({
+			title: `${title} — Order Wise Detail`,
+			size:  'extra-large',
+			fields: [{ fieldtype:'HTML', fieldname:'dob3_order_html' }],
+		});
+		dialog.$wrapper.addClass('dob3-item-dialog');
+		dialog.fields_dict.dob3_order_html.$wrapper.html(
+			`<div class="dob3-dialog-pad">${this._orders_table(rows)}</div>`
+		);
+		dialog.show();
+	}
+
+	_orders_table(rows) {
+		const sorted = [...rows].sort((a, b) => {
+			if (a.customer_name !== b.customer_name) return (a.customer_name||'').localeCompare(b.customer_name||'');
+			return (b.po_date||'').localeCompare(a.po_date||'');
+		});
+
+		let h = `<div class="table-responsive"><table class="dob3-tbl">
+		<thead><tr>
+			<th class="tl">Customer</th>
+			<th class="tl">Dispatch Order</th>
+			<th class="tl">P.O. No</th>
+			<th class="tl">P.O. Date</th>
+			<th>Order Qty</th>
+			<th>Supplied Qty</th>
+			<th>Pending Qty</th>
+			<th class="tl">Plant</th>
+			<th>UOM</th>
+		</tr></thead><tbody>`;
+
+		for (const r of sorted) {
+			const p = r.pending_qty;
+			const pc = p > 0 ? 'cv-pend-pos' : p < 0 ? 'cv-pend-neg' : 'cv-pend-zero';
+			h += `<tr>
+				<td class="tl">${_esc(r.customer_name)}</td>
+				<td class="tl"><a href="/app/dispatch-order/${_esc(r.dispatch_order)}" target="_blank">${_esc(r.dispatch_order)}</a></td>
+				<td class="tl">${_esc(r.po_no)}</td>
+				<td class="tl">${r.po_date ? frappe.datetime.str_to_user(r.po_date) : ''}</td>
+				<td>${_n(r.order_qty)}</td>
+				<td class="cv-sup">${_n(r.supplied_qty)}</td>
+				<td class="${pc}">${_n(p)}</td>
+				<td class="tl">${_esc(r.plant)}</td>
+				<td class="cv-uom">${_esc(r.uom)}</td>
+			</tr>`;
+		}
+
+		const ta = _agg(rows);
+		const tc = _pend_cls(ta.pending).replace('dob3-val-pend-', 'cv-pend-');
+		h += `<tr class="dob3-total">
+			<td colspan="4" class="tl"><strong>Total</strong></td>
+			<td>${_n(ta.order)}</td>
+			<td class="cv-sup">${_n(ta.supplied)}</td>
+			<td class="${tc}">${_n(ta.pending)}</td>
+			<td></td><td></td>
+		</tr>`;
+		return h + `</tbody></table></div>`;
+	}
+
+	_render_summary(data, as_on) {
+		if (!data || !data.length) {
+			this.$sec_sum.text("Today's Stock & Dispatch");
+			this.$summary.html(`<div class="dob3-empty" style="padding:16px;">No data.</div>`);
+			return;
+		}
+		const dl = (data[0] && data[0].as_on) || as_on;
+		this.$sec_sum.html(`Today&#39;s Stock &amp; Dispatch
+			<span style="font-weight:500;font-size:11px;color:#8796A8;text-transform:none;letter-spacing:0;">
+				— ${frappe.datetime.str_to_user(dl)}
+			</span>`);
+
+		const rows_html = data.map(d => {
+			const is_t = d.item_code === 'TOTAL';
+			const b    = parseFloat(d.balance_qty) || 0;
+			const bc   = b < 0 ? 'cv-bal-neg' : b > 0 ? 'cv-bal-pos' : 'cv-bal-zero';
+			return `<tr${is_t ? ' class="dob3-total"' : ''}>
+				<td>${is_t ? '<strong>Total</strong>' : _esc(d.item_name || d.item_code)}</td>
+				<td>${_n(d.stock_qty)}</td>
+				<td>${_n(d.dispatch_qty)}</td>
+				<td class="${bc}">${_n(b)}</td>
 			</tr>`;
 		}).join('');
 
-		this.$summary_wrap.html(`
-			<div class="dob-item-block" style="max-width:2020px;">
-				<table class="table dob-table">
-					<thead>
-						<tr>
-							<th>Feed Stock</th>
-							<th class="text-right">Stock</th>
-							<th class="text-right">Dispatch</th>
-							<th class="text-right">Balance</th>
-						</tr>
-					</thead>
-					<tbody>${rows}</tbody>
+		this.$summary.html(`
+			<div class="dob3-card" style="max-width:520px;">
+				<table class="dob3-sum-tbl">
+					<thead><tr>
+						<th style="text-align:left">Item</th>
+						<th>Stock</th><th>Dispatched Today</th><th>Balance</th>
+					</tr></thead>
+					<tbody>${rows_html}</tbody>
 				</table>
 			</div>`);
 	}
 
-	async export_excel() {
-		if (!this.last_data) { frappe.msgprint('Load data first.'); return; }
+	async _export_excel() {
+		if (!this.data) { frappe.msgprint('Load data first.'); return; }
 		frappe.show_alert({ message:'Preparing Excel…', indicator:'blue' });
-		try { await this.load_excel_libs(); }
-		catch(e) { frappe.msgprint('Could not load Excel libraries. Check internet connection.'); return; }
+		try { await _load_script('https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js'); }
+		catch(e) { frappe.msgprint('Could not load ExcelJS.'); return; }
 
-		const ExcelJS = window.ExcelJS;
-		const wb = new ExcelJS.Workbook();
-		wb.creator = 'Dispatch Order Balance';
-		wb.created = new Date();
-
-		const { user, timestamp } = this.get_user_meta();
-		const { item_tables: it={}, today_summary: ts=[], as_on } = this.last_data;
-		const qcols = it.quarter_columns || [];
-		const mcols = it.month_columns   || [];
-		const items = it.items           || [];
-
+		const wb = new window.ExcelJS.Workbook();
 		const ws = wb.addWorksheet('Dispatch Balance');
+		const { rows, as_on } = this.data;
+		const THIN = { style:'thin', color:{ argb:'FFC8D4E4' } };
+		const B  = { top:THIN, left:THIN, bottom:THIN, right:THIN };
+		const Hf = { type:'pattern', pattern:'solid', fgColor:{ argb:'FFEEF2FA' } };
+		const Pf = { type:'pattern', pattern:'solid', fgColor:{ argb:'FFFFF0F0' } };
+		const Sf = { type:'pattern', pattern:'solid', fgColor:{ argb:'FFEBF3FF' } };
 
-		const FIXED_AFTER  = ['Order Qty','Supplied Qty','UOM','Pending Qty','P.O. No','P.O. Date'];
-		const ncols        = Math.max(1 + qcols.length + mcols.length + FIXED_AFTER.length, 4);
-
-		const HEADER_FILL   = { type:'pattern', pattern:'solid', fgColor:{ argb:'FFEEF2FA' } };
-		const Q_FILL        = { type:'pattern', pattern:'solid', fgColor:{ argb:'FFD0E4F8' } };
-		const M_FILL        = { type:'pattern', pattern:'solid', fgColor:{ argb:'FFDBF0FF' } };
-		const TOTAL_FILL    = { type:'pattern', pattern:'solid', fgColor:{ argb:'FFEEF2FA' } };
-		const ITEM_BAR_FILL = { type:'pattern', pattern:'solid', fgColor:{ argb:'FF0F2750' } };
-		const PEND_FILL     = { type:'pattern', pattern:'solid', fgColor:{ argb:'FFFFF0F0' } };
-		const THIN   = { style:'thin', color:{ argb:'FFC8D4E4' } };
-		const BORDER = { top:THIN, left:THIN, bottom:THIN, right:THIN };
-		const set_borders = (row, count) => { for (let c=1; c<=count; c++) row.getCell(c).border = BORDER; };
+		const hdrs = ['Item','Item Code','Plant','Customer','Dispatch Order',
+			'P.O. No','P.O. Date','Order Qty','Supplied Qty','Pending Qty','UOM'];
 
 		let r = 1;
-		const title_row = ws.getRow(r);
-		title_row.getCell(1).value = `Dispatch Order Balance — As on: ${as_on || ''}`;
-		title_row.getCell(1).font  = { bold:true, size:13, color:{ argb:'FF0F1B3C' } };
-		title_row.getCell(1).note  = `Generated by: ${user}\n${timestamp}`;
-		ws.mergeCells(r, 1, r, ncols);
+		ws.getRow(r).getCell(1).value = `Dispatch Order Balance — As on: ${as_on}`;
+		ws.getRow(r).getCell(1).font  = { bold:true, size:13 };
+		ws.mergeCells(r, 1, r, hdrs.length);
 		r += 2;
 
-		items.forEach(item => {
-			const head_bar = ws.getRow(r);
-			head_bar.getCell(1).value = `${item.item_name || item.item_code}  (${item.item_code})`;
-			ws.mergeCells(r, 1, r, ncols);
-			for (let c = 1; c <= ncols; c++) {
-				const cell = head_bar.getCell(c);
-				cell.fill = ITEM_BAR_FILL;
-				cell.font = { bold:true, size:11, color:{ argb:'FFEEF4FF' } };
-			}
-			head_bar.height = 20;
-			r += 1;
-
-			const col_labels = ['OMC / Customer', ...qcols.map(c=>c.label), ...mcols.map(c=>c.label), ...FIXED_AFTER];
-			const col_head = ws.getRow(r);
-			col_labels.forEach((label, i) => {
-				const cell = col_head.getCell(i + 1);
-				cell.value = label;
-				cell.font  = { bold:true, color:{ argb:'FF3A4A60' } };
-				cell.alignment = { horizontal: i === 0 ? 'left' : 'center', vertical:'middle' };
-				const is_q = i >= 1 && i <= qcols.length;
-				const is_m = i > qcols.length && i <= qcols.length + mcols.length;
-				cell.fill = is_q ? Q_FILL : is_m ? M_FILL : HEADER_FILL;
-			});
-			set_borders(col_head, ncols);
-			r += 1;
-
-			[...item.rows, item.total].forEach(rd => {
-				const is_t = rd.customer_name === 'TOTAL';
-				const xrow = ws.getRow(r);
-				let c = 1;
-				xrow.getCell(c++).value = is_t ? 'Total' : (rd.customer_name || '');
-				qcols.forEach(qc => xrow.getCell(c++).value = num_or_blank(rd[qc.fieldname]));
-				mcols.forEach(mc => xrow.getCell(c++).value = num_or_blank(rd[mc.fieldname]));
-				xrow.getCell(c++).value = num_or_blank(rd.order_qty);
-				xrow.getCell(c++).value = num_or_blank(rd.supplied_qty);
-				xrow.getCell(c++).value = is_t ? '' : (rd.uom || '');
-				const pend_cell = xrow.getCell(c++);
-				pend_cell.value = num_or_blank(rd.pending_qty);
-				xrow.getCell(c++).value = is_t ? '' : (rd.po_no || '');
-				xrow.getCell(c++).value = is_t ? '' : (rd.po_date ? frappe.datetime.str_to_user(rd.po_date) : '');
-
-				for (let cc = 1; cc <= ncols; cc++) {
-					const cell = xrow.getCell(cc);
-					if (typeof cell.value === 'number') cell.numFmt = '0.000';
-					if (is_t) { cell.font = { bold:true }; cell.fill = TOTAL_FILL; }
-				}
-				if ((parseFloat(rd.pending_qty) || 0) > 0) {
-					pend_cell.font = { bold:true, color:{ argb:'FFC0392B' } };
-					pend_cell.fill = PEND_FILL;
-				}
-				set_borders(xrow, ncols);
-				r += 1;
-			});
-			r += 1;
+		const hr = ws.getRow(r);
+		hdrs.forEach((h, i) => {
+			const c = hr.getCell(i+1);
+			c.value = h; c.font = { bold:true }; c.fill = Hf; c.border = B;
 		});
+		r += 1;
 
-		if (ts.length) {
-			const sum_head = ws.getRow(r);
-			sum_head.getCell(1).value = `TODAY'S STOCK & DISPATCH — ${ts[0].as_on || as_on || ''}`;
-			sum_head.getCell(1).font  = { bold:true, size:11, color:{ argb:'FF0F1B3C' } };
-			ws.mergeCells(r, 1, r, 4);
+		for (const row of rows) {
+			if (!this.show_zero && row.pending_qty <= 0) continue;
+			const xr = ws.getRow(r); let c = 1;
+			xr.getCell(c++).value = row.item_name;
+			xr.getCell(c++).value = row.item_code;
+			xr.getCell(c++).value = row.plant;
+			xr.getCell(c++).value = row.customer_name;
+			xr.getCell(c++).value = row.dispatch_order;
+			xr.getCell(c++).value = row.po_no;
+			xr.getCell(c++).value = row.po_date ? frappe.datetime.str_to_user(row.po_date) : '';
+			xr.getCell(c++).value = row.order_qty;
+			const sc = xr.getCell(c++); sc.value = row.supplied_qty; sc.fill = Sf;
+			const pc = xr.getCell(c++); pc.value = row.pending_qty;
+			if (row.pending_qty > 0) { pc.fill = Pf; pc.font = { bold:true, color:{ argb:'FFC0392B' } }; }
+			xr.getCell(c++).value = row.uom;
+			for (let cc = 1; cc <= hdrs.length; cc++) {
+				const cell = xr.getCell(cc);
+				if (typeof cell.value === 'number') cell.numFmt = '0.000';
+				cell.border = B;
+			}
 			r += 1;
-
-			const sum_col_head = ws.getRow(r);
-			['Feed Stock','Stock','Dispatch','Balance'].forEach((label, i) => {
-				const cell = sum_col_head.getCell(i + 1);
-				cell.value = label;
-				cell.font  = { bold:true, color:{ argb:'FF3A4A60' } };
-				cell.fill  = HEADER_FILL;
-				cell.alignment = { horizontal: i === 0 ? 'left' : 'center' };
-			});
-			set_borders(sum_col_head, 4);
-			r += 1;
-
-			ts.forEach(d => {
-				const is_t = d.item_code === 'TOTAL';
-				const xrow = ws.getRow(r);
-				xrow.getCell(1).value = is_t ? 'Total' : (d.item_name || d.item_code);
-				xrow.getCell(2).value = num_or_blank(d.stock_qty);
-				xrow.getCell(3).value = num_or_blank(d.dispatch_qty);
-				const bal_cell = xrow.getCell(4);
-				bal_cell.value = num_or_blank(d.balance_qty);
-				for (let cc = 1; cc <= 4; cc++) {
-					const cell = xrow.getCell(cc);
-					if (typeof cell.value === 'number') cell.numFmt = '0.000';
-					if (is_t) { cell.font = { bold:true }; cell.fill = TOTAL_FILL; }
-				}
-				const bal = parseFloat(d.balance_qty) || 0;
-				if (bal !== 0 && !is_t) {
-					bal_cell.font = { bold:true, color:{ argb: bal < 0 ? 'FFC0392B' : 'FF1E8449' } };
-				}
-				set_borders(xrow, 4);
-				r += 1;
-			});
 		}
 
-		ws.getColumn(1).width = 26;
-		for (let c = 2; c <= ncols; c++) ws.getColumn(c).width = 13;
-
-		const buffer = await wb.xlsx.writeBuffer();
-		this.download_blob(buffer,
-			'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+		ws.columns.forEach((col, i) => { col.width = i < 7 ? 18 : 13; });
+		const buf = await wb.xlsx.writeBuffer();
+		_download_blob(buf, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 			`dispatch-order-balance-${as_on}.xlsx`);
 		frappe.show_alert({ message:'Excel downloaded!', indicator:'green' });
 	}
 
-	async export_pdf() {
-		if (!this.last_data) { frappe.msgprint('Load data first.'); return; }
+	async _export_pdf() {
+		if (!this.data) { frappe.msgprint('Load data first.'); return; }
 		frappe.show_alert({ message:'Preparing PDF…', indicator:'blue' });
-		try { await this.load_pdf_libs(); }
-		catch(e) { frappe.msgprint('Could not load PDF libraries. Check internet connection.'); return; }
+		try {
+			await _load_script('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+			await _load_script('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js');
+		} catch(e) { frappe.msgprint('Could not load PDF libs.'); return; }
 
-		const { jsPDF }  = window.jspdf;
-		const doc        = new jsPDF({ orientation:'landscape', unit:'pt', format:'a4' });
-		const { item_tables:it={}, today_summary:ts=[], as_on } = this.last_data;
-		const qcols = it.quarter_columns || [];
-		const mcols = it.month_columns   || [];
-		const items = it.items           || [];
-		const { user, timestamp } = this.get_user_meta();
+		const { jsPDF } = window.jspdf;
+		const doc = new jsPDF({ orientation:'landscape', unit:'pt', format:'a4' });
+		const { rows, as_on } = this.data;
+		const PW = doc.internal.pageSize.getWidth();
+		const PH = doc.internal.pageSize.getHeight();
+		const M = 26, FH = 22;
+		let curY = M;
 
-		const PAGE_W = doc.internal.pageSize.getWidth();
-		const PAGE_H = doc.internal.pageSize.getHeight();
-		const MARGIN = 28;
-		const ITEM_BAR_H = 17;
-		const FOOTER_H   = 26;
-		let curY = MARGIN;
+		doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(15,27,60);
+		doc.text(`Dispatch Order Balance — As on: ${as_on}`, M, curY+10); curY += 22;
 
-		const fv = this.get_filter_values();
-		const fp = [];
-		if (fv.company)   fp.push(`Company: ${fv.company}`);
-		if (fv.plant)     fp.push(`Plant: ${fv.plant}`);
-		if (fv.customer)  fp.push(`Customer: ${fv.customer}`);
-		if (fv.po_no)     fp.push(`P.O. No: ${fv.po_no}`);
-		if (fv.item_code) fp.push(`Item: ${fv.item_code}`);
-		if (fv.show_zero_pending) fp.push(`Show Zero Pending: Yes`);
+		const heads = ['Customer','Dispatch Order','P.O. No','P.O. Date','Order Qty','Supplied Qty','Pending Qty','UOM'];
 
-		doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(15,27,60);
-		doc.text(`Dispatch Order Balance  —  As on: ${as_on||''}`, MARGIN, curY);
-		curY += 16;
-		if (fp.length) {
-			doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(100,110,120);
-			doc.text(`Filters: ${fp.join('   |   ')}`, MARGIN, curY);
-			curY += 12;
-		}
-		curY += 8;
+		for (const [ic, i_rows] of Object.entries(_group(rows, r => r.item_code))) {
+			const ia = _agg(i_rows);
+			if (!this.show_zero && ia.pending <= 0) continue;
+			if (curY + 40 > PH - FH) { doc.addPage(); curY = M; }
 
-		const draw_item_bar = (y, item) => {
-			doc.setFont('helvetica','bold'); doc.setFontSize(10);
-			doc.setFillColor(15, 39, 80);
-			doc.rect(MARGIN, y, PAGE_W - MARGIN*2, ITEM_BAR_H, 'F');
-			doc.setTextColor(220,235,255);
-			doc.text(`${item.item_name||item.item_code}  (${item.item_code})`, MARGIN+7, y+11.5);
-			doc.setTextColor(0,0,0);
-		};
+			doc.setFillColor(15,39,80); doc.rect(M, curY, PW-M*2, 15,'F');
+			doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(220,235,255);
+			doc.text(`${i_rows[0].item_name}  (${ic})`, M+6, curY+10); curY += 18;
 
-		const COL_OMC      = 0;
-		const COL_Q_START  = 1;
-		const COL_Q_END    = COL_Q_START + qcols.length - 1;
-		const COL_M_START  = COL_Q_START + qcols.length;
-		const COL_M_END    = COL_M_START + mcols.length - 1;
-		const COL_ORDER    = COL_M_START + mcols.length;
-		const COL_SUPPLIED = COL_ORDER + 1;
-		const COL_UOM      = COL_SUPPLIED + 1;
-		const COL_PENDING  = COL_UOM + 1;
-		const COL_PO_NO    = COL_PENDING + 1;
-		const COL_PO_DATE  = COL_PO_NO + 1;
+			const body = i_rows
+				.filter(r => this.show_zero || r.pending_qty > 0)
+				.map(r => [r.customer_name, r.dispatch_order, r.po_no,
+					r.po_date ? frappe.datetime.str_to_user(r.po_date) : '',
+					_n(r.order_qty), _n(r.supplied_qty), _n(r.pending_qty), r.uom]);
+			if (!body.length) continue;
 
-		const head_cols = [
-			'OMC / Customer',
-			...qcols.map(c=>c.label),
-			...mcols.map(c=>c.label),
-			'Order Qty','Supplied Qty','UOM','Pending Qty','P.O. No','P.O. Date',
-		];
-
-		for (const item of items) {
-			if (curY + 40 > PAGE_H) { doc.addPage(); curY = MARGIN; }
-
-			const table_start_page = doc.internal.getNumberOfPages();
-
-			draw_item_bar(curY, item);
-			curY += 19;
-
-			const body = [...item.rows, item.total].map(r => {
-				const is_t = r.customer_name === 'TOTAL';
-				return [
-					is_t ? 'Total' : (r.customer_name||''),
-					...qcols.map(c => raw_num(r[c.fieldname])),
-					...mcols.map(c => raw_num(r[c.fieldname])),
-					raw_num(r.order_qty),
-					raw_num(r.supplied_qty),
-					is_t ? '' : (r.uom||''),
-					raw_num(r.pending_qty),
-					is_t ? '' : (r.po_no||''),
-					is_t ? '' : (r.po_date ? frappe.datetime.str_to_user(r.po_date) : ''),
-				];
-			});
+			const ta = _agg(i_rows.filter(r => this.show_zero || r.pending_qty > 0));
+			body.push(['Total','','','' , _n(ta.order), _n(ta.supplied), _n(ta.pending), '']);
 
 			doc.autoTable({
-				head:  [head_cols],
-				body,
-				startY: curY,
-				margin: { left:MARGIN, right:MARGIN, top: MARGIN + 19 + 8, bottom: MARGIN + FOOTER_H },
-				styles: { fontSize:8, cellPadding:3.5, lineColor:[200,210,225], lineWidth:0.3,
-					textColor:[30,40,55], font:'helvetica' },
-				headStyles: { fillColor:[238,242,250], textColor:[35,55,90],
-					fontStyle:'bold', fontSize:7.5, halign:'center' },
-				columnStyles: {
-					[COL_OMC]:      { cellWidth:82, halign:'left' },
-					[COL_ORDER]:    { halign:'right' },
-					[COL_SUPPLIED]: { halign:'right' },
-					[COL_UOM]:      { halign:'center', cellWidth:26 },
-					[COL_PENDING]:  { halign:'right' },
-					[COL_PO_NO]:    { halign:'left'  },
-					[COL_PO_DATE]:  { halign:'left', cellWidth:46 },
-				},
-				didParseCell: (data) => {
-					const ci = data.column.index;
-					const ri = data.row.index;
-					if (data.section === 'head') {
-						if (qcols.length && ci>=COL_Q_START && ci<=COL_Q_END)
-							{ data.cell.styles.fillColor=[195,224,250]; data.cell.styles.textColor=[15,60,130]; }
-						if (mcols.length && ci>=COL_M_START && ci<=COL_M_END)
-							{ data.cell.styles.fillColor=[215,238,255]; data.cell.styles.textColor=[20,90,155]; }
-						if (ci>=COL_Q_START && ci<=COL_PENDING)
-							data.cell.styles.halign='right';
-					}
-					if (data.section === 'body') {
-						const is_t = ri === body.length - 1;
-						if (is_t) { data.cell.styles.fontStyle='bold'; data.cell.styles.fillColor=[238,242,250]; }
-						if (qcols.length && ci>=COL_Q_START && ci<=COL_Q_END)
-							{ data.cell.styles.halign='right'; data.cell.styles.fillColor=is_t?[228,241,255]:[234,242,252];
-							  data.cell.styles.textColor=[20,80,160]; data.cell.styles.fontStyle='bold'; }
-						if (mcols.length && ci>=COL_M_START && ci<=COL_M_END)
-							{ data.cell.styles.halign='right'; data.cell.styles.fillColor=is_t?[228,241,255]:[240,248,255];
-							  data.cell.styles.textColor=[30,100,185]; }
-						if (ci===COL_SUPPLIED)
-							{ data.cell.styles.fillColor=[235,245,255]; data.cell.styles.textColor=[25,80,165]; data.cell.styles.halign='right'; }
-						if (ci===COL_PENDING) {
-							const v = parseFloat(data.cell.raw)||0;
-							data.cell.styles.halign='right';
-							data.cell.styles.textColor = v>0 ? [192,57,43] : [30,132,73];
-							if (v>0) data.cell.styles.fillColor=[255,240,240];
-							data.cell.styles.fontStyle = v>0 ? 'bold' : 'normal';
-						}
-						if (ci===COL_UOM)
-							{ data.cell.styles.halign='center'; data.cell.styles.textColor=[107,122,141]; data.cell.styles.fontSize=7.5; }
-					}
-				},
-				didDrawPage: (data) => {
-					if (data.pageNumber > table_start_page) draw_item_bar(MARGIN, item);
-				},
-				theme: 'grid',
-			});
-			curY = doc.lastAutoTable.finalY + 16;
-		}
-
-		if (ts.length) {
-			if (curY + 80 > PAGE_H) { doc.addPage(); curY = MARGIN; }
-			doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(15,27,60);
-			doc.text(`Today's Stock & Dispatch  —  ${as_on||''}`, MARGIN, curY+11);
-			curY += 20;
-
-			const sum_body = ts.map(d => {
-				const is_t = d.item_code==='TOTAL';
-				return [is_t?'Total':(d.item_name||d.item_code),
-					raw_num(d.stock_qty), raw_num(d.dispatch_qty), raw_num(d.balance_qty)];
-			});
-			doc.autoTable({
-				head: [['Feed Stock','Stock','Dispatch','Balance']],
-				body: sum_body,
-				startY: curY,
-				margin: { left:MARGIN, right:MARGIN, bottom: MARGIN + FOOTER_H },
-				tableWidth: 320,
-				styles: { fontSize:8.5, cellPadding:4, lineColor:[200,210,225], lineWidth:0.3, font:'helvetica' },
-				headStyles: { fillColor:[238,242,250], textColor:[35,55,90], fontStyle:'bold' },
-				columnStyles: { 0:{halign:'left'}, 1:{halign:'right'}, 2:{halign:'right'}, 3:{halign:'right'} },
-				didParseCell: (data) => {
-					const ri = data.row.index;
-					if (data.section==='body') {
-						const is_t = ri===sum_body.length-1;
-						if (is_t) { data.cell.styles.fontStyle='bold'; data.cell.styles.fillColor=[238,242,250]; }
-						if (data.column.index===3) {
-							const v = parseFloat(data.cell.raw)||0;
-							data.cell.styles.textColor = v<0?[192,57,43]:v>0?[30,132,73]:[154,163,175];
-							if (v<0) data.cell.styles.fillColor=[255,240,240];
-							if (v>0) data.cell.styles.fillColor=[237,250,240];
+				head:[heads], body, startY:curY,
+				margin:{ left:M, right:M, bottom:M+FH },
+				styles:{ fontSize:7.5, cellPadding:3, font:'helvetica', textColor:[30,40,55] },
+				headStyles:{ fillColor:[238,242,250], textColor:[35,55,90], fontStyle:'bold', fontSize:7 },
+				didParseCell:(d) => {
+					const ri=d.row.index, ci=d.column.index, is_t=ri===body.length-1;
+					if (d.section==='body') {
+						if (is_t) { d.cell.styles.fontStyle='bold'; d.cell.styles.fillColor=[238,242,250]; }
+						if (ci===5) { d.cell.styles.halign='right'; d.cell.styles.fillColor=[235,245,255]; }
+						if (ci===6) {
+							const v = parseFloat(d.cell.raw) || 0;
+							d.cell.styles.halign='right';
+							d.cell.styles.textColor = v>0?[192,57,43]:v<0?[200,90,0]:[30,132,73];
+							if (v>0) { d.cell.styles.fillColor=[255,240,240]; d.cell.styles.fontStyle='bold'; }
 						}
 					}
 				},
-				theme: 'grid',
+				theme:'grid',
 			});
+			curY = doc.lastAutoTable.finalY + 12;
 		}
 
-		const total_pages = doc.internal.getNumberOfPages();
-		for (let p = 1; p <= total_pages; p++) {
+		const tp = doc.internal.getNumberOfPages();
+		for (let p=1;p<=tp;p++) {
 			doc.setPage(p);
-			doc.setDrawColor(225,230,238);
-			doc.setLineWidth(0.5);
-			doc.line(MARGIN, PAGE_H - FOOTER_H + 4, PAGE_W - MARGIN, PAGE_H - FOOTER_H + 4);
-			doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(120,130,145);
-			doc.text(`Generated by: ${user}   |   ${timestamp}`, MARGIN, PAGE_H - FOOTER_H + 16);
-			doc.text(`Page ${p} of ${total_pages}`, PAGE_W - MARGIN, PAGE_H - FOOTER_H + 16, { align:'right' });
+			doc.setDrawColor(225,230,238); doc.setLineWidth(0.4);
+			doc.line(M, PH-FH+2, PW-M, PH-FH+2);
+			doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(130,140,155);
+			doc.text(`Page ${p} of ${tp}`, PW-M, PH-FH+14, {align:'right'});
 		}
-
 		doc.save(`dispatch-order-balance-${as_on}.pdf`);
 		frappe.show_alert({ message:'PDF downloaded!', indicator:'green' });
 	}
-
-	load_pdf_libs() {
-		const load = (src) => new Promise((resolve, reject) => {
-			if (document.querySelector(`script[src="${src}"]`)) return resolve();
-			const s = document.createElement('script');
-			s.src=src; s.onload=resolve;
-			s.onerror=()=>reject(new Error(`Failed: ${src}`));
-			document.head.appendChild(s);
-		});
-		return load('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js')
-			.then(()=>load('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js'));
-	}
-
-	load_excel_libs() {
-		const load = (src) => new Promise((resolve, reject) => {
-			if (document.querySelector(`script[src="${src}"]`)) return resolve();
-			const s = document.createElement('script');
-			s.src=src; s.onload=resolve;
-			s.onerror=()=>reject(new Error(`Failed: ${src}`));
-			document.head.appendChild(s);
-		});
-		return load('https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js');
-	}
-
-	download_blob(content, mime, filename) {
-		const blob = new Blob([content],{type:mime});
-		const url  = URL.createObjectURL(blob);
-		const a    = document.createElement('a');
-		a.href=url; a.download=filename;
-		document.body.appendChild(a); a.click(); document.body.removeChild(a);
-		setTimeout(()=>URL.revokeObjectURL(url), 1000);
-	}
 }
 
-function raw_num(val) {
-	const n = parseFloat(val);
-	if (isNaN(n)) return '';
-	return n === 0 ? '0.000' : n.toFixed(3);
+/* ── UTILITIES ── */
+function _group(arr, key_fn) {
+	const map = {};
+	for (const item of arr) {
+		const k = key_fn(item);
+		(map[k] = map[k] || []).push(item);
+	}
+	return map;
 }
-function num_or_blank(val) {
-	if (val === '' || val === null || val === undefined) return null;
-	const n = parseFloat(val);
-	return isNaN(n) ? null : n;
+
+function _agg(rows) {
+	let order=0, supplied=0, pending=0;
+	for (const r of rows) {
+		order    += r.order_qty    || 0;
+		supplied += r.supplied_qty || 0;
+		pending  += r.pending_qty  || 0;
+	}
+	return { order, supplied, pending };
 }
-function esc(v) {
-	return frappe.utils.escape_html(String(v==null?'':v));
+
+function _pend_cls(v) {
+	return v > 0 ? 'dob3-val-pend-pos' : v < 0 ? 'dob3-val-pend-neg' : 'dob3-val-pend-zero';
+}
+
+function _n(v) { const n = parseFloat(v); return isNaN(n) ? '' : n.toFixed(3); }
+
+function _esc(v) { return frappe.utils.escape_html(String(v == null ? '' : v)); }
+
+function _load_script(src) {
+	return new Promise((res, rej) => {
+		if (document.querySelector(`script[src="${src}"]`)) return res();
+		const s = document.createElement('script');
+		s.src = src; s.onload = res;
+		s.onerror = () => rej(new Error(`Failed: ${src}`));
+		document.head.appendChild(s);
+	});
+}
+
+function _download_blob(content, mime, filename) {
+	const blob = new Blob([content], {type:mime});
+	const url  = URL.createObjectURL(blob);
+	const a    = document.createElement('a');
+	a.href=url; a.download=filename;
+	document.body.appendChild(a); a.click(); document.body.removeChild(a);
+	setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
