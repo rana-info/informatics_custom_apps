@@ -222,3 +222,12 @@
 .pms-ct-default .indicator-dot {
     background-color: #374151 !important;
 }
+
+
+.indicator-pill.custom-coral {
+    background: rgba(252, 79, 63, 0.592);
+    color: #490e05;
+}
+.indicator-pill.custom-coral .indicator-dot {
+    background: #ec6155;
+}

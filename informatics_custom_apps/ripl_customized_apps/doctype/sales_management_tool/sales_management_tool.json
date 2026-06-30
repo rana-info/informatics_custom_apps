@@ -104,7 +104,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Correction Type",
-   "options": "\nWrong Vehicle Number\nWrong Driver Name\nWrong Transporter\nWrong Card Number\nWrong Vehicle Type\nReset Second Weight (Not Manual)\nReset Second Weight (Manual)\nWrong Item Group\nWrong Delivery Note\nInward/Outward Wrong Entry (Manual)\nWrong Sales Partner\nChange First Weight(Tare)\nWrong Segment\nUnlink Weighment\nWrong Segment(Deal)",
+   "options": "\nWrong Vehicle Number\nWrong Driver Name\nWrong Transporter\nWrong Card Number\nWrong Vehicle Type\nReset Second Weight (Not Manual)\nReset Second Weight (Manual)\nWrong Item Group\nWrong Delivery Note\nInward/Outward Wrong Entry (Manual)\nWrong Sales Partner\nChange First Weight(Tare)\nWrong Segment\nUnlink Weighment\nWrong Segment(Deal)\nWrong Weight(Sale)",
    "reqd": 1
   },
   {
@@ -344,7 +344,7 @@
    "options": "Vehicle Type"
   },
   {
-   "depends_on": "eval:doc.correction_type == 'Reset Second Weight (Not Manual)' || doc.correction_type == 'Reset Second Weight (Manual)' || doc.correction_type == 'Inward/Outward Wrong Entry (Manual)' || doc.correction_type == 'Change First Weight(Tare)'",
+   "depends_on": "eval:doc.correction_type == 'Reset Second Weight (Not Manual)' || doc.correction_type == 'Reset Second Weight (Manual)' || doc.correction_type == 'Wrong Weight(Sale)' || doc.correction_type == 'Inward/Outward Wrong Entry (Manual)' || doc.correction_type == 'Change First Weight(Tare)'",
    "fieldname": "section_break_fgcq",
    "fieldtype": "Section Break",
    "label": "Weighment Data"
@@ -376,7 +376,7 @@
    "read_only": 1
   },
   {
-   "depends_on": "eval:doc.correction_type == 'Reset Second Weight (Not Manual)' || doc.correction_type == 'Reset Second Weight (Manual)' || doc.correction_type == 'Inward/Outward Wrong Entry (Manual)' || doc.correction_type == 'Change First Weight(Tare)'",
+   "depends_on": "eval:doc.correction_type == 'Reset Second Weight (Not Manual)' || doc.correction_type == 'Reset Second Weight (Manual)' || doc.correction_type == 'Wrong Weight(Sale)' || doc.correction_type == 'Inward/Outward Wrong Entry (Manual)' || doc.correction_type == 'Change First Weight(Tare)'",
    "fieldname": "weight_details_section",
    "fieldtype": "Section Break",
    "label": "Weight Details"
@@ -516,7 +516,7 @@
  ],
  "is_submittable": 1,
  "links": [],
- "modified": "2026-06-20 11:07:49.582653",
+ "modified": "2026-06-30 14:58:46.239559",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "Sales Management Tool",

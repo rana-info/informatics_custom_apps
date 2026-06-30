@@ -62,6 +62,7 @@ class SalesManagementTool(Document):
             "Wrong Item Group": self.validate_item_group,
             "Wrong Delivery Note": self.validate_wrong_delivery_note,
             "Wrong Segment": self.validate_wrong_segment,
+            "Wrong Weight(Sale)": self.validate_wrong_weight_sale,
         }
         validator = validators.get(self.correction_type)
         if validator:
@@ -278,6 +279,7 @@ class SalesManagementTool(Document):
             "Wrong Segment": self.handle_wrong_segment,
             "Unlink Weighment": self.handle_unlink_weighment,
             "Wrong Segment(Deal)": self.handle_wrong_segment_deal,
+            "Wrong Weight(Sale)": self.handle_wrong_weight_sale,
         }
 
         handler = handlers.get(self.correction_type)
@@ -572,6 +574,122 @@ class SalesManagementTool(Document):
             frappe.db.set_value(
                 "Weighment", wname,
                 {"tare_weight": self.tare_weight},
+                update_modified=False
+            )
+
+    def validate_wrong_weight_sale(self):
+        """Validate Wrong Weight(Sale) correction:
+        - Gate Entry must exist
+        - Weighment must have a linked Delivery Note (warning if not)
+        - At least one of gross_weight or tare_weight must be provided
+        """
+        if not self.gate_entry:
+            return
+
+        weighments = self.get_related_weighments()
+        if not weighments:
+            frappe.throw("No active Weighment found for this Gate Entry.")
+
+        # Check that at least one weighment has a linked Delivery Note
+        has_dn = False
+        for wname in weighments:
+            dn_exists = frappe.db.exists(
+                "Delivery Note",
+                {"custom_weighment": wname, "docstatus": ["<", 2]}
+            )
+            if dn_exists:
+                has_dn = True
+                break
+
+        if not has_dn:
+            frappe.throw(
+                "No Delivery Note exists for this Weighment. "
+                "Wrong Weight(Sale) correction requires a Delivery Note to be linked.",
+                title="Delivery Note Required"
+            )
+
+        # At least one weight must be entered
+        has_gross = self.gross_weight and self.gross_weight > 0
+        has_tare = self.tare_weight and self.tare_weight > 0
+        if not has_gross and not has_tare:
+            frappe.throw("At least one of Gross Weight or Tare Weight must be provided.")
+
+        # Block if gate entry is already completed
+        ge_status = frappe.db.get_value(
+            "Gate Entry", self.gate_entry,
+            ["is_completed", "is_in_progress"], as_dict=True
+        )
+        if ge_status and ge_status.is_completed:
+            frappe.throw(
+                f"Gate Entry <b>{self.gate_entry}</b> is already Completed. "
+                f"Wrong Weight(Sale) correction is not allowed on completed entries.",
+                title="Gate Entry Already Completed"
+            )
+
+    def handle_wrong_weight_sale(self):
+        """Handles Wrong Weight(Sale) correction.
+
+        Works for is_in_progress Gate Entries.
+        """
+        if not self.gate_entry:
+            frappe.throw("Gate Entry is required for Wrong Weight(Sale) correction.")
+
+        weighments = self.get_related_weighments()
+        if not weighments:
+            frappe.throw("No active Weighment found for this Gate Entry.")
+
+        has_gross = self.gross_weight and self.gross_weight > 0
+        has_tare = self.tare_weight and self.tare_weight > 0
+        both_provided = has_gross and has_tare
+
+        for wname in weighments:
+            wei_updates = {}
+
+            if both_provided:
+                # Both weights provided: update all 3, mark as completed
+                net = self.gross_weight - self.tare_weight
+                wei_updates = {
+                    "gross_weight": self.gross_weight,
+                    "tare_weight": self.tare_weight,
+                    "net_weight": net,
+                    "is_completed": 1,
+                    "is_in_progress": 0,
+                }
+            elif has_gross:
+                # Only gross weight: update gross, zero net, keep in-progress
+                wei_updates = {
+                    "gross_weight": self.gross_weight,
+                    "net_weight": 0,
+                    "is_in_progress": 1,
+                    "is_completed": 0,
+                }
+            elif has_tare:
+                # Only tare weight: update tare, zero net, keep in-progress
+                wei_updates = {
+                    "tare_weight": self.tare_weight,
+                    "net_weight": 0,
+                    "is_in_progress": 1,
+                    "is_completed": 0,
+                }
+
+            if wei_updates:
+                frappe.db.set_value("Weighment", wname, wei_updates, update_modified=False)
+
+        # Update Gate Entry status accordingly
+        if both_provided:
+            frappe.db.set_value(
+                "Gate Entry", self.gate_entry,
+                {"is_completed": 1, "is_in_progress": 0},
+                update_modified=False
+            )
+            # Free the card since the weighment cycle is now complete
+            card = frappe.db.get_value("Gate Entry", self.gate_entry, "card_number")
+            if card:
+                frappe.db.set_value("Card Details", card, "is_assigned", 0, update_modified=False)
+        else:
+            frappe.db.set_value(
+                "Gate Entry", self.gate_entry,
+                {"is_in_progress": 1, "is_completed": 0},
                 update_modified=False
             )
 
