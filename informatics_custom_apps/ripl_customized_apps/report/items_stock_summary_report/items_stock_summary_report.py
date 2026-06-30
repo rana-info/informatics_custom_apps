@@ -24,7 +24,6 @@ def get_columns():
         {"label": "Value", "fieldname": "value", "fieldtype": "Currency", "width": 120},
         {"label": "Rate", "fieldname": "rate", "fieldtype": "Currency", "width": 120},
     ]
-
 def get_data(filters):
 
     plant = filters.get("plant") or []
@@ -35,6 +34,7 @@ def get_data(filters):
         AND sle.is_cancelled = 0
         AND sle.posting_date <= %(to_date)s
         AND sle.item_code IN %(item_list)s
+        AND wh.warehouse_name NOT LIKE %(exclude_wh)s
     """
 
     # Company filter (single value safe)
@@ -118,7 +118,8 @@ def get_data(filters):
         "company": filters.get("company"),
         "plant": tuple(plant) if plant else None,
         "segment": tuple(segment) if segment else None,
-        "item_list": tuple(get_item_list())
+        "item_list": tuple(get_item_list()),
+        "exclude_wh": "%Return & Rejection%"
     }, as_dict=1)
 
 def get_item_list():

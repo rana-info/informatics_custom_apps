@@ -13,6 +13,8 @@ def execute(filters=None):
 
     valid_docs = set(d.voucher_no for d in gl_entries)
 
+    valid_docs.update(get_non_gl_docs(filters, valid_docs))
+
     graph = build_graph(valid_docs)
 
     data = build_flows(gl_entries, graph, valid_docs)
@@ -25,6 +27,30 @@ def execute(filters=None):
     ]
 
     return columns, data
+
+
+def get_non_gl_docs(filters, existing_docs):
+    docs = set()
+
+    common_filters = {
+        "posting_date": ["between", [filters.from_date, filters.to_date]],
+        "docstatus": 1,
+    }
+
+    for doctype in ["Purchase Receipt", "Purchase Invoice"]:
+
+        rows = frappe.get_all(
+            doctype,
+            filters=common_filters,
+            pluck="name"
+        )
+
+        docs.update(
+            doc for doc in rows
+            if doc not in existing_docs
+        )
+
+    return docs
 
 
 def get_columns():
