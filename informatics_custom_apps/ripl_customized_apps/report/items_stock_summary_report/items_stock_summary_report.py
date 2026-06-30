@@ -35,6 +35,7 @@ def get_data(filters):
         AND sle.is_cancelled = 0
         AND sle.posting_date <= %(to_date)s
         AND sle.item_code IN %(item_list)s
+        AND wh.warehouse_name !="Return & Rejection Warehuse"
     """
 
     # Company filter (single value safe)
