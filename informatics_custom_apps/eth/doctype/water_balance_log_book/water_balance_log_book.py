@@ -5,5 +5,5 @@
 from frappe.model.document import Document
 
 
-class WaterBalance(Document):
+class WaterBalanceLogBook(Document):
 	pass

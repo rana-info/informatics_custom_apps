@@ -5,5 +5,5 @@
 from frappe.tests.utils import FrappeTestCase
 
 
-class TestWaterBalance(FrappeTestCase):
+class TestWaterBalanceLogBook(FrappeTestCase):
 	pass
