@@ -1,0 +1,774 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "autoname": "naming_series:",
+ "creation": "2026-06-18 14:51:56.355326",
+ "default_view": "List",
+ "doctype": "DocType",
+ "document_type": "Setup",
+ "engine": "InnoDB",
+ "field_order": [
+  "details_tab",
+  "section_break_6",
+  "employee",
+  "employee_name",
+  "department",
+  "designation",
+  "branch",
+  "column_break_obdl",
+  "posting_date",
+  "letter_head",
+  "naming_series",
+  "retaining_salary",
+  "column_break_18",
+  "status",
+  "company",
+  "currency",
+  "exchange_rate",
+  "section_break_gsts",
+  "payroll_frequency",
+  "start_date",
+  "end_date",
+  "column_break_ptcc",
+  "salary_structure",
+  "payroll_entry",
+  "mode_of_payment",
+  "column_break1",
+  "section_break_wrwj",
+  "deduct_tax_for_unclaimed_employee_benefits",
+  "deduct_tax_for_unsubmitted_tax_exemption_proof",
+  "payment_days_tab",
+  "total_working_days",
+  "unmarked_days",
+  "leave_without_pay",
+  "column_break_geio",
+  "absent_days",
+  "payment_days",
+  "earning_deduction",
+  "section_break_gerh",
+  "earnings",
+  "column_break_ywkr",
+  "deductions",
+  "totals",
+  "gross_pay",
+  "base_gross_pay",
+  "gross_year_to_date",
+  "base_gross_year_to_date",
+  "column_break_25",
+  "total_deduction",
+  "base_total_deduction",
+  "section_break_43",
+  "total_principal_amount",
+  "total_interest_amount",
+  "column_break_45",
+  "total_loan_repayment",
+  "net_pay_info",
+  "net_pay",
+  "base_net_pay",
+  "column_break_dqnd",
+  "base_month_to_date",
+  "column_break_53",
+  "rounded_total",
+  "base_rounded_total",
+  "section_break_55",
+  "total_in_words",
+  "column_break_69",
+  "base_total_in_words",
+  "income_tax_breakup_tab",
+  "ctc",
+  "income_from_other_sources",
+  "total_earnings",
+  "column_break_sems",
+  "non_taxable_earnings",
+  "standard_tax_exemption_amount",
+  "tax_exemption_declaration",
+  "deductions_before_tax_calculation",
+  "annual_taxable_amount",
+  "column_break_bwl4",
+  "income_tax_deducted_till_date",
+  "current_month_income_tax",
+  "future_income_tax",
+  "total_income_tax",
+  "section_break_75",
+  "journal_entry",
+  "column_break_ieob",
+  "bank_name",
+  "bank_account_no",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "details_tab",
+   "fieldtype": "Tab Break",
+   "label": "Details",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_6",
+   "fieldtype": "Section Break",
+   "label": "Employee Details",
+   "read_only": 1
+  },
+  {
+   "fieldname": "employee",
+   "fieldtype": "Link",
+   "in_global_search": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Employee",
+   "oldfieldname": "employee",
+   "oldfieldtype": "Link",
+   "options": "Employee",
+   "read_only": 1,
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fetch_from": "employee.employee_name",
+   "fieldname": "employee_name",
+   "fieldtype": "Read Only",
+   "in_global_search": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Employee Name",
+   "oldfieldname": "employee_name",
+   "oldfieldtype": "Data",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fetch_from": "employee.department",
+   "fieldname": "department",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Department",
+   "oldfieldname": "department",
+   "oldfieldtype": "Link",
+   "options": "Department",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.designation",
+   "fetch_from": "employee.designation",
+   "fieldname": "designation",
+   "fieldtype": "Link",
+   "label": "Designation",
+   "oldfieldname": "designation",
+   "oldfieldtype": "Link",
+   "options": "Designation",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "employee.branch",
+   "fieldname": "branch",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Branch",
+   "oldfieldname": "branch",
+   "oldfieldtype": "Link",
+   "options": "Branch",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_obdl",
+   "fieldtype": "Column Break",
+   "read_only": 1
+  },
+  {
+   "default": "Today",
+   "fieldname": "posting_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Posting Date",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fetch_from": "employee.branch",
+   "fieldname": "letter_head",
+   "fieldtype": "Link",
+   "ignore_user_permissions": 1,
+   "label": "Letter Head",
+   "options": "Letter Head",
+   "print_hide": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Data",
+   "label": "name",
+   "options": "RET-SLIP-.YYYY.-.#####",
+   "reqd": 1
+  },
+  {
+   "fieldname": "retaining_salary",
+   "fieldtype": "Link",
+   "label": "Retaining Salary",
+   "options": "zzRetaining Salary"
+  },
+  {
+   "fieldname": "column_break_18",
+   "fieldtype": "Column Break",
+   "read_only": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Draft\nSubmitted\nCancelled",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "employee.company",
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Company",
+   "options": "Company",
+   "read_only": 1,
+   "remember_last_selected_value": 1,
+   "reqd": 1
+  },
+  {
+   "depends_on": "eval:(doc.docstatus==1 || doc.salary_structure)",
+   "fetch_from": "salary_structure.currency",
+   "fieldname": "currency",
+   "fieldtype": "Link",
+   "label": "Currency",
+   "options": "Currency",
+   "print_hide": 1,
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "default": "1.0",
+   "fieldname": "exchange_rate",
+   "fieldtype": "Float",
+   "hidden": 1,
+   "label": "Exchange Rate",
+   "print_hide": 1,
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_gsts",
+   "fieldtype": "Section Break",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:(!doc.salary_slip_based_on_timesheet)",
+   "fieldname": "payroll_frequency",
+   "fieldtype": "Select",
+   "label": "Payroll Frequency",
+   "options": "\nMonthly\nFortnightly\nBimonthly\nWeekly\nDaily",
+   "read_only": 1
+  },
+  {
+   "fieldname": "start_date",
+   "fieldtype": "Date",
+   "label": "Start Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "end_date",
+   "fieldtype": "Date",
+   "label": "End Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_ptcc",
+   "fieldtype": "Column Break",
+   "read_only": 1
+  },
+  {
+   "fieldname": "salary_structure",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Salary Structure",
+   "options": "Salary Structure",
+   "read_only": 1,
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "payroll_entry",
+   "fieldtype": "Link",
+   "label": "Payroll Entry",
+   "options": "Payroll Entry",
+   "read_only": 1
+  },
+  {
+   "fieldname": "mode_of_payment",
+   "fieldtype": "Select",
+   "label": "Mode Of Payment",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break1",
+   "fieldtype": "Column Break",
+   "oldfieldtype": "Column Break",
+   "read_only": 1,
+   "width": "50%"
+  },
+  {
+   "fieldname": "section_break_wrwj",
+   "fieldtype": "Section Break",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "deduct_tax_for_unclaimed_employee_benefits",
+   "fieldtype": "Check",
+   "label": "Deduct Tax For Unclaimed Employee Benefits",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "deduct_tax_for_unsubmitted_tax_exemption_proof",
+   "fieldtype": "Check",
+   "label": "Deduct Tax For Unsubmitted Tax Exemption Proof",
+   "read_only": 1
+  },
+  {
+   "fieldname": "payment_days_tab",
+   "fieldtype": "Tab Break",
+   "label": "Payment Days",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_working_days",
+   "fieldtype": "Float",
+   "label": "Working Days",
+   "oldfieldname": "total_days_in_month",
+   "oldfieldtype": "Int",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "unmarked_days",
+   "fieldtype": "Float",
+   "hidden": 1,
+   "label": "Unmarked days",
+   "read_only": 1
+  },
+  {
+   "fieldname": "leave_without_pay",
+   "fieldtype": "Float",
+   "label": "Leave Without Pay",
+   "oldfieldname": "leave_without_pay",
+   "oldfieldtype": "Currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_geio",
+   "fieldtype": "Column Break",
+   "read_only": 1
+  },
+  {
+   "fieldname": "absent_days",
+   "fieldtype": "Float",
+   "label": "Absent Days",
+   "read_only": 1
+  },
+  {
+   "fieldname": "payment_days",
+   "fieldtype": "Float",
+   "label": "Payment Days",
+   "oldfieldname": "payment_days",
+   "oldfieldtype": "Float",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "earning_deduction",
+   "fieldtype": "Tab Break",
+   "label": "Earnings & Deductions",
+   "oldfieldtype": "Section Break",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_gerh",
+   "fieldtype": "Section Break",
+   "read_only": 1
+  },
+  {
+   "fieldname": "earnings",
+   "fieldtype": "Table",
+   "label": "Earnings",
+   "oldfieldname": "earning_details",
+   "oldfieldtype": "Table",
+   "options": "Salary Detail",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_ywkr",
+   "fieldtype": "Column Break",
+   "read_only": 1
+  },
+  {
+   "fieldname": "deductions",
+   "fieldtype": "Table",
+   "label": "Deductions",
+   "oldfieldname": "deduction_details",
+   "oldfieldtype": "Table",
+   "options": "Salary Detail",
+   "read_only": 1
+  },
+  {
+   "fieldname": "totals",
+   "fieldtype": "Section Break",
+   "oldfieldtype": "Section Break",
+   "read_only": 1
+  },
+  {
+   "fieldname": "gross_pay",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Gross Pay",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "base_gross_pay",
+   "fieldtype": "Currency",
+   "label": "Gross Pay (Company Currency)",
+   "options": "Company:company:default_currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "gross_year_to_date",
+   "fieldtype": "Currency",
+   "label": "Gross Year To Date",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "base_gross_year_to_date",
+   "fieldtype": "Currency",
+   "label": "Gross Year To Date(Company Currency)",
+   "options": "Company:company:default_currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_25",
+   "fieldtype": "Column Break",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_deduction",
+   "fieldtype": "Currency",
+   "label": "Total Deduction",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "base_total_deduction",
+   "fieldtype": "Currency",
+   "label": "Total Deduction (Company Currency)",
+   "options": "Company:company:default_currency",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.docstatus != 0",
+   "fieldname": "section_break_43",
+   "fieldtype": "Section Break",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "total_principal_amount",
+   "fieldtype": "Currency",
+   "label": "Total Principal Amount",
+   "options": "Company:company:default_currency",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "total_interest_amount",
+   "fieldtype": "Currency",
+   "label": "Total Interest Amount",
+   "options": "Company:company:default_currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_45",
+   "fieldtype": "Column Break",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "total_loan_repayment",
+   "fieldtype": "Currency",
+   "label": "Total Loan Repayment",
+   "options": "Company:company:default_currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "net_pay_info",
+   "fieldtype": "Tab Break",
+   "label": "Net Pay Info",
+   "read_only": 1
+  },
+  {
+   "fieldname": "net_pay",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Net Pay",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "base_net_pay",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Net Pay (Company Currency)",
+   "options": "Company:company:default_currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_dqnd",
+   "fieldtype": "Column Break",
+   "read_only": 1
+  },
+  {
+   "fieldname": "base_month_to_date",
+   "fieldtype": "Currency",
+   "label": "Month To Date(Company Currency)",
+   "options": "Company:company:default_currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_53",
+   "fieldtype": "Column Break",
+   "read_only": 1
+  },
+  {
+   "bold": 1,
+   "fieldname": "rounded_total",
+   "fieldtype": "Currency",
+   "label": "Rounded Total",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "bold": 1,
+   "fieldname": "base_rounded_total",
+   "fieldtype": "Currency",
+   "label": "Rounded Total (Company Currency)",
+   "options": "Company:company:default_currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_55",
+   "fieldtype": "Section Break",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_in_words",
+   "fieldtype": "Data",
+   "label": "Total in words",
+   "length": 240,
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_69",
+   "fieldtype": "Column Break",
+   "read_only": 1
+  },
+  {
+   "fieldname": "base_total_in_words",
+   "fieldtype": "Data",
+   "label": "Total in words (Company Currency)",
+   "length": 240,
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.ctc",
+   "fieldname": "income_tax_breakup_tab",
+   "fieldtype": "Tab Break",
+   "label": "Income Tax Breakup"
+  },
+  {
+   "fieldname": "ctc",
+   "fieldtype": "Currency",
+   "label": "CTC",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "income_from_other_sources",
+   "fieldtype": "Currency",
+   "label": "Income from Other Sources",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_earnings",
+   "fieldtype": "Currency",
+   "label": "Total Earnings",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_sems",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "non_taxable_earnings",
+   "fieldtype": "Currency",
+   "label": "Non Taxable Earnings",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "standard_tax_exemption_amount",
+   "fieldtype": "Currency",
+   "label": "Standard Tax Exemption Amount",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "tax_exemption_declaration",
+   "fieldtype": "Currency",
+   "label": "Tax Exemption Declaration",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "deductions_before_tax_calculation",
+   "fieldtype": "Currency",
+   "label": "Deductions before tax calculation",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "annual_taxable_amount",
+   "fieldtype": "Currency",
+   "label": "Annual Taxable Amount",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_bwl4",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "income_tax_deducted_till_date",
+   "fieldtype": "Currency",
+   "label": "Income Tax Deducted Till Date",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "current_month_income_tax",
+   "fieldtype": "Currency",
+   "label": "Current Month Income Tax",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "future_income_tax",
+   "fieldtype": "Currency",
+   "label": "Future Income Tax",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_income_tax",
+   "fieldtype": "Currency",
+   "label": "Total Income Tax",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_75",
+   "fieldtype": "Tab Break",
+   "label": "Bank Details",
+   "read_only": 1
+  },
+  {
+   "fieldname": "journal_entry",
+   "fieldtype": "Link",
+   "label": "Journal Entry",
+   "options": "Journal Entry",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_ieob",
+   "fieldtype": "Column Break",
+   "read_only": 1
+  },
+  {
+   "fieldname": "bank_name",
+   "fieldtype": "Data",
+   "label": "Bank Name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "bank_account_no",
+   "fieldtype": "Data",
+   "label": "Bank Account No",
+   "read_only": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Retaining Salary Slip",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  }
+ ],
+ "icon": "fa fa-file-text",
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-07-02 10:52:58.402082",
+ "modified_by": "Administrator",
+ "module": "RIPL Customized Apps",
+ "name": "zzRetaining Salary Slip",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "HR User",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "HR Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "Employee"
+  }
+ ],
+ "row_format": "Dynamic",
+ "search_fields": "employee_name",
+ "show_name_in_global_search": 1,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "timeline_field": "employee",
+ "title_field": "employee_name"
+}

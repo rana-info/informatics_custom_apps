@@ -1,0 +1,77 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-06-18 10:43:10.226732",
+ "default_view": "List",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "is_selected",
+  "paid_off",
+  "from_date",
+  "to_date",
+  "paid_off_days",
+  "recall"
+ ],
+ "fields": [
+  {
+   "default": "0",
+   "fieldname": "is_selected",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Select"
+  },
+  {
+   "fieldname": "paid_off",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Paid Off",
+   "read_only": 1
+  },
+  {
+   "fieldname": "from_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "From Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "to_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "To Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "paid_off_days",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Paid Off Days",
+   "read_only": 1
+  },
+  {
+   "fieldname": "recall",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Recall",
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-06-23 11:27:40.387506",
+ "modified_by": "Administrator",
+ "module": "RIPL Customized Apps",
+ "name": "Retaining Salary Paid Off Period",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
