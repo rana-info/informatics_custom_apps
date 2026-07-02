@@ -185,6 +185,7 @@
   },
   {
    "allow_on_submit": 1,
+   "fetch_from": "employee.branch",
    "fieldname": "letter_head",
    "fieldtype": "Link",
    "ignore_user_permissions": 1,
@@ -725,7 +726,7 @@
  "icon": "fa fa-file-text",
  "is_submittable": 1,
  "links": [],
- "modified": "2026-06-23 11:30:44.488588",
+ "modified": "2026-07-02 10:52:58.402082",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "zzRetaining Salary Slip",

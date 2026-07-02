@@ -2,6 +2,7 @@ from hrms.payroll.doctype.salary_structure.salary_structure import make_salary_s
 from erpnext.accounts.general_ledger import make_gl_entries
 from datetime import datetime, timedelta
 import calendar
+import math
 import frappe
 from frappe.model.document import Document
 from frappe.utils import flt, nowdate, money_in_words, cint
@@ -41,6 +42,19 @@ class zzRetainingSalary(Document):
             frappe.delete_doc(
 				"zzRetaining Salary Slip", slip_name, force=True,ignore_permissions=True
 			)
+
+    @staticmethod
+    def floor_round(amount):
+        """Floor round off an amount to the nearest whole currency unit
+        (drops paise/decimal points instead of rounding to 2 decimals).
+        Used for earnings."""
+        return math.floor(flt(amount))
+
+    @staticmethod
+    def ceil_round(amount):
+        """Ceiling round off an amount to the nearest whole currency unit.
+        Used for deductions."""
+        return math.ceil(flt(amount))
 
     def get_pf_deductions(self, assn, total_days_month, days, end_date=None):
         if not cint(assn.get("is_pf_applicable")):
@@ -97,9 +111,9 @@ class zzRetainingSalary(Document):
         })
 
         return {
-            "Employee Provident Fund": round(employee_pf, 2),
-            "Family Pension": round(family_pension, 2),
-            "Employer Provident Fund": round(employer_pf, 2),
+            "Employee Provident Fund": employee_pf,
+            "Family Pension": family_pension,
+            "Employer Provident Fund": employer_pf,
         }
 
     def validate_duplicate_retaining_salary(self):
@@ -246,19 +260,6 @@ class zzRetainingSalary(Document):
                 "ret_pct": ret_pct,
             })
 
-            # for comp_row in assn.get("custom_salary_detail", []):
-            #     sc = comp_row.salary_component
-            #     sc_doc = frappe.get_cached_doc("Salary Component", sc)
-            #     if not self._is_retained(sc_doc):
-            #         continue
-            #     monthly = flt(comp_row.amount)
-            #     prorated = (monthly / total_days_month) * days
-            #     retained = prorated * ret_pct / 100
-
-            #     data = earn.setdefault(sc, {"amount": 0.0, "old_amount": 0.0})
-            #     data["amount"] += retained
-            #     data["old_amount"] += prorated
-            
             pf_map = self.get_pf_deductions(
                 assn=assn,
                 total_days_month=total_days_month,
@@ -311,14 +312,14 @@ class zzRetainingSalary(Document):
         for sc, vals in earn.items():
             self.append("earnings", {
                 "salary_component": sc,
-                "amount": round(vals["amount"], 2),
-                "old_amount": round(vals["old_amount"], 2),
+                "amount": self.floor_round(vals["amount"]),
+                "old_amount": self.floor_round(vals["old_amount"]),
             })
         for sc, vals in ded.items():
             self.append("deductions", {
                 "salary_component": sc,
-                "amount": round(vals["amount"], 2),
-                "old_amount": round(vals["old_amount"], 2),
+                "amount": self.ceil_round(vals["amount"]),
+                "old_amount": self.ceil_round(vals["old_amount"]),
             })
 
     def submit_retaining_salary_slips(self):
@@ -386,23 +387,6 @@ class zzRetainingSalary(Document):
             ret_pct = flt(meta["ret_pct"])
             days = meta["days"]
 
-            # for comp_row in assn.get("custom_salary_detail", []):
-            #     sc = comp_row.salary_component
-            #     sc_doc = frappe.get_cached_doc("Salary Component", sc)
-            #     if not self._is_retained(sc_doc):
-            #         continue
-            #     monthly = flt(comp_row.amount)
-            #     if not monthly:
-            #         continue
-            #     actual = (monthly / total_days_month) * days
-            #     retained = actual * ret_pct / 100
-            #     slip.append("earnings", {
-            #         "salary_component": sc,
-            #         "amount": round(retained, 2),
-            #         "old_amount": round(actual, 2)
-            #     })
-            #     gross += retained
-            
             pf_map = self.get_pf_deductions(
                 assn=assn,
                 total_days_month=total_days_month,
@@ -422,19 +406,12 @@ class zzRetainingSalary(Document):
                 if sc == "Employer's PF":
 
                     actual = flt(pf_map.get("Employee Provident Fund", 0))
-                    # frappe.errprint({
-                    #     "component": sc,
-                    #     "employee_pf": pf_map.get("Employee Provident Fund"),
-                    #     "family_pension": pf_map.get("Family Pension"),
-                    #     "employer_pf": pf_map.get("Employer Provident Fund"),
-                    #     "actual_used": actual
-                    # })
                     retained = actual * ret_pct / 100
 
                     slip.append("earnings", {
                         "salary_component": sc,
-                        "amount": round(retained, 2),
-                        "old_amount": round(actual, 2)
+                        "amount": self.floor_round(retained),
+                        "old_amount": self.floor_round(actual)
                     })
 
                     gross += retained
@@ -450,8 +427,8 @@ class zzRetainingSalary(Document):
 
                 slip.append("earnings", {
                     "salary_component": sc,
-                    "amount": round(retained, 2),
-                    "old_amount": round(actual, 2)
+                    "amount": self.floor_round(retained),
+                    "old_amount": self.floor_round(actual)
                 })
 
                 gross += retained
@@ -462,17 +439,17 @@ class zzRetainingSalary(Document):
                 retained = actual * ret_pct / 100
                 slip.append("deductions", {
                     "salary_component": sc,
-                    "amount": round(retained, 2),
-                    "old_amount": round(actual, 2)
+                    "amount": self.ceil_round(retained),
+                    "old_amount": self.ceil_round(actual)
                 })
                 ded += retained
 
-            slip.gross_pay = gross
-            slip.total_deduction = ded
-            slip.net_pay = gross - ded
-            slip.rounded_total = round(slip.net_pay)
-            slip.base_gross_pay = gross
-            slip.base_total_deduction = ded
+            slip.gross_pay = self.floor_round(gross)
+            slip.total_deduction = self.ceil_round(ded)
+            slip.net_pay = slip.gross_pay - slip.total_deduction
+            slip.rounded_total = self.floor_round(slip.net_pay)
+            slip.base_gross_pay = slip.gross_pay
+            slip.base_total_deduction = slip.total_deduction
             slip.base_net_pay = slip.net_pay
             slip.base_rounded_total = slip.rounded_total
             slip.total_in_words = money_in_words(slip.rounded_total, slip.currency)
@@ -494,8 +471,8 @@ class zzRetainingSalary(Document):
                 slip.db_set("retaining_salary", self.name)
 
     def calculate_net_differences(self):
-        self.net_earnings = sum(flt(e.amount) for e in self.earnings)
-        self.net_deductions = sum(flt(d.amount) for d in self.deductions)
+        self.net_earnings = self.floor_round(sum(flt(e.amount) for e in self.earnings))
+        self.net_deductions = self.ceil_round(sum(flt(d.amount) for d in self.deductions))
         self.net_retaining_salary = self.net_earnings - self.net_deductions
         self.total_amount = self.net_retaining_salary
 
