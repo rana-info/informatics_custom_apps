@@ -33,6 +33,7 @@
  ],
  "fields": [
   {
+   "description": "All Fields In KLD\n",
    "fieldname": "cpu_plantetp_and_fresh_water_section",
    "fieldtype": "Section Break",
    "label": "CPU PLANT,ETP AND FRESH WATER"
@@ -160,12 +161,14 @@
    "label": "Surface Water Used"
   },
   {
+   "description": "(In Meter)",
    "fieldname": "piezometer_1",
    "fieldtype": "Float",
    "label": "Piezometer 1",
    "precision": "2"
   },
   {
+   "description": "(In Meter)",
    "fieldname": "piezometer_2",
    "fieldtype": "Float",
    "label": "Piezometer 2",
@@ -183,7 +186,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-02 16:44:24.764072",
+ "modified": "2026-07-02 16:47:03.806033",
  "modified_by": "Administrator",
  "module": "ETH",
  "name": "Water Balance Log Book",
