@@ -1,0 +1,210 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-07-02 16:27:33.703987",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "cpu_plantetp_and_fresh_water_section",
+  "date",
+  "plant",
+  "total_condensate_genration",
+  "condensate_inlet_process",
+  "condensate_inlet",
+  "column_break_xqjc",
+  "feed_in_cpuetp",
+  "treated_water_recycle",
+  "total_treated_water",
+  "effluent",
+  "total_effluent_genration",
+  "treated_water_use_section",
+  "treated_water",
+  "treated_water1",
+  "column_break_moed",
+  "treated_water_transfer",
+  "raw_water_consumption_and_piezometer_section",
+  "float_apqq",
+  "ground_water_extraction",
+  "piezometer_1",
+  "column_break_dkdu",
+  "borewell_2",
+  "surface_water_used",
+  "piezometer_2"
+ ],
+ "fields": [
+  {
+   "fieldname": "cpu_plantetp_and_fresh_water_section",
+   "fieldtype": "Section Break",
+   "label": "CPU PLANT,ETP AND FRESH WATER"
+  },
+  {
+   "fieldname": "date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "total_condensate_genration",
+   "fieldtype": "Float",
+   "label": "Total Condensate Genration",
+   "precision": "2"
+  },
+  {
+   "description": "(Process)",
+   "fieldname": "condensate_inlet_process",
+   "fieldtype": "Float",
+   "label": "Condensate Inlet",
+   "precision": "2"
+  },
+  {
+   "description": "(Other Source)",
+   "fieldname": "condensate_inlet",
+   "fieldtype": "Float",
+   "label": "Condensate Inlet",
+   "precision": "2"
+  },
+  {
+   "fieldname": "column_break_xqjc",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "(Other Source)",
+   "fieldname": "effluent",
+   "fieldtype": "Float",
+   "label": "Effluent",
+   "precision": "2"
+  },
+  {
+   "fieldname": "total_effluent_genration",
+   "fieldtype": "Float",
+   "label": "Total Effluent Genration",
+   "precision": "2"
+  },
+  {
+   "description": "(In CPU/ETP)",
+   "fieldname": "feed_in_cpuetp",
+   "fieldtype": "Float",
+   "label": " Feed ",
+   "precision": "2"
+  },
+  {
+   "fieldname": "treated_water_recycle",
+   "fieldtype": "Float",
+   "label": "Treated Water Recycle",
+   "precision": "2"
+  },
+  {
+   "fieldname": "total_treated_water",
+   "fieldtype": "Float",
+   "label": "Total Treated Water ",
+   "precision": "2"
+  },
+  {
+   "fieldname": "treated_water_use_section",
+   "fieldtype": "Section Break",
+   "label": "Treated Water Use"
+  },
+  {
+   "description": "(In LT)",
+   "fieldname": "treated_water",
+   "fieldtype": "Float",
+   "label": "Treated Water"
+  },
+  {
+   "fieldname": "column_break_moed",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "(In Cooling Towers)",
+   "fieldname": "treated_water1",
+   "fieldtype": "Float",
+   "label": "Treated Water"
+  },
+  {
+   "description": "(Other Use)",
+   "fieldname": "treated_water_transfer",
+   "fieldtype": "Float",
+   "label": "Treated Water Transfer"
+  },
+  {
+   "fieldname": "raw_water_consumption_and_piezometer_section",
+   "fieldtype": "Section Break",
+   "label": "Raw Water Consumption And Piezometer"
+  },
+  {
+   "fieldname": "float_apqq",
+   "fieldtype": "Float",
+   "label": "Borewell 1",
+   "precision": "2"
+  },
+  {
+   "fieldname": "column_break_dkdu",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "borewell_2",
+   "fieldtype": "Float",
+   "label": "Borewell 2",
+   "precision": "2"
+  },
+  {
+   "fieldname": "ground_water_extraction",
+   "fieldtype": "Float",
+   "label": "Ground Water Extraction",
+   "precision": "2"
+  },
+  {
+   "fieldname": "surface_water_used",
+   "fieldtype": "Float",
+   "label": "Surface Water Used"
+  },
+  {
+   "fieldname": "piezometer_1",
+   "fieldtype": "Float",
+   "label": "Piezometer 1",
+   "precision": "2"
+  },
+  {
+   "fieldname": "piezometer_2",
+   "fieldtype": "Float",
+   "label": "Piezometer 2",
+   "precision": "2"
+  },
+  {
+   "fieldname": "plant",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Plant",
+   "options": "Branch",
+   "reqd": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-07-02 16:40:18.086162",
+ "modified_by": "Administrator",
+ "module": "ETH",
+ "name": "Water Balance",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
