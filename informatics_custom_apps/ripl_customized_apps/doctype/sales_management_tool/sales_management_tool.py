@@ -675,6 +675,14 @@ class SalesManagementTool(Document):
             if wei_updates:
                 frappe.db.set_value("Weighment", wname, wei_updates, update_modified=False)
 
+            # Set outward_date via raw SQL to guarantee modified/modified_by stay untouched
+            if both_provided:
+                frappe.db.sql(
+                    """UPDATE `tabWeighment` SET outward_date = %s
+                       WHERE name = %s""",
+                    (frappe.utils.now(), wname)
+                )
+
         # Update Gate Entry status accordingly
         if both_provided:
             frappe.db.set_value(
@@ -1047,7 +1055,8 @@ class SalesManagementTool(Document):
             targets.append(("Gate Entry", self.gate_entry))
             weighments = self.get_related_weighments()
             for w in weighments:
-                targets.append(("Weighment", w))
+                if self.correction_type != "Wrong Weight(Sale)":
+                    targets.append(("Weighment", w))
                 dns = frappe.get_all("Delivery Note", filters={"custom_weighment": w}, pluck="name")
                 for dn in dns:
                     targets.append(("Delivery Note", dn))
