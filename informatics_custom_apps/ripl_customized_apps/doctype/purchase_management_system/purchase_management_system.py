@@ -1086,7 +1086,7 @@ class PurchaseManagementSystem(Document):
 
         if self.reason:
             comment_content = (
-				f"{self.owner} changed the card number from {gate_entry_doc.card_number} to {self.newcorrect_card_number} <br>"
+				f"{self.owner} changed the card number from {old_card.name} to {self.newcorrect_card_number} <br>"
 				f"Reason: {self.reason}"
 			)
             frappe.get_doc({

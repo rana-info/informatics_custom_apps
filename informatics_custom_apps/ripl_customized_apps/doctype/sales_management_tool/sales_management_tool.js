@@ -323,8 +323,11 @@ function toggle_correction_sections(frm) {
 	frm.refresh_fields(["segment_correction_section", "wrong_segment", "new_segment"]);
 
 	const is_tare = ct === "Change First Weight(Tare)";
-	frm.set_df_property("tare_weight", "read_only", is_tare ? 0 : 1);
-	frm.refresh_field("tare_weight");
+	const is_wrong_weight = ct === "Wrong Weight(Sale)";
+
+	frm.set_df_property("tare_weight", "read_only", (is_tare || is_wrong_weight) ? 0 : 1);
+	frm.set_df_property("gross_weight", "read_only", is_wrong_weight ? 0 : 1);
+	frm.refresh_fields(["tare_weight", "gross_weight"]);
 }
 
 /* ─── Form Events ─── */
@@ -479,8 +482,11 @@ frappe.ui.form.on("Sales Management Tool", {
 
 		// Tare weight editability
 		const is_tare = ct === "Change First Weight(Tare)";
-		frm.set_df_property("tare_weight", "read_only", is_tare ? 0 : 1);
-		frm.refresh_field("tare_weight");
+		const is_wrong_weight = ct === "Wrong Weight(Sale)";
+
+		frm.set_df_property("tare_weight", "read_only", (is_tare || is_wrong_weight) ? 0 : 1);
+		frm.set_df_property("gross_weight", "read_only", is_wrong_weight ? 0 : 1);
+		frm.refresh_fields(["tare_weight", "gross_weight"]);
 
 		frm.doc.reason = ct || "";
 		frm.refresh_field("reason");
@@ -495,10 +501,18 @@ frappe.ui.form.on("Sales Management Tool", {
 
 
 	gross_weight(frm) {
+		if (frm.doc.correction_type === "Wrong Weight(Sale)") {
+			recalculate_net_weight(frm);
+			return;
+		}
 		recalculate_net_weight(frm);
 	},
 
 	tare_weight(frm) {
+		if (frm.doc.correction_type === "Wrong Weight(Sale)") {
+			recalculate_net_weight(frm);
+			return;
+		}
 		if (frm.doc.correction_type === "Change First Weight(Tare)") return;
 		recalculate_net_weight(frm);
 	},
