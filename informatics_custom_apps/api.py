@@ -1,5 +1,6 @@
 import frappe
 from frappe import _
+import json
 
 
 @frappe.whitelist()
@@ -210,3 +211,57 @@ def make_purchase_receipt(source_name, target_doc=None):
         source_name,
         target_doc
     )
+# Code for saving RO Plant Log Book entries through page
+@frappe.whitelist()
+def get_ro_plant_log(company, plant, log_date):
+    """Fetch existing log for this company+plant+date, if any."""
+    name = frappe.db.get_value(
+        "RO Plant Log Book",
+        {"company": company, "plant": plant, "log_date": log_date},
+        "name"
+    )
+    if not name:
+        return None
+
+    doc = frappe.get_doc("RO Plant Log Book", name)
+    return {
+        "name": doc.name,
+        "rows": [row.as_dict() for row in doc.logs]
+    }
+
+
+@frappe.whitelist()
+def save_ro_plant_log(company, plant, log_date, rows):
+    if isinstance(rows, str):
+        rows = json.loads(rows)
+
+    existing = frappe.db.get_value(
+        "RO Plant Log Book",
+        {"company": company, "plant": plant, "log_date": log_date},
+        "name"
+    )
+
+    if existing:
+        doc = frappe.get_doc("RO Plant Log Book", existing)
+        existing_by_slot = {row.time_slot: row for row in doc.logs}
+
+        for row in rows:
+            slot = row.get("time_slot")
+            if slot in existing_by_slot:
+                existing_by_slot[slot].update(row)
+            else:
+                doc.append("logs", row)
+        doc.save()
+    else:
+        doc = frappe.get_doc({
+            "doctype": "RO Plant Log Book",
+            "company": company,
+            "plant": plant,
+            "log_date": log_date,
+        })
+        for row in rows:
+            doc.append("logs", row)
+        doc.insert()
+
+    frappe.db.commit()
+    return doc.name
