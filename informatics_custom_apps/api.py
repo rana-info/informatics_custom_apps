@@ -265,3 +265,59 @@ def save_ro_plant_log(company, plant, log_date, rows):
 
     frappe.db.commit()
     return doc.name
+
+
+# Power Plant Log Book Save Logic
+@frappe.whitelist()
+def get_power_plant_log(company, plant, log_date):
+    """Fetch existing power plant log for this company+plant+date, if any."""
+    name = frappe.db.get_value(
+        "Power Plant Log Book",
+        {"company": company, "plant": plant, "log_date": log_date},
+        "name"
+    )
+    if not name:
+        return None
+
+    doc = frappe.get_doc("Power Plant Log Book", name)
+    return {
+        "name": doc.name,
+        "rows": [row.as_dict() for row in doc.logs]
+    }
+
+
+@frappe.whitelist()
+def save_power_plant_log(company, plant, log_date, rows):
+    if isinstance(rows, str):
+        rows = json.loads(rows)
+
+    existing = frappe.db.get_value(
+        "Power Plant Log Book",
+        {"company": company, "plant": plant, "log_date": log_date},
+        "name"
+    )
+
+    if existing:
+        doc = frappe.get_doc("Power Plant Log Book", existing)
+        existing_by_slot = {row.time_slot: row for row in doc.logs}
+
+        for row in rows:
+            slot = row.get("time_slot")
+            if slot in existing_by_slot:
+                existing_by_slot[slot].update(row)
+            else:
+                doc.append("logs", row)
+        doc.save()
+    else:
+        doc = frappe.get_doc({
+            "doctype": "Power Plant Log Book",
+            "company": company,
+            "plant": plant,
+            "log_date": log_date,
+        })
+        for row in rows:
+            doc.append("logs", row)
+        doc.insert()
+
+    frappe.db.commit()
+    return doc.name

@@ -1,0 +1,548 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-07-03 10:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "time_slot",
+  "column_break_feed_water",
+  "ph",
+  "conductivity",
+  "silica",
+  "residual_oxygen_scavenger",
+  "iron_as_fe",
+  "dissolve_oxygen",
+  "total_hardness",
+  "column_break_boiler_water",
+  "ph1",
+  "conductivity1",
+  "tds",
+  "silica1",
+  "phosphate_as_po4",
+  "p_alkalinity",
+  "total_hardness1",
+  "chloride_as_caco3",
+  "column_break_steam_quality",
+  "ph2",
+  "conductivity2",
+  "silica2",
+  "iron_as_fe1",
+  "sodium_as_na",
+  "column_break_turbine_condensate",
+  "ph3",
+  "conductivity3",
+  "silica3",
+  "copper_in_turbine_condensate",
+  "column_break_common_exhaust_condensate",
+  "ph4",
+  "conductivity4",
+  "silica4",
+  "total_hardness2",
+  "iron_as_fe2",
+  "column_break_boiler_chemicals",
+  "chemical_1",
+  "chemical_2",
+  "chemical_3",
+  "column_break_dm_plant",
+  "hydrochloric_acid",
+  "caustic_soda",
+  "dm_plant_running_hours",
+  "dm_water_consumption",
+  "column_break_cooling_tower_water",
+  "ph5",
+  "conductivity5",
+  "tds1",
+  "t_hardness",
+  "calcium_hardness",
+  "magnesium_hardness",
+  "chloride_as_caco31",
+  "sulphate_as_so4",
+  "silica5",
+  "cw_inlet_pressure",
+  "cw_outlet_pressure",
+  "cw_inlet_temperature",
+  "cw_outlet_temperature",
+  "turbine_condensate_temperature",
+  "vacuum_in_condensor",
+  "column_break_fuel",
+  "moisture",
+  "g_cal_value",
+  "dust",
+  "column_break_oil",
+  "moisture1",
+  "tss",
+  "column_break_remarks",
+  "remarks"
+ ],
+ "fields": [
+  {
+   "fieldname": "time_slot",
+   "fieldtype": "Select",
+   "label": "Time Slot",
+   "options": "9:30 AM\n1:30 PM\n5:30 PM\n9:30 PM\n1:30 AM\n5:30 AM",
+   "in_list_view": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_feed_water",
+   "fieldtype": "Column Break",
+   "label": "FEED WATERS"
+  },
+  {
+   "fieldname": "ph",
+   "fieldtype": "Float",
+   "label": "PH",
+   "precision": "2",
+   "description": "Norm: 8.8-9.2"
+  },
+  {
+   "fieldname": "conductivity",
+   "fieldtype": "Float",
+   "label": "Conductivity (Max)",
+   "precision": "2",
+   "description": "Norm: 10"
+  },
+  {
+   "fieldname": "silica",
+   "fieldtype": "Float",
+   "label": "Silica (Max)",
+   "precision": "2",
+   "description": "UOM: ppm | Norm: 0.02"
+  },
+  {
+   "fieldname": "residual_oxygen_scavenger",
+   "fieldtype": "Float",
+   "label": "Residual Oxygen Scavenger",
+   "precision": "2",
+   "description": "UOM: ppm | Norm: 0.01-0.04"
+  },
+  {
+   "fieldname": "iron_as_fe",
+   "fieldtype": "Float",
+   "label": "Iron as Fe (Max)",
+   "precision": "2",
+   "description": "UOM: ppm | Norm: 0.02"
+  },
+  {
+   "fieldname": "dissolve_oxygen",
+   "fieldtype": "Float",
+   "label": "Dissolve Oxygen",
+   "precision": "2",
+   "description": "UOM: ppm | Norm: 0.007"
+  },
+  {
+   "fieldname": "total_hardness",
+   "fieldtype": "Float",
+   "label": "Total Hardness",
+   "precision": "2",
+   "description": "UOM: ppm"
+  },
+  {
+   "fieldname": "column_break_boiler_water",
+   "fieldtype": "Column Break",
+   "label": "BOILER WATER"
+  },
+  {
+   "fieldname": "ph1",
+   "fieldtype": "Float",
+   "label": "PH",
+   "precision": "2",
+   "description": "Norm: 9.5-10.2"
+  },
+  {
+   "fieldname": "conductivity1",
+   "fieldtype": "Float",
+   "label": "Conductivity (Max)",
+   "precision": "2",
+   "description": "Norm: 100"
+  },
+  {
+   "fieldname": "tds",
+   "fieldtype": "Float",
+   "label": "TDS (Max)",
+   "precision": "2",
+   "description": "UOM: ppm | Norm: 50"
+  },
+  {
+   "fieldname": "silica1",
+   "fieldtype": "Float",
+   "label": "Silica (Max)",
+   "precision": "2",
+   "description": "UOM: ppm | Norm: 2"
+  },
+  {
+   "fieldname": "phosphate_as_po4",
+   "fieldtype": "Float",
+   "label": "Phosphate as PO4",
+   "precision": "2",
+   "description": "UOM: ppm | Norm: 5.0-20"
+  },
+  {
+   "fieldname": "p_alkalinity",
+   "fieldtype": "Float",
+   "label": "P Alkalinity (Max)",
+   "precision": "2",
+   "description": "UOM: ppm | Norm: 20"
+  },
+  {
+   "fieldname": "total_hardness1",
+   "fieldtype": "Float",
+   "label": "Total Hardness",
+   "precision": "2",
+   "description": "UOM: ppm | Norm: N.D"
+  },
+  {
+   "fieldname": "chloride_as_caco3",
+   "fieldtype": "Float",
+   "label": "Chloride as CaCO3",
+   "precision": "2",
+   "description": "UOM: ppm | Norm: N.D"
+  },
+  {
+   "fieldname": "column_break_steam_quality",
+   "fieldtype": "Column Break",
+   "label": "STEAM QUALITY"
+  },
+  {
+   "fieldname": "ph2",
+   "fieldtype": "Float",
+   "label": "PH",
+   "precision": "2",
+   "description": "Norm: 8.8-9.2"
+  },
+  {
+   "fieldname": "conductivity2",
+   "fieldtype": "Float",
+   "label": "Conductivity (Max)",
+   "precision": "2",
+   "description": "Norm: 10"
+  },
+  {
+   "fieldname": "silica2",
+   "fieldtype": "Float",
+   "label": "Silica (Max)",
+   "precision": "2",
+   "description": "UOM: ppm | Norm: 0.02"
+  },
+  {
+   "fieldname": "iron_as_fe1",
+   "fieldtype": "Float",
+   "label": "Iron as Fe (Max)",
+   "precision": "2",
+   "description": "UOM: ppm | Norm: 0.02"
+  },
+  {
+   "fieldname": "sodium_as_na",
+   "fieldtype": "Float",
+   "label": "Sodium as Na (Max)",
+   "precision": "2",
+   "description": "UOM: ppm | Norm: 0.02"
+  },
+  {
+   "fieldname": "column_break_turbine_condensate",
+   "fieldtype": "Column Break",
+   "label": "TURBINE CONDENSATE"
+  },
+  {
+   "fieldname": "ph3",
+   "fieldtype": "Float",
+   "label": "PH",
+   "precision": "2",
+   "description": "Norm: 8.8-9.2"
+  },
+  {
+   "fieldname": "conductivity3",
+   "fieldtype": "Float",
+   "label": "Conductivity (Max)",
+   "precision": "2",
+   "description": "UOM: ppm | Norm: 10"
+  },
+  {
+   "fieldname": "silica3",
+   "fieldtype": "Float",
+   "label": "Silica (Max)",
+   "precision": "2",
+   "description": "UOM: ppm | Norm: 0.02"
+  },
+  {
+   "fieldname": "copper_in_turbine_condensate",
+   "fieldtype": "Float",
+   "label": "Copper in Turbine Condensate",
+   "precision": "2",
+   "description": "UOM: ppm | Norm: 0.005"
+  },
+  {
+   "fieldname": "column_break_common_exhaust_condensate",
+   "fieldtype": "Column Break",
+   "label": "COMMON EXHAUST CONDENSATE"
+  },
+  {
+   "fieldname": "ph4",
+   "fieldtype": "Float",
+   "label": "PH",
+   "precision": "2",
+   "description": "Norm: 8.5-9.0"
+  },
+  {
+   "fieldname": "conductivity4",
+   "fieldtype": "Float",
+   "label": "Conductivity (Max)",
+   "precision": "2",
+   "description": "Norm: 10"
+  },
+  {
+   "fieldname": "silica4",
+   "fieldtype": "Float",
+   "label": "Silica (Max)",
+   "precision": "2",
+   "description": "UOM: ppm | Norm: 0.02"
+  },
+  {
+   "fieldname": "total_hardness2",
+   "fieldtype": "Float",
+   "label": "Total Hardness",
+   "precision": "2",
+   "description": "UOM: ppm | Norm: ND"
+  },
+  {
+   "fieldname": "iron_as_fe2",
+   "fieldtype": "Float",
+   "label": "Iron as Fe (Max)",
+   "precision": "2",
+   "description": "UOM: ppm | Norm: 0.02"
+  },
+  {
+   "fieldname": "column_break_boiler_chemicals",
+   "fieldtype": "Column Break",
+   "label": "BOILER CHEMICALS CONS./DAY"
+  },
+  {
+   "fieldname": "chemical_1",
+   "fieldtype": "Float",
+   "label": "Chemical 1",
+   "precision": "2"
+  },
+  {
+   "fieldname": "chemical_2",
+   "fieldtype": "Float",
+   "label": "Chemical 2",
+   "precision": "2"
+  },
+  {
+   "fieldname": "chemical_3",
+   "fieldtype": "Float",
+   "label": "Chemical 3",
+   "precision": "2"
+  },
+  {
+   "fieldname": "column_break_dm_plant",
+   "fieldtype": "Column Break",
+   "label": "D.M PLANT"
+  },
+  {
+   "fieldname": "hydrochloric_acid",
+   "fieldtype": "Float",
+   "label": "Hydrochloric Acid",
+   "precision": "2"
+  },
+  {
+   "fieldname": "caustic_soda",
+   "fieldtype": "Float",
+   "label": "Caustic Soda",
+   "precision": "2"
+  },
+  {
+   "fieldname": "dm_plant_running_hours",
+   "fieldtype": "Float",
+   "label": "DM Plant Running Hours/Day",
+   "precision": "2"
+  },
+  {
+   "fieldname": "dm_water_consumption",
+   "fieldtype": "Float",
+   "label": "DM Water Consumption/Day",
+   "precision": "2"
+  },
+  {
+   "fieldname": "column_break_cooling_tower_water",
+   "fieldtype": "Column Break",
+   "label": "COOLING TOWER WATER"
+  },
+  {
+   "fieldname": "ph5",
+   "fieldtype": "Float",
+   "label": "PH",
+   "precision": "2",
+   "description": "Norm: 8.3-8.8"
+  },
+  {
+   "fieldname": "conductivity5",
+   "fieldtype": "Float",
+   "label": "Conductivity (Max)",
+   "precision": "2",
+   "description": "UOM: ppm | Norm: 5000"
+  },
+  {
+   "fieldname": "tds1",
+   "fieldtype": "Float",
+   "label": "TDS (Max)",
+   "precision": "2",
+   "description": "UOM: ppm | Norm: 4000"
+  },
+  {
+   "fieldname": "t_hardness",
+   "fieldtype": "Float",
+   "label": "T.Hardness (Max)",
+   "precision": "2",
+   "description": "UOM: ppm | Norm: 500"
+  },
+  {
+   "fieldname": "calcium_hardness",
+   "fieldtype": "Float",
+   "label": "Calcium Hardness (Max)",
+   "precision": "2",
+   "description": "UOM: ppm | Norm: 250"
+  },
+  {
+   "fieldname": "magnesium_hardness",
+   "fieldtype": "Float",
+   "label": "Magnesium Hardness (Max)",
+   "precision": "2",
+   "description": "Norm: 250"
+  },
+  {
+   "fieldname": "chloride_as_caco31",
+   "fieldtype": "Float",
+   "label": "Chloride as CaCO3",
+   "precision": "2",
+   "description": "Norm: 500"
+  },
+  {
+   "fieldname": "sulphate_as_so4",
+   "fieldtype": "Float",
+   "label": "Sulphate as SO4 (Max)",
+   "precision": "2",
+   "description": "Norm: 1000"
+  },
+  {
+   "fieldname": "silica5",
+   "fieldtype": "Float",
+   "label": "Silica (Max)",
+   "precision": "2",
+   "description": "Norm: 150"
+  },
+  {
+   "fieldname": "cw_inlet_pressure",
+   "fieldtype": "Float",
+   "label": "CW Inlet Pressure",
+   "precision": "2",
+   "description": "UOM: Kg/Cm2"
+  },
+  {
+   "fieldname": "cw_outlet_pressure",
+   "fieldtype": "Float",
+   "label": "CW Outlet Pressure",
+   "precision": "2",
+   "description": "UOM: Kg/Cm2"
+  },
+  {
+   "fieldname": "cw_inlet_temperature",
+   "fieldtype": "Float",
+   "label": "CW Inlet Temperature",
+   "precision": "2",
+   "description": "UOM: Deg.C | Norm: 28-32"
+  },
+  {
+   "fieldname": "cw_outlet_temperature",
+   "fieldtype": "Float",
+   "label": "CW Outlet Temperature",
+   "precision": "2",
+   "description": "UOM: Deg.C | Norm: 38-42"
+  },
+  {
+   "fieldname": "turbine_condensate_temperature",
+   "fieldtype": "Float",
+   "label": "Turbine Condensate Temperature",
+   "precision": "2",
+   "description": "UOM: Deg.C | Norm: 40-50"
+  },
+  {
+   "fieldname": "vacuum_in_condensor",
+   "fieldtype": "Float",
+   "label": "Vacuum In Condensor",
+   "precision": "2",
+   "description": "UOM: Kg/Cm2"
+  },
+  {
+   "fieldname": "column_break_fuel",
+   "fieldtype": "Column Break",
+   "label": "FUEL"
+  },
+  {
+   "fieldname": "moisture",
+   "fieldtype": "Float",
+   "label": "Moisture",
+   "precision": "2",
+   "description": "UOM: %"
+  },
+  {
+   "fieldname": "g_cal_value",
+   "fieldtype": "Float",
+   "label": "G.Cal. Value",
+   "precision": "2",
+   "description": "UOM: Kcal/Kg"
+  },
+  {
+   "fieldname": "dust",
+   "fieldtype": "Float",
+   "label": "Dust",
+   "precision": "2",
+   "description": "UOM: %"
+  },
+  {
+   "fieldname": "column_break_oil",
+   "fieldtype": "Column Break",
+   "label": "OIL"
+  },
+  {
+   "fieldname": "moisture1",
+   "fieldtype": "Float",
+   "label": "Moisture",
+   "precision": "2"
+  },
+  {
+   "fieldname": "tss",
+   "fieldtype": "Float",
+   "label": "T.S.S",
+   "precision": "2"
+  },
+  {
+   "fieldname": "column_break_remarks",
+   "fieldtype": "Column Break",
+   "label": "REMARKS"
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks",
+   "description": "General remarks for this shift"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-07-03 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "ETH",
+ "name": "Power Plant Log Book Item",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
