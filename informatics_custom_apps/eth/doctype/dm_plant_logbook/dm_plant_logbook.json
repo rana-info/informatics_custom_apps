@@ -3,15 +3,33 @@
  "autoname": "format:{plant}-{log_date}",
  "creation": "2026-07-02 00:00:00",
  "doctype": "DocType",
+ "editable_grid": 1,
  "engine": "InnoDB",
  "field_order": [
   "company",
   "plant",
   "log_date",
-  "amended_from",
-  "parameters"
+  "rows"
  ],
  "fields": [
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "fieldname": "plant",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Plant",
+   "options": "Branch",
+   "reqd": 1
+  },
   {
    "fieldname": "log_date",
    "fieldtype": "Date",
@@ -21,41 +39,18 @@
    "reqd": 1
   },
   {
-   "fieldname": "amended_from",
-   "fieldtype": "Link",
-   "label": "Amended From",
-   "no_copy": 1,
-   "options": "CPU Plant Lab Log",
-   "print_hide": 1,
-   "read_only": 1
-  },
-  {
-   "fieldname": "parameters",
+   "fieldname": "rows",
    "fieldtype": "Table",
-   "label": "Parameters",
-   "options": "CPU Plant Lab Log Detail"
-  },
-  {
-   "fieldname": "company",
-   "fieldtype": "Link",
-   "in_list_view": 1,
-   "label": "Company",
-   "options": "Company"
-  },
-  {
-   "fieldname": "plant",
-   "fieldtype": "Link",
-   "in_list_view": 1,
-   "label": "Plant",
-   "options": "Branch"
+   "label": "Rows",
+   "options": "DM Plant Log Row"
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-02 16:42:55.880803",
+ "modified": "2026-07-02 17:40:06.686955",
  "modified_by": "Administrator",
  "module": "ETH",
- "name": "CPU Plant Lab Log",
+ "name": "DM Plant Logbook",
  "naming_rule": "Expression (old style)",
  "owner": "Administrator",
  "permissions": [
@@ -88,5 +83,5 @@
  "sort_field": "modified",
  "sort_order": "DESC",
  "states": [],
- "title_field": "log_date"
+ "track_changes": 1
 }
