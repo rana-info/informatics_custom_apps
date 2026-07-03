@@ -195,6 +195,7 @@ frappe.pages['ro-plant-log'].on_page_load = function(wrapper) {
 
     let inputs = {}; // inputs[fieldname][time_slot] = jquery input
     let current_doc_name = null; // set when an existing record is loaded
+    let ordered_fieldnames = []; // row order, top to bottom, for keyboard navigation
 
     sections.forEach(sec => {
         $table.find('tbody').append(
@@ -203,10 +204,44 @@ frappe.pages['ro-plant-log'].on_page_load = function(wrapper) {
         sec.fields.forEach(([fieldname, label]) => {
             let $row = $(`<tr><td>${label}</td></tr>`).appendTo($table.find('tbody'));
             inputs[fieldname] = {};
+            ordered_fieldnames.push(fieldname);
             time_slots.forEach((ts, i) => {
                 let $td = $(`<td class="slot-col-${i}"></td>`).appendTo($row);
                 let $input = $('<input type="number" step="0.01" class="form-control input-sm">').appendTo($td);
                 inputs[fieldname][ts] = $input;
+            });
+        });
+    });
+
+    // ---------- keyboard navigation: Enter / Tab move down the same column ----------
+    function focus_cell(fieldname, ts) {
+        let $inp = inputs[fieldname] && inputs[fieldname][ts];
+        if ($inp) {
+            $inp.trigger('focus');
+            $inp.trigger('select');
+        }
+    }
+
+    ordered_fieldnames.forEach((fieldname, row_idx) => {
+        time_slots.forEach(ts => {
+            inputs[fieldname][ts].on('keydown', function (e) {
+                if (e.key !== 'Enter') return; // Tab keeps native browser behaviour
+
+                e.preventDefault();
+                let next_idx = e.shiftKey ? row_idx - 1 : row_idx + 1;
+
+                if (next_idx >= 0 && next_idx < ordered_fieldnames.length) {
+                    focus_cell(ordered_fieldnames[next_idx], ts);
+                } else {
+                    // reached top/bottom of this column - jump to the
+                    // first/last row of the next/previous time slot
+                    let ts_idx = time_slots.indexOf(ts);
+                    let next_ts_idx = e.shiftKey ? ts_idx - 1 : ts_idx + 1;
+                    if (next_ts_idx >= 0 && next_ts_idx < time_slots.length) {
+                        let edge_row = e.shiftKey ? ordered_fieldnames.length - 1 : 0;
+                        focus_cell(ordered_fieldnames[edge_row], time_slots[next_ts_idx]);
+                    }
+                }
             });
         });
     });
