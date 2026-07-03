@@ -1,15 +1,15 @@
 {
  "content": null,
- "creation": "2026-07-02 15:32:41.069890",
+ "creation": "2026-07-02 17:07:55.402918",
  "docstatus": 0,
  "doctype": "Page",
  "idx": 0,
- "modified": "2026-07-02 16:43:56.187143",
+ "modified": "2026-07-02 17:08:00.366820",
  "modified_by": "Administrator",
  "module": "ETH",
- "name": "cpu-plant-lab-log-bo",
+ "name": "dm-plant-log-book",
  "owner": "Administrator",
- "page_name": "cpu-plant-lab-log-bo",
+ "page_name": "dm-plant-log-book",
  "roles": [
   {
    "role": "Employee"
@@ -19,5 +19,5 @@
  "standard": "Yes",
  "style": null,
  "system_page": 0,
- "title": "CPU Plant Lab Log Book"
+ "title": "D.M Plant Log Book"
 }

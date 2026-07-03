@@ -1,0 +1,266 @@
+{
+ "actions": [],
+ "creation": "2026-07-02 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "s_no",
+  "time_slot",
+  "started_time",
+  "stopped_time",
+  "discharging_time",
+  "total_running_hours",
+  "dmf_inlet_turbidity",
+  "dmf_outlet_turbidity",
+  "dmf_inlet_pr",
+  "dmf_outlet_pr",
+  "sac_inlet_pr",
+  "sac_outlet_pr",
+  "sac_ph",
+  "sac_th",
+  "sac_fma",
+  "wba_inlet_pr",
+  "wba_outlet_pr",
+  "wba_outlet_pr_2",
+  "sba_inlet_pr",
+  "sba_outlet_pr",
+  "sba_outlet_ph",
+  "sba_outlet_conductivity",
+  "sba_outlet_silica",
+  "mb_inlet_pr",
+  "mb_outlet_pr",
+  "mb_before_dosing_ph",
+  "mb_after_dosing_ph",
+  "mb_outlet_conductivity",
+  "mb_outlet_silica",
+  "storage_tank_position",
+  "remarks"
+ ],
+ "fields": [
+  {
+   "fieldname": "s_no",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "S.No",
+   "read_only": 1
+  },
+  {
+   "fieldname": "time_slot",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Time in Hrs.",
+   "read_only": 1
+  },
+  {
+   "fieldname": "started_time",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Started Time in Hours"
+  },
+  {
+   "fieldname": "stopped_time",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Stoped Times in Hours"
+  },
+  {
+   "fieldname": "discharging_time",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Discharging Time in Hours"
+  },
+  {
+   "fieldname": "total_running_hours",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Total Running in Hours"
+  },
+  {
+   "fieldname": "dmf_inlet_turbidity",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "D.M.F - Inlet Turbidity (NTU)",
+   "precision": "3"
+  },
+  {
+   "fieldname": "dmf_outlet_turbidity",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "D.M.F - Outlet Turbidity (NTU)",
+   "precision": "3"
+  },
+  {
+   "fieldname": "dmf_inlet_pr",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "D.M.F - Inlet P.R. KG/CM2",
+   "precision": "3"
+  },
+  {
+   "fieldname": "dmf_outlet_pr",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "D.M.F - Outlet P.R. KG/CM2",
+   "precision": "3"
+  },
+  {
+   "fieldname": "sac_inlet_pr",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "S.A.C - Inlet P.R. KG/CM2",
+   "precision": "3"
+  },
+  {
+   "fieldname": "sac_outlet_pr",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "S.A.C - Outlet P.R. KG/CM2",
+   "precision": "3"
+  },
+  {
+   "fieldname": "sac_ph",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "S.A.C - PH",
+   "precision": "3"
+  },
+  {
+   "fieldname": "sac_th",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "S.A.C - T.H",
+   "precision": "3"
+  },
+  {
+   "fieldname": "sac_fma",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "S.A.C - FMA",
+   "precision": "3"
+  },
+  {
+   "fieldname": "wba_inlet_pr",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "W.B.A - Inlet P.R. KG/CM2",
+   "precision": "3"
+  },
+  {
+   "fieldname": "wba_outlet_pr",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "W.B.A - Outlet P.R. KG/CM2",
+   "precision": "3"
+  },
+  {
+   "fieldname": "wba_outlet_pr_2",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "W.B.A - Outlet PR KG/CM2",
+   "precision": "3"
+  },
+  {
+   "fieldname": "sba_inlet_pr",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "S.B.A - Inlet P.R. KG/CM2",
+   "precision": "3"
+  },
+  {
+   "fieldname": "sba_outlet_pr",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "S.B.A - Outlet P.R. KG/CM2",
+   "precision": "3"
+  },
+  {
+   "fieldname": "sba_outlet_ph",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "S.B.A - Outlet PH",
+   "precision": "3"
+  },
+  {
+   "fieldname": "sba_outlet_conductivity",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "S.B.A - Outlet Conductivity /CM",
+   "precision": "3"
+  },
+  {
+   "fieldname": "sba_outlet_silica",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "S.B.A - Outlet Silica MG/LTR",
+   "precision": "3"
+  },
+  {
+   "fieldname": "mb_inlet_pr",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Mixed Bed - Inlet P.R. KG/CM2",
+   "precision": "3"
+  },
+  {
+   "fieldname": "mb_outlet_pr",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Mixed Bed - Outlet P.R. KG/CM2",
+   "precision": "3"
+  },
+  {
+   "fieldname": "mb_before_dosing_ph",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Mixed Bed - Before Dosing PH",
+   "precision": "3"
+  },
+  {
+   "fieldname": "mb_after_dosing_ph",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Mixed Bed - After Dosing PH",
+   "precision": "3"
+  },
+  {
+   "fieldname": "mb_outlet_conductivity",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Mixed Bed - Outlet Conductivity /CM",
+   "precision": "3"
+  },
+  {
+   "fieldname": "mb_outlet_silica",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Mixed Bed - Outlet Silica MG/LTR",
+   "precision": "3"
+  },
+  {
+   "fieldname": "storage_tank_position",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Storage Tank Position"
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "in_list_view": 1,
+   "label": "Remarks"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-07-02 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Eth",
+ "name": "DM Plant Log Row",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
