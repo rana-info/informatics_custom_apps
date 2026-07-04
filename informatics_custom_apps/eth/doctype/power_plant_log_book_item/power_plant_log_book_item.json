@@ -29,25 +29,17 @@
   "conductivity2",
   "silica2",
   "iron_as_fe1",
-  "sodium_as_na",
   "column_break_turbine_condensate",
   "ph3",
   "conductivity3",
   "silica3",
-  "copper_in_turbine_condensate",
   "column_break_common_exhaust_condensate",
   "ph4",
   "conductivity4",
   "silica4",
   "total_hardness2",
   "iron_as_fe2",
-  "column_break_boiler_chemicals",
-  "chemical_1",
-  "chemical_2",
-  "chemical_3",
   "column_break_dm_plant",
-  "hydrochloric_acid",
-  "caustic_soda",
   "dm_plant_running_hours",
   "dm_water_consumption",
   "column_break_cooling_tower_water",
@@ -70,9 +62,6 @@
   "moisture",
   "g_cal_value",
   "dust",
-  "column_break_oil",
-  "moisture1",
-  "tss",
   "column_break_remarks",
   "remarks"
  ],
@@ -234,13 +223,6 @@
    "description": "UOM: ppm | Norm: 0.02"
   },
   {
-   "fieldname": "sodium_as_na",
-   "fieldtype": "Float",
-   "label": "Sodium as Na (Max)",
-   "precision": "2",
-   "description": "UOM: ppm | Norm: 0.02"
-  },
-  {
    "fieldname": "column_break_turbine_condensate",
    "fieldtype": "Column Break",
    "label": "TURBINE CONDENSATE"
@@ -265,13 +247,6 @@
    "label": "Silica (Max)",
    "precision": "2",
    "description": "UOM: ppm | Norm: 0.02"
-  },
-  {
-   "fieldname": "copper_in_turbine_condensate",
-   "fieldtype": "Float",
-   "label": "Copper in Turbine Condensate",
-   "precision": "2",
-   "description": "UOM: ppm | Norm: 0.005"
   },
   {
    "fieldname": "column_break_common_exhaust_condensate",
@@ -314,44 +289,9 @@
    "description": "UOM: ppm | Norm: 0.02"
   },
   {
-   "fieldname": "column_break_boiler_chemicals",
-   "fieldtype": "Column Break",
-   "label": "BOILER CHEMICALS CONS./DAY"
-  },
-  {
-   "fieldname": "chemical_1",
-   "fieldtype": "Float",
-   "label": "Chemical 1",
-   "precision": "2"
-  },
-  {
-   "fieldname": "chemical_2",
-   "fieldtype": "Float",
-   "label": "Chemical 2",
-   "precision": "2"
-  },
-  {
-   "fieldname": "chemical_3",
-   "fieldtype": "Float",
-   "label": "Chemical 3",
-   "precision": "2"
-  },
-  {
    "fieldname": "column_break_dm_plant",
    "fieldtype": "Column Break",
    "label": "D.M PLANT"
-  },
-  {
-   "fieldname": "hydrochloric_acid",
-   "fieldtype": "Float",
-   "label": "Hydrochloric Acid",
-   "precision": "2"
-  },
-  {
-   "fieldname": "caustic_soda",
-   "fieldtype": "Float",
-   "label": "Caustic Soda",
-   "precision": "2"
   },
   {
    "fieldname": "dm_plant_running_hours",
@@ -500,23 +440,6 @@
    "label": "Dust",
    "precision": "2",
    "description": "UOM: %"
-  },
-  {
-   "fieldname": "column_break_oil",
-   "fieldtype": "Column Break",
-   "label": "OIL"
-  },
-  {
-   "fieldname": "moisture1",
-   "fieldtype": "Float",
-   "label": "Moisture",
-   "precision": "2"
-  },
-  {
-   "fieldname": "tss",
-   "fieldtype": "Float",
-   "label": "T.S.S",
-   "precision": "2"
   },
   {
    "fieldname": "column_break_remarks",

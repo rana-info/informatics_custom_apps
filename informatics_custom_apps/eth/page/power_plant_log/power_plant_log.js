@@ -35,13 +35,11 @@ frappe.pages['power-plant-log'].on_page_load = function(wrapper) {
             ["conductivity2", "Conductivity (Max)", null],
             ["silica2", "Silica (Max)", "ppm"],
             ["iron_as_fe1", "Iron as Fe (Max)", "ppm"],
-            ["sodium_as_na", "Sodium as Na (Max)", "ppm"],
         ]},
         { title: "TURBINE CONDENSATE", fields: [
             ["ph3", "PH", null],
             ["conductivity3", "Conductivity (Max)", "ppm"],
             ["silica3", "Silica (Max)", "ppm"],
-            ["copper_in_turbine_condensate", "Copper in Turbine Condensate", "ppm"],
         ]},
         { title: "COMMON EXHAUST CONDENSATE", fields: [
             ["ph4", "PH", null],
@@ -50,14 +48,7 @@ frappe.pages['power-plant-log'].on_page_load = function(wrapper) {
             ["total_hardness2", "Total Hardness", "ppm"],
             ["iron_as_fe2", "Iron as Fe (Max)", "ppm"],
         ]},
-        { title: "BOILER CHEMICALS CONS./DAY", fields: [
-            ["chemical_1", "Chemical 1", null],
-            ["chemical_2", "Chemical 2", null],
-            ["chemical_3", "Chemical 3", null],
-        ]},
         { title: "D.M PLANT", fields: [
-            ["hydrochloric_acid", "Hydrochloric Acid", null],
-            ["caustic_soda", "Caustic Soda", null],
             ["dm_plant_running_hours", "DM Plant Running Hours/Day", null],
             ["dm_water_consumption", "DM Water Consumption/Day", null],
         ]},
@@ -82,10 +73,6 @@ frappe.pages['power-plant-log'].on_page_load = function(wrapper) {
             ["moisture", "Moisture", "%"],
             ["g_cal_value", "G.Cal. Value", "Kcal/Kg"],
             ["dust", "Dust", "%"],
-        ]},
-        { title: "OIL", fields: [
-            ["moisture1", "Moisture", null],
-            ["tss", "T.S.S", null],
         ]},
     ];
 
