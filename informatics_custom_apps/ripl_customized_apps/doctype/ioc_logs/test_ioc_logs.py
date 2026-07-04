@@ -5,5 +5,5 @@
 from frappe.tests.utils import FrappeTestCase
 
 
-class TestzzProjectRSLD(FrappeTestCase):
+class TestIOCLogs(FrappeTestCase):
 	pass
