@@ -36,81 +36,71 @@
   "turbidity",
   "ph",
   "conductivity",
-  "total_hardness",
   "total_alkalinity",
   "silica_as_sio2",
-  "iron_as_fe",
   "column_break_ro_inlet_params",
   "ph1",
-  "conductivity1",
   "total_hardness1",
   "total_alkalinity1",
   "silica_as_sio21",
   "orp",
-  "frc",
   "column_break_ro_outlet_params",
   "ph2",
   "conductivity2",
   "total_hardness2",
   "silica_as_sio22",
-  "column_break_sac_outlet_params",
-  "ph3",
-  "conductivity3",
-  "column_break_sba_outlet_params",
-  "ph4",
-  "conductivity4",
-  "silica_as_sio23",
-  "column_break_mb_outlet_params",
-  "ph5",
-  "conductivity5",
-  "silica_as_sio24",
-  "ph_after_morph_dosing",
   "column_break_storage_tank",
   "dm_water_tank",
   "make_up_water_tank"
  ],
  "fields": [
   {
- "fieldname": "time_slot",
- "fieldtype": "Select",
- "label": "Time Slot",
- "options": "9:30 AM-1:30 PM\n1:30 PM-5:30 PM\n5:30 PM-9:30 PM\n9:30 PM-1:30 AM\n1:30 AM-5:30 AM\n5:30 AM-9:30 AM",
- "in_list_view": 1,
- "reqd": 1
+   "fieldname": "time_slot",
+   "fieldtype": "Select",
+   "label": "Time Slot",
+   "options": "9:30 AM-1:30 PM\n1:30 PM-5:30 PM\n5:30 PM-9:30 PM\n9:30 PM-1:30 AM\n1:30 AM-5:30 AM\n5:30 AM-9:30 AM",
+   "in_list_view": 1,
+   "reqd": 1
   },
   {
    "fieldname": "unit_pressure_column",
    "fieldtype": "Column Break",
+   "in_list_view": 1,
    "label": "UNIT PRESSURE"
   },
   {
    "fieldname": "raw__water_pump_outlet",
    "fieldtype": "Float",
    "label": "Raw  Water Pump Outlet",
+   "in_list_view": 1,
    "precision": "2"
   },
   {
    "fieldname": "mgf_inlet",
    "fieldtype": "Float",
    "label": "MGF Inlet",
+   "in_list_view": 1,
    "precision": "2"
   },
   {
    "fieldname": "mgf_outlet",
    "fieldtype": "Float",
    "label": "MGF Outlet",
+   "in_list_view": 1,
    "precision": "2"
   },
   {
    "fieldname": "mcf_inlet",
    "fieldtype": "Float",
    "label": "MCF Inlet",
+   "in_list_view": 1,
    "precision": "2"
   },
   {
    "fieldname": "mcf_outlet",
    "fieldtype": "Float",
    "label": "MCF Outlet",
+   "in_list_view": 1,
    "precision": "2"
   },
   {
@@ -251,12 +241,6 @@
    "precision": "2"
   },
   {
-   "fieldname": "total_hardness",
-   "fieldtype": "Float",
-   "label": "Total Hardness",
-   "precision": "2"
-  },
-  {
    "fieldname": "total_alkalinity",
    "fieldtype": "Float",
    "label": "Total Alkalinity",
@@ -269,12 +253,6 @@
    "precision": "2"
   },
   {
-   "fieldname": "iron_as_fe",
-   "fieldtype": "Float",
-   "label": "Iron as Fe",
-   "precision": "2"
-  },
-  {
    "fieldname": "column_break_ro_inlet_params",
    "fieldtype": "Column Break",
    "label": "R.O. INLET PARAMETERS"
@@ -283,12 +261,6 @@
    "fieldname": "ph1",
    "fieldtype": "Float",
    "label": "PH",
-   "precision": "2"
-  },
-  {
-   "fieldname": "conductivity1",
-   "fieldtype": "Float",
-   "label": "Conductivity",
    "precision": "2"
   },
   {
@@ -313,12 +285,6 @@
    "fieldname": "orp",
    "fieldtype": "Float",
    "label": "ORP",
-   "precision": "2"
-  },
-  {
-   "fieldname": "frc",
-   "fieldtype": "Float",
-   "label": "FRC",
    "precision": "2"
   },
   {
@@ -348,75 +314,6 @@
    "fieldname": "silica_as_sio22",
    "fieldtype": "Float",
    "label": "Silica as SiO2",
-   "precision": "2"
-  },
-  {
-   "fieldname": "column_break_sac_outlet_params",
-   "fieldtype": "Column Break",
-   "label": "SAC OUTLET PARAMETERS"
-  },
-  {
-   "fieldname": "ph3",
-   "fieldtype": "Float",
-   "label": "PH",
-   "precision": "2"
-  },
-  {
-   "fieldname": "conductivity3",
-   "fieldtype": "Float",
-   "label": "Conductivity",
-   "precision": "2"
-  },
-  {
-   "fieldname": "column_break_sba_outlet_params",
-   "fieldtype": "Column Break",
-   "label": "SBA OUTLET PARAMETERS"
-  },
-  {
-   "fieldname": "ph4",
-   "fieldtype": "Float",
-   "label": "PH",
-   "precision": "2"
-  },
-  {
-   "fieldname": "conductivity4",
-   "fieldtype": "Float",
-   "label": "Conductivity",
-   "precision": "2"
-  },
-  {
-   "fieldname": "silica_as_sio23",
-   "fieldtype": "Float",
-   "label": "Silica as SiO2",
-   "precision": "2"
-  },
-  {
-   "fieldname": "column_break_mb_outlet_params",
-   "fieldtype": "Column Break",
-   "label": "MB OUTLET PARAMETERS"
-  },
-  {
-   "fieldname": "ph5",
-   "fieldtype": "Float",
-   "label": "PH",
-   "precision": "2"
-  },
-  {
-   "fieldname": "conductivity5",
-   "fieldtype": "Float",
-   "label": "Conductivity",
-   "precision": "2"
-  },
-  {
-   "fieldname": "silica_as_sio24",
-   "fieldtype": "Float",
-   "label": "Silica as SiO2",
-   "precision": "2"
-  },
-  {
-   "fieldname": "ph_after_morph_dosing",
-   "fieldtype": "Float",
-   "label": "PH after Morph. Dosing",
    "precision": "2"
   },
   {

@@ -10,76 +10,58 @@ frappe.pages['ro-plant-log'].on_page_load = function(wrapper) {
         "9:30 PM-1:30 AM", "1:30 AM-5:30 AM", "5:30 AM-9:30 AM"
     ];
 
+    // each field: [fieldname, label, unit-or-null]
     let sections = [
         { title: "UNIT PRESSURE", fields: [
-            ["raw__water_pump_outlet", "Raw Water Pump Outlet"],
-            ["mgf_inlet", "MGF Inlet"],
-            ["mgf_outlet", "MGF Outlet"],
-            ["mcf_inlet", "MCF Inlet"],
-            ["mcf_outlet", "MCF Outlet"],
-            ["high_pressure_pump_outlet", "High Pressure Pump Outlet"],
-            ["ro_1st_stage", "RO 1st Stage"],
-            ["ro_2nd_stage", "RO 2nd Stage"],
-            ["ro_reject", "RO Reject"],
-            ["pressure_difference", "Pressure Difference"],
-            ["dg_pump_outlet", "DG Pump Outlet"],
-            ["sac_inlet", "SAC Inlet"],
-            ["sac_outlet", "SAC Outlet"],
-            ["sba_inlet", "SBA Inlet"],
-            ["sba_outlet", "SBA Outlet"],
-            ["mb_inlet", "MB Inlet"],
-            ["mb_outlet", "MB Outlet"],
+            ["raw__water_pump_outlet", "Raw Water Pump Outlet", "Kg/Cm2"],
+            ["mgf_inlet", "MGF Inlet", "Kg/Cm2"],
+            ["mgf_outlet", "MGF Outlet", "Kg/Cm2"],
+            ["mcf_inlet", "MCF Inlet", "Kg/Cm2"],
+            ["mcf_outlet", "MCF Outlet", "Kg/Cm2"],
+            ["high_pressure_pump_outlet", "High Pressure Pump Outlet", "Kg/Cm2"],
+            ["ro_1st_stage", "RO 1st Stage", "Kg/Cm2"],
+            ["ro_2nd_stage", "RO 2nd Stage", "Kg/Cm2"],
+            ["ro_reject", "RO Reject", "Kg/Cm2"],
+            ["pressure_difference", "Pressure Difference", "Kg/Cm2"],
+            ["dg_pump_outlet", "DG Pump Outlet", "Kg/Cm2"],
+            ["sac_inlet", "SAC Inlet", "Kg/Cm2"],
+            ["sac_outlet", "SAC Outlet", "Kg/Cm2"],
+            ["sba_inlet", "SBA Inlet", "Kg/Cm2"],
+            ["sba_outlet", "SBA Outlet", "Kg/Cm2"],
+            ["mb_inlet", "MB Inlet", "Kg/Cm2"],
+            ["mb_outlet", "MB Outlet", "Kg/Cm2"],
         ]},
         { title: "WATER FLOW", fields: [
-            ["mgf_inlet1", "MGF Inlet"],
-            ["ro_inlet", "RO Inlet"],
-            ["ro_outlet", "RO Outlet"],
-            ["reject", "Reject"],
-            ["mb_outlet1", "MB Outlet"],
-            ["recovery", "Recovery"],
+            ["mgf_inlet1", "MGF Inlet", "TPH"],
+            ["ro_inlet", "RO Inlet", "TPH"],
+            ["ro_outlet", "RO Outlet", "TPH"],
+            ["reject", "Reject", "TPH"],
+            ["mb_outlet1", "MB Outlet", "TPH"],
+            ["recovery", "Recovery", "%"],
         ]},
         { title: "MGF INLET PARAMETERS", fields: [
-            ["turbidity", "Turbidity"],
-            ["ph", "PH"],
-            ["conductivity", "Conductivity"],
-            ["total_hardness", "Total Hardness"],
-            ["total_alkalinity", "Total Alkalinity"],
-            ["silica_as_sio2", "Silica as SiO2"],
-            ["iron_as_fe", "Iron as Fe"],
+            ["turbidity", "Turbidity", "NTU"],
+            ["ph", "PH", null],
+            ["conductivity", "Conductivity", "µs/cm"],
+            ["total_alkalinity", "Total Alkalinity", "PPM"],
+            ["silica_as_sio2", "Silica as SiO2", "PPM"],
         ]},
         { title: "R.O. INLET PARAMETERS", fields: [
-            ["ph1", "PH"],
-            ["conductivity1", "Conductivity"],
-            ["total_hardness1", "Total Hardness"],
-            ["total_alkalinity1", "Total Alkalinity"],
-            ["silica_as_sio21", "Silica as SiO2"],
-            ["orp", "ORP"],
-            ["frc", "FRC"],
+            ["ph1", "PH", null],
+            ["total_hardness1", "Total Hardness", "PPM"],
+            ["total_alkalinity1", "Total Alkalinity", "PPM"],
+            ["silica_as_sio21", "Silica as SiO2", "PPM"],
+            ["orp", "ORP", "PPM"],
         ]},
         { title: "R.O. OUTLET PARAMETERS", fields: [
-            ["ph2", "PH"],
-            ["conductivity2", "Conductivity"],
-            ["total_hardness2", "Total Hardness"],
-            ["silica_as_sio22", "Silica as SiO2"],
-        ]},
-        { title: "SAC OUTLET PARAMETERS", fields: [
-            ["ph3", "PH"],
-            ["conductivity3", "Conductivity"],
-        ]},
-        { title: "SBA OUTLET PARAMETERS", fields: [
-            ["ph4", "PH"],
-            ["conductivity4", "Conductivity"],
-            ["silica_as_sio23", "Silica as SiO2"],
-        ]},
-        { title: "MB OUTLET PARAMETERS", fields: [
-            ["ph5", "PH"],
-            ["conductivity5", "Conductivity"],
-            ["silica_as_sio24", "Silica as SiO2"],
-            ["ph_after_morph_dosing", "PH after Morph. Dosing"],
+            ["ph2", "PH", null],
+            ["conductivity2", "Conductivity", "µs/cm"],
+            ["total_hardness2", "Total Hardness", "PPM"],
+            ["silica_as_sio22", "Silica as SiO2", "PPM"],
         ]},
         { title: "STORAGE TANK LEVEL", fields: [
-            ["dm_water_tank", "DM Water Tank"],
-            ["make_up_water_tank", "Make-Up Water Tank"],
+            ["dm_water_tank", "DM Water Tank", "%"],
+            ["make_up_water_tank", "Make-Up Water Tank", "%"],
         ]},
     ];
 
@@ -106,6 +88,11 @@ frappe.pages['ro-plant-log'].on_page_load = function(wrapper) {
                 font-weight: 600;
                 text-align: left;
                 padding: 6px 8px;
+            }
+            .ro-uom {
+                color: var(--text-muted, #8d99a6);
+                font-size: 11px;
+                font-weight: 400;
             }
             /* distinct colour per time-slot column */
             .ro-log-table th.slot-col-0, .ro-log-table td.slot-col-0 { background-color: #eaf4ff; }
@@ -201,8 +188,11 @@ frappe.pages['ro-plant-log'].on_page_load = function(wrapper) {
         $table.find('tbody').append(
             `<tr class="section-row"><td colspan="${time_slots.length + 1}"><b>${sec.title}</b></td></tr>`
         );
-        sec.fields.forEach(([fieldname, label]) => {
-            let $row = $(`<tr><td>${label}</td></tr>`).appendTo($table.find('tbody'));
+        sec.fields.forEach(([fieldname, label, uom]) => {
+            let label_html = uom
+                ? `${label} <span class="ro-uom">(${uom})</span>`
+                : label;
+            let $row = $(`<tr><td>${label_html}</td></tr>`).appendTo($table.find('tbody'));
             inputs[fieldname] = {};
             ordered_fieldnames.push(fieldname);
             time_slots.forEach((ts, i) => {
@@ -246,23 +236,42 @@ frappe.pages['ro-plant-log'].on_page_load = function(wrapper) {
         });
     });
 
+    function normalize_ts(s) {
+        return (s || '').replace(/\s+/g, ' ').trim().toUpperCase();
+    }
+
+    // map of normalized time-slot string -> the exact string used as a key in `inputs`
+    let ts_lookup = {};
+    time_slots.forEach(ts => { ts_lookup[normalize_ts(ts)] = ts; });
+
     function clear_grid() {
         Object.keys(inputs).forEach(fieldname => {
             time_slots.forEach(ts => inputs[fieldname][ts].val(''));
         });
-        current_doc_name = null;
     }
 
     function fill_grid(rows) {
         clear_grid();
+        let unmatched = [];
         rows.forEach(row => {
-            let ts = row.time_slot;
+            let ts = ts_lookup[normalize_ts(row.time_slot)];
+            if (!ts) {
+                unmatched.push(row.time_slot);
+                return;
+            }
             Object.keys(inputs).forEach(fieldname => {
                 if (row[fieldname] !== undefined && row[fieldname] !== null && inputs[fieldname][ts]) {
                     inputs[fieldname][ts].val(row[fieldname]);
                 }
             });
         });
+        if (unmatched.length) {
+            console.warn('RO Plant Log: could not match these saved time_slot values to a column:', unmatched);
+            frappe.show_alert({
+                message: __('Some saved rows had a Time Slot value that didn\'t match a column and were skipped. Check the browser console for details.'),
+                indicator: 'orange'
+            });
+        }
     }
 
     function maybe_load() {
@@ -271,6 +280,7 @@ frappe.pages['ro-plant-log'].on_page_load = function(wrapper) {
         let log_date = date_field.get_value();
         if (!company || !plant || !log_date) {
             clear_grid();
+            current_doc_name = null;
             return;
         }
         frappe.call({
@@ -283,6 +293,7 @@ frappe.pages['ro-plant-log'].on_page_load = function(wrapper) {
                     frappe.show_alert({ message: __('Existing entry loaded — edit and save to update.'), indicator: 'blue' });
                 } else {
                     clear_grid();
+                    current_doc_name = null;
                 }
             }
         });
