@@ -1,0 +1,396 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-07-04 16:34:57.349141",
+ "default_view": "List",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "dmf_inlet_turbidity_min",
+  "dmf_inlet_turbidity_max",
+  "dmf_outlet_turbidity_min",
+  "dmf_outlet_turbidity_max",
+  "dmf_inlet_pr_min",
+  "dmf_inlet_pr_max",
+  "dmf_outlet_pr_min",
+  "dmf_outlet_pr_max",
+  "sac_inlet_pr_min",
+  "sac_inlet_pr_max",
+  "sac_outlet_pr_min",
+  "sac_outlet_pr_max",
+  "sac_ph_min",
+  "sac_ph_max",
+  "sac_th_min",
+  "sac_th_max",
+  "wba_inlet_pr_min",
+  "wba_inlet_pr_max",
+  "wba_outlet_pr_min",
+  "wba_outlet_pr_max",
+  "wba_outlet_ph_min",
+  "wba_outlet_ph_max",
+  "sba_inlet_pr_min",
+  "sba_inlet_pr_max",
+  "sba_outlet_pr_min",
+  "sba_outlet_pr_max",
+  "sba_outlet_ph_min",
+  "sba_outlet_ph_max",
+  "sba_outlet_conductivity_min",
+  "sba_outlet_conductivity_max",
+  "sba_outlet_silica_min",
+  "sba_outlet_silica_max",
+  "mb_inlet_pr_min",
+  "mb_inlet_pr_max",
+  "mb_outlet_pr_min",
+  "mb_outlet_pr_max",
+  "mb_before_dosing_ph_min",
+  "mb_before_dosing_ph_max",
+  "mb_after_dosing_ph_min",
+  "mb_after_dosing_ph_max",
+  "mb_outlet_conductivity_min",
+  "mb_outlet_conductivity_max",
+  "mb_outlet_silica_min",
+  "mb_outlet_silica_max",
+  "storage_tank_position_min",
+  "storage_tank_position_max"
+ ],
+ "fields": [
+  {
+   "columns": 1,
+   "fieldname": "dmf_inlet_turbidity_min",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "DMF Inlet Turbidity (NTU) Min"
+  },
+  {
+   "columns": 1,
+   "fieldname": "dmf_inlet_turbidity_max",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "DMF Inlet Turbidity (NTU) Max"
+  },
+  {
+   "columns": 1,
+   "fieldname": "dmf_outlet_turbidity_min",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "DMF Outlet Turbidity (NTU) Min"
+  },
+  {
+   "columns": 1,
+   "fieldname": "dmf_outlet_turbidity_max",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "DMF Outlet Turbidity (NTU) Max"
+  },
+  {
+   "columns": 1,
+   "fieldname": "dmf_inlet_pr_min",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "DMF Inlet P.R. KG/CM2 Min"
+  },
+  {
+   "columns": 1,
+   "fieldname": "dmf_inlet_pr_max",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "DMF Inlet P.R. KG/CM2 Max"
+  },
+  {
+   "columns": 1,
+   "fieldname": "dmf_outlet_pr_min",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "DMF Outlet P.R. KG/CM2 Min"
+  },
+  {
+   "columns": 1,
+   "fieldname": "dmf_outlet_pr_max",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "DMF Outlet P.R. KG/CM2 Max"
+  },
+  {
+   "columns": 1,
+   "fieldname": "sac_inlet_pr_min",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "SAC Inlet P.R. KG/CM2 Min"
+  },
+  {
+   "columns": 1,
+   "fieldname": "sac_inlet_pr_max",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "SAC Inlet P.R. KG/CM2 Max"
+  },
+  {
+   "columns": 1,
+   "fieldname": "sac_outlet_pr_min",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "SAC Outlet P.R. KG/CM2 Min"
+  },
+  {
+   "columns": 1,
+   "fieldname": "sac_outlet_pr_max",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "SAC Outlet P.R. KG/CM2 Max"
+  },
+  {
+   "columns": 1,
+   "fieldname": "sac_ph_min",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "SAC PH Min"
+  },
+  {
+   "columns": 1,
+   "fieldname": "sac_ph_max",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "SAC PH Max"
+  },
+  {
+   "columns": 1,
+   "fieldname": "sac_th_min",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "SAC T.H Min"
+  },
+  {
+   "columns": 1,
+   "fieldname": "sac_th_max",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "SAC T.H Max"
+  },
+  {
+   "columns": 1,
+   "fieldname": "wba_inlet_pr_min",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "WBA Inlet P.R. KG/CM2 Min"
+  },
+  {
+   "columns": 1,
+   "fieldname": "wba_inlet_pr_max",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "WBA Inlet P.R. KG/CM2 Max"
+  },
+  {
+   "columns": 1,
+   "fieldname": "wba_outlet_pr_min",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "WBA Outlet P.R. KG/CM2 Min"
+  },
+  {
+   "columns": 1,
+   "fieldname": "wba_outlet_pr_max",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "WBA Outlet P.R. KG/CM2 Max"
+  },
+  {
+   "columns": 1,
+   "fieldname": "wba_outlet_ph_min",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "WBA Outlet PH Min"
+  },
+  {
+   "columns": 1,
+   "fieldname": "wba_outlet_ph_max",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "WBA Outlet PH Max"
+  },
+  {
+   "columns": 1,
+   "fieldname": "sba_inlet_pr_min",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "SBA Inlet P.R. KG/CM2 Min"
+  },
+  {
+   "columns": 1,
+   "fieldname": "sba_inlet_pr_max",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "SBA Inlet P.R. KG/CM2 Max"
+  },
+  {
+   "columns": 1,
+   "fieldname": "sba_outlet_pr_min",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "SBA Outlet P.R. KG/CM2 Min"
+  },
+  {
+   "columns": 1,
+   "fieldname": "sba_outlet_pr_max",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "SBA Outlet P.R. KG/CM2 Max"
+  },
+  {
+   "columns": 1,
+   "fieldname": "sba_outlet_ph_min",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "SBA Outlet PH Min"
+  },
+  {
+   "columns": 1,
+   "fieldname": "sba_outlet_ph_max",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "SBA Outlet PH Max"
+  },
+  {
+   "columns": 1,
+   "fieldname": "sba_outlet_conductivity_min",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "SBA Outlet Conductivity /CM Min"
+  },
+  {
+   "columns": 1,
+   "fieldname": "sba_outlet_conductivity_max",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "SBA Outlet Conductivity /CM Max"
+  },
+  {
+   "columns": 1,
+   "fieldname": "sba_outlet_silica_min",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "SBA Outlet Silica MG/LTR Min"
+  },
+  {
+   "columns": 1,
+   "fieldname": "sba_outlet_silica_max",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "SBA Outlet Silica MG/LTR Max"
+  },
+  {
+   "columns": 1,
+   "fieldname": "mb_inlet_pr_min",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Mixed Bed Inlet P.R. KG/CM2 Min"
+  },
+  {
+   "columns": 1,
+   "fieldname": "mb_inlet_pr_max",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Mixed Bed Inlet P.R. KG/CM2 Max"
+  },
+  {
+   "columns": 1,
+   "fieldname": "mb_outlet_pr_min",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Mixed Bed Outlet P.R. KG/CM2 Min"
+  },
+  {
+   "columns": 1,
+   "fieldname": "mb_outlet_pr_max",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Mixed Bed Outlet P.R. KG/CM2 Max"
+  },
+  {
+   "columns": 1,
+   "fieldname": "mb_before_dosing_ph_min",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Mixed Bed Before Dosing PH Min"
+  },
+  {
+   "columns": 1,
+   "fieldname": "mb_before_dosing_ph_max",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Mixed Bed Before Dosing PH Max"
+  },
+  {
+   "columns": 1,
+   "fieldname": "mb_after_dosing_ph_min",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Mixed Bed After Dosing PH Min"
+  },
+  {
+   "columns": 1,
+   "fieldname": "mb_after_dosing_ph_max",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Mixed Bed After Dosing PH Max"
+  },
+  {
+   "columns": 1,
+   "fieldname": "mb_outlet_conductivity_min",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Mixed Bed Outlet Conductivity /CM Min"
+  },
+  {
+   "columns": 1,
+   "fieldname": "mb_outlet_conductivity_max",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Mixed Bed Outlet Conductivity /CM Max"
+  },
+  {
+   "columns": 1,
+   "fieldname": "mb_outlet_silica_min",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Mixed Bed Outlet Silica MG/LTR Min"
+  },
+  {
+   "columns": 1,
+   "fieldname": "mb_outlet_silica_max",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Mixed Bed Outlet Silica MG/LTR Max"
+  },
+  {
+   "columns": 2,
+   "fieldname": "storage_tank_position_min",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Storage Tank Position MIin"
+  },
+  {
+   "columns": 2,
+   "fieldname": "storage_tank_position_max",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Storage Tank Position Max"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-07-04 16:48:10.858873",
+ "modified_by": "Administrator",
+ "module": "ETH",
+ "name": "DM Plant Log Norms",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

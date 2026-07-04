@@ -1,0 +1,203 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-07-04 15:08:50.629529",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "description",
+  "unit",
+  "eqt_tank_min",
+  "eqt_tank_max",
+  "ct_tank_min",
+  "ct_tank_max",
+  "reactor_inlet_min",
+  "reactor_inlet_max",
+  "reactor_outlet_min",
+  "reactor_outlet_max",
+  "aeration_tank_min",
+  "aeration_tank_max",
+  "sec_clarifier_outlet_min",
+  "sec_clarifier_outlet_max",
+  "hrscc_outlet_min",
+  "hrscc_outlet_max",
+  "mgf_outlet_min",
+  "mgf_outlet_max",
+  "acf_outlet_min",
+  "acf_outlet_max",
+  "uv_outlet_min",
+  "uv_outlet_max"
+ ],
+ "fields": [
+  {
+   "columns": 1,
+   "fieldname": "description",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Description"
+  },
+  {
+   "columns": 1,
+   "fieldname": "unit",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Unit"
+  },
+  {
+   "columns": 1,
+   "fieldname": "eqt_tank_min",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "EQT-Tank Min"
+  },
+  {
+   "columns": 1,
+   "fieldname": "eqt_tank_max",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "EQT-Tank Max"
+  },
+  {
+   "columns": 1,
+   "fieldname": "ct_tank_min",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "CT-Tank Min"
+  },
+  {
+   "columns": 1,
+   "fieldname": "ct_tank_max",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "CT-Tank Max"
+  },
+  {
+   "columns": 1,
+   "fieldname": "reactor_inlet_min",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Reactor Inlet Min"
+  },
+  {
+   "columns": 1,
+   "fieldname": "reactor_inlet_max",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Reactor Inlet Max"
+  },
+  {
+   "columns": 1,
+   "fieldname": "reactor_outlet_min",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Reactor Outlet Min"
+  },
+  {
+   "columns": 1,
+   "fieldname": "reactor_outlet_max",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Reactor Outlet Max"
+  },
+  {
+   "columns": 1,
+   "fieldname": "aeration_tank_min",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Aeration Tank Min"
+  },
+  {
+   "columns": 1,
+   "fieldname": "aeration_tank_max",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Aeration Tank Max"
+  },
+  {
+   "columns": 1,
+   "fieldname": "sec_clarifier_outlet_min",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Sec. Clarifier Outlet Min"
+  },
+  {
+   "columns": 1,
+   "fieldname": "sec_clarifier_outlet_max",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Sec. Clarifier Outlet Max"
+  },
+  {
+   "columns": 1,
+   "fieldname": "hrscc_outlet_min",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "HRSCC Outlet Min"
+  },
+  {
+   "columns": 1,
+   "fieldname": "hrscc_outlet_max",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "HRSCC Outlet Max"
+  },
+  {
+   "columns": 1,
+   "fieldname": "mgf_outlet_min",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "MGF Outlet Min"
+  },
+  {
+   "columns": 1,
+   "fieldname": "mgf_outlet_max",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "MGF Outlet Max"
+  },
+  {
+   "columns": 1,
+   "fieldname": "acf_outlet_min",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "ACF Outlet Min"
+  },
+  {
+   "columns": 1,
+   "fieldname": "acf_outlet_max",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "ACF Outlet Max"
+  },
+  {
+   "columns": 1,
+   "fieldname": "uv_outlet_min",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "UV - Outlet Min"
+  },
+  {
+   "columns": 1,
+   "fieldname": "uv_outlet_max",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "UV - Outlet Max"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-07-04 16:49:36.453322",
+ "modified_by": "Administrator",
+ "module": "ETH",
+ "name": "CPU Plant Lab Norms",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

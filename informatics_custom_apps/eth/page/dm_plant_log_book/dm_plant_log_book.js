@@ -23,8 +23,7 @@ const COLUMN_GROUPS = [
 			{ field: "sac_inlet_pr", label: "Inlet P.R. KG/CM2" },
 			{ field: "sac_outlet_pr", label: "Outlet P.R. KG/CM2" },
 			{ field: "sac_ph", label: "PH" },
-			{ field: "sac_th", label: "T.H" },
-			{ field: "sac_fma", label: "FMA" },
+			{ field: "sac_th", label: "T.H" }
 		],
 	},
 	{
@@ -68,13 +67,36 @@ const COLUMN_GROUPS = [
 const ALL_FIELDS = COLUMN_GROUPS.flatMap((g) => g.cols.map((c) => c.field));
 const APP_METHOD_PATH = "informatics_custom_apps.eth.page.dm_plant_log_book.dm_plant_log_book";
 
+// Fields that hold free text and should wrap / show full content instead of a
+// narrow right-aligned number box.
+const TEXT_FIELDS = new Set(["remarks", "storage_tank_position"]);
+
+// Widths (px) for the 6 frozen columns: S.No, Time in Hrs.,
+// Started Time, Stopped Time, Discharging Time, Total Running Hours
+const STICKY_WIDTHS = [34, 100, 55, 55, 55, 55];
+const STICKY_LEFT = (() => {
+	const left = [];
+	let acc = 0;
+	STICKY_WIDTHS.forEach((w) => {
+		left.push(acc);
+		acc += w;
+	});
+	return left;
+})();
+
 frappe.pages["dm-plant-log-book"].on_page_load = function (wrapper) {
 	const page = frappe.ui.make_app_page({
 		parent: wrapper,
 		title: "D.M Plant Log Book",
 		single_column: true,
 	});
-	new DMPlantLog(page);
+	wrapper.dm_plant_log_instance = new DMPlantLog(page);
+};
+
+frappe.pages["dm-plant-log-book"].on_page_show = function (wrapper) {
+	if (wrapper.dm_plant_log_instance) {
+		wrapper.dm_plant_log_instance.on_selection_change();
+	}
 };
 
 class DMPlantLog {
@@ -130,17 +152,47 @@ class DMPlantLog {
 		this.$wrap = $(`
 			<div class="dm-plant-log-wrapper" style="padding: 10px 0;">
 				<style>
+					.dm-plant-log-wrapper table {
+						font-size: 13px;
+						border-collapse: separate;
+						border-spacing: 0;
+					}
+					.dm-plant-log-wrapper table th,
+					.dm-plant-log-wrapper table td {
+						padding: 2px 3px !important;
+					}
 					.dm-plant-log-wrapper table tbody tr.dm-row-even { background: #ffffff; }
 					.dm-plant-log-wrapper table tbody tr.dm-row-odd { background: #f2f6fb; }
 					.dm-plant-log-wrapper table tbody tr:hover { background: #fff3cd !important; }
-					.dm-plant-log-wrapper table tbody tr td:first-child,
-					.dm-plant-log-wrapper table tbody tr td:nth-child(2) {
-						font-weight: 600;
+					.dm-plant-log-wrapper .dm-cell {
+						padding: 2px !important;
+						font-size: 13px;
+					}
+					.dm-plant-log-wrapper .dm-cell-text {
+						resize: none;
+						overflow: hidden;
+						white-space: normal;
+						word-break: break-word;
+						text-align: left !important;
+						line-height: 1.3;
+						font-family: inherit;
+					}
+
+					/* Frozen columns */
+					.dm-plant-log-wrapper table .sticky-col {
+						position: sticky;
+						z-index: 2;
 						background: #e9edf2;
 					}
-					.dm-plant-log-wrapper table tbody tr:hover td:first-child,
-					.dm-plant-log-wrapper table tbody tr:hover td:nth-child(2) {
-						background: #ffe9a8;
+					.dm-plant-log-wrapper table thead .sticky-col {
+						z-index: 4;
+						background: #f5f5f5;
+					}
+					.dm-plant-log-wrapper table tbody tr.dm-row-even .sticky-col { background: #e9edf2; }
+					.dm-plant-log-wrapper table tbody tr.dm-row-odd .sticky-col { background: #dbe6f0; }
+					.dm-plant-log-wrapper table tbody tr:hover .sticky-col { background: #ffe9a8 !important; }
+					.dm-plant-log-wrapper table .sticky-col:last-child {
+						box-shadow: 2px 0 4px -2px rgba(0,0,0,0.25);
 					}
 				</style>
 				<div id="dm-status" class="text-muted" style="margin-bottom:10px;"></div>
@@ -248,23 +300,36 @@ class DMPlantLog {
 		this.rows = rows;
 
 		let group_header =
-			'<th rowspan="2" style="min-width:40px; padding:6px; background:#f5f5f5; border:1px solid #ddd;">S.No</th>' +
-			'<th rowspan="2" style="min-width:110px; padding:6px; background:#f5f5f5; border:1px solid #ddd;">Time in Hrs.</th>';
+			`<th rowspan="2" class="sticky-col" style="left:${STICKY_LEFT[0]}px; width:${STICKY_WIDTHS[0]}px; min-width:${STICKY_WIDTHS[0]}px; border:1px solid #ddd;">S.No</th>` +
+			`<th rowspan="2" class="sticky-col" style="left:${STICKY_LEFT[1]}px; width:${STICKY_WIDTHS[1]}px; min-width:${STICKY_WIDTHS[1]}px; border:1px solid #ddd;">Time in Hrs.</th>`;
 		let sub_header = "";
+		let sticky_idx = 2;
+		let first_null_group_done = false;
 
 		COLUMN_GROUPS.forEach((g) => {
 			if (g.group === null) {
 				g.cols.forEach((c) => {
-					group_header += `<th rowspan="2" style="min-width:110px; padding:6px; background:#f5f5f5; border:1px solid #ddd;">${frappe.utils.escape_html(
-						c.label
-					)}</th>`;
+					if (!first_null_group_done) {
+						// Frozen fields: started_time, stopped_time, discharging_time, total_running_hours
+						group_header += `<th rowspan="2" class="sticky-col" style="left:${STICKY_LEFT[sticky_idx]}px; width:${STICKY_WIDTHS[sticky_idx]}px; min-width:${STICKY_WIDTHS[sticky_idx]}px; border:1px solid #ddd;">${frappe.utils.escape_html(
+							c.label
+						)}</th>`;
+						sticky_idx++;
+					} else {
+						// Trailing null group: storage_tank_position, remarks - not frozen, wider for text
+						const width = c.field === "remarks" ? 220 : 100;
+						group_header += `<th rowspan="2" style="min-width:${width}px; background:#f5f5f5; border:1px solid #ddd;">${frappe.utils.escape_html(
+							c.label
+						)}</th>`;
+					}
 				});
+				first_null_group_done = true;
 			} else {
-				group_header += `<th colspan="${g.cols.length}" style="padding:6px; background:#eaeaea; border:1px solid #ddd; text-align:center;">${frappe.utils.escape_html(
+				group_header += `<th colspan="${g.cols.length}" style="background:#eaeaea; border:1px solid #ddd; text-align:center;">${frappe.utils.escape_html(
 					g.group
 				)}</th>`;
 				g.cols.forEach((c) => {
-					sub_header += `<th style="min-width:100px; padding:6px; background:#f5f5f5; border:1px solid #ddd;">${frappe.utils.escape_html(
+					sub_header += `<th style="min-width:50px; background:#f5f5f5; border:1px solid #ddd;">${frappe.utils.escape_html(
 						c.label
 					)}</th>`;
 				});
@@ -273,22 +338,40 @@ class DMPlantLog {
 
 		const body_rows = rows
 			.map((row, idx) => {
-				const cells = ALL_FIELDS.map((field) => {
+				const cells = ALL_FIELDS.map((field, field_i) => {
 					const val = row[field] === null || row[field] === undefined ? "" : row[field];
-					return `<td style="border:1px solid #ddd; padding:2px;">
+					// First 4 fields in ALL_FIELDS are the frozen ones (started_time, stopped_time, discharging_time, total_running_hours)
+					const is_sticky = field_i < 4;
+					const left_style = is_sticky ? `left:${STICKY_LEFT[2 + field_i]}px;` : "";
+					const is_text = TEXT_FIELDS.has(field);
+
+					if (is_text) {
+						const width = field === "remarks" ? 220 : 100;
+						return `<td style="${left_style} border:1px solid #ddd; min-width:${width}px;">
+							<textarea
+								class="dm-cell dm-cell-text"
+								data-row="${idx}"
+								data-field="${field}"
+								rows="1"
+								style="width:100%; min-width:${width - 10}px; border:1px solid transparent; padding:3px; box-sizing:border-box; background:transparent; font-size:13px;"
+							>${frappe.utils.escape_html(String(val))}</textarea>
+						</td>`;
+					}
+
+					return `<td class="${is_sticky ? "sticky-col" : ""}" style="${left_style} border:1px solid #ddd;">
 						<input type="text"
 							class="dm-cell"
 							data-row="${idx}"
 							data-field="${field}"
 							value="${frappe.utils.escape_html(String(val))}"
-							style="width:100%; min-width:90px; text-align:right; border:1px solid transparent; padding:6px; box-sizing:border-box; background:transparent;">
+							style="width:100%; min-width:45px; text-align:right; border:1px solid transparent; padding:2px; box-sizing:border-box; background:transparent; font-size:13px;">
 					</td>`;
 				}).join("");
 
 				const row_class = idx % 2 === 0 ? "dm-row-even" : "dm-row-odd";
 				return `<tr class="${row_class}">
-					<td style="text-align:center; border:1px solid #ddd; padding:6px;">${row.s_no}</td>
-					<td style="border:1px solid #ddd; padding:6px; white-space:nowrap;">${frappe.utils.escape_html(row.time_slot)}</td>
+					<td class="sticky-col" style="left:${STICKY_LEFT[0]}px; text-align:center; border:1px solid #ddd;">${row.s_no}</td>
+					<td class="sticky-col" style="left:${STICKY_LEFT[1]}px; border:1px solid #ddd; white-space:nowrap;">${frappe.utils.escape_html(row.time_slot)}</td>
 					${cells}
 				</tr>`;
 			})
@@ -296,7 +379,7 @@ class DMPlantLog {
 
 		this.$table_holder.html(`
 			<div style="overflow-x:auto;">
-				<table style="border-collapse:collapse; width:100%;">
+				<table style="width:100%;">
 					<thead>
 						<tr>${group_header}</tr>
 						<tr>${sub_header}</tr>
@@ -306,9 +389,19 @@ class DMPlantLog {
 			</div>
 		`);
 
+		// Auto-grow textareas (remarks / storage tank position) to fit their content
+		this.$table_holder.find(".dm-cell-text").each((_, el) => {
+			el.style.height = "auto";
+			el.style.height = el.scrollHeight + "px";
+		});
+
 		this.$table_holder.off("input", ".dm-cell").on("input", ".dm-cell", (e) => {
 			const $el = $(e.currentTarget);
 			this.rows[$el.data("row")][$el.data("field")] = $el.val();
+			if ($el.hasClass("dm-cell-text")) {
+				e.currentTarget.style.height = "auto";
+				e.currentTarget.style.height = e.currentTarget.scrollHeight + "px";
+			}
 		});
 	}
 

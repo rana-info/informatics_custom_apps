@@ -1,5 +1,4 @@
 const LOCATIONS = [
-	{ field: "cpu_feed", label: "CPU Feed" },
 	{ field: "eqt_tank", label: "EQT-Tank" },
 	{ field: "ct_tank", label: "CT-Tank" },
 	{ field: "reactor_inlet", label: "Reactor inlet" },
@@ -20,7 +19,13 @@ frappe.pages["cpu-plant-lab-log-bo"].on_page_load = function (wrapper) {
 		title: "CPU Plant Lab Log Book",
 		single_column: true,
 	});
-	new CPULabLog(page);
+	wrapper.cpu_lab_log_instance = new CPULabLog(page);
+};
+
+frappe.pages["cpu-plant-lab-log-bo"].on_page_show = function (wrapper) {
+	if (wrapper.cpu_lab_log_instance) {
+		wrapper.cpu_lab_log_instance.on_selection_change();
+	}
 };
 
 class CPULabLog {
