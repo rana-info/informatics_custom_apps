@@ -17,7 +17,9 @@ def execute(filters=None):
 
     graph = build_graph(valid_docs)
 
-    data = build_flows(gl_entries, graph, valid_docs)
+    supplier_map = get_supplier_map(valid_docs)
+
+    data = build_flows(gl_entries, graph, valid_docs, supplier_map)
 
     data = append_journal_entries(data, gl_entries)
 
@@ -26,7 +28,37 @@ def execute(filters=None):
         if abs(d.get("net_impact") or 0) > 1
     ]
 
+    if filters and filters.get("supplier"):
+        data = [
+            d for d in data
+            if d.get("supplier") == filters.get("supplier")
+        ]
+
     return columns, data
+
+
+def get_supplier_map(valid_docs):
+    if not valid_docs:
+        return {}
+
+    doc_tuple = tuple(valid_docs)
+    if len(doc_tuple) == 1:
+        doc_tuple = f"('{doc_tuple[0]}')"
+
+    rows = frappe.db.sql(f"""
+        SELECT name, supplier, supplier_name
+        FROM `tabPurchase Invoice`
+        WHERE name IN {doc_tuple}
+        UNION
+        SELECT name, supplier, supplier_name
+        FROM `tabPurchase Receipt`
+        WHERE name IN {doc_tuple}
+    """, as_dict=1)
+
+    return {
+        r.name: {"supplier": r.supplier, "supplier_name": r.supplier_name}
+        for r in rows
+    }
 
 
 def get_non_gl_docs(filters, existing_docs):
@@ -74,6 +106,19 @@ def get_columns():
             "fieldtype": "Link", 
             "options": "Purchase Receipt", 
             "width": 320
+            },
+        {
+            "label": "Supplier", 
+            "fieldname": "supplier", 
+            "fieldtype": "Link", 
+            "options": "Supplier", 
+            "width": 150
+            },
+        {
+            "label": "Supplier Name", 
+            "fieldname": "supplier_name", 
+            "fieldtype": "Data", 
+            "width": 300
             },
         {
             "label": "GL Debit", 
@@ -225,7 +270,7 @@ def get_connected_components(graph):
 
     return components
 
-def build_flows(gl_entries, graph, valid_docs):
+def build_flows(gl_entries, graph, valid_docs, supplier_map):
 
     voucher_index = defaultdict(list)
 
@@ -290,12 +335,24 @@ def build_flows(gl_entries, graph, valid_docs):
                     else:
                         prs.add(doc)
 
+        supplier = None
+        supplier_name = None
+
+        for doc in pis | prs | rpis | rprs:
+            info = supplier_map.get(doc)
+            if info:
+                supplier = info.get("supplier")
+                supplier_name = info.get("supplier_name")
+                break
+
         result.append({
             "posting_date": ", ".join(sorted(str(d) for d in component_dates)),
             "purchase_invoice": ", ".join(sorted(pis)) or None,
             "purchase_receipt": ", ".join(sorted(prs)) or None,
             "return_invoice": ", ".join(sorted(rpis)) or None,
             "return_pr": ", ".join(sorted(rprs)) or None,
+            "supplier": supplier,
+            "supplier_name": supplier_name,
             "gl_debit": total_debit,
             "gl_credit": total_credit,
             "net_impact": total_debit - total_credit
@@ -324,6 +381,8 @@ def append_journal_entries(flows, gl_entries):
             "purchase_receipt": None,
             "return_pr": None,
             "return_invoice": None,
+            "supplier": None,
+            "supplier_name": None,
             "gl_debit": val["debit"],
             "gl_credit": val["credit"],
             "net_impact": val["debit"] - val["credit"],
