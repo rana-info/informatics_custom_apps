@@ -1,0 +1,74 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-07-06 18:23:28.887190",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "alcohol_percentage",
+  "fermenter_rs",
+  "fermenter_rst",
+  "average_starch__maize",
+  "average_starch_dfg",
+  "average_starch_fci"
+ ],
+ "fields": [
+  {
+   "fieldname": "alcohol_percentage",
+   "fieldtype": "Percent",
+   "label": "Alcohol Percentage"
+  },
+  {
+   "fieldname": "fermenter_rs",
+   "fieldtype": "Percent",
+   "label": "Fermenter (RS)"
+  },
+  {
+   "fieldname": "fermenter_rst",
+   "fieldtype": "Percent",
+   "label": "Fermenter (RST)"
+  },
+  {
+   "fieldname": "average_starch__maize",
+   "fieldtype": "Percent",
+   "label": "Average Starch  (Maize)"
+  },
+  {
+   "fieldname": "average_starch_dfg",
+   "fieldtype": "Percent",
+   "label": "Average Starch (DFG)"
+  },
+  {
+   "fieldname": "average_starch_fci",
+   "fieldtype": "Percent",
+   "label": "Average Starch (FCI)"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-07-06 18:25:27.796951",
+ "modified_by": "Administrator",
+ "module": "ETH",
+ "name": "DMR Technical Lab Parameters",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
