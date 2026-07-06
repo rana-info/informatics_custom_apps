@@ -136,30 +136,6 @@ class IOCLogs(Document):
 			self.db_set("task_status", "Open")
 			self.db_set("task_completion_date", None)
 
-	@frappe.whitelist()
-	def assign_sub_task_owners(self, row_name, users):
-		if isinstance(users, str):
-			users = frappe.parse_json(users)
-
-		if not users:
-			frappe.throw("Select at least one user")
-
-		row = self.get("sub_task", {"name": row_name})
-		if not row:
-			frappe.throw("Sub-task row not found")
-		row = row[0]
-
-		full_names = [
-			frappe.get_cached_value("User", u, "full_name") or u
-			for u in users
-		]
-
-		row.sub_task_owner = ", ".join(full_names)
-		row.sub_task_owner_emails = ", ".join(users)
-
-		self.save()
-		return "Owner(s) assigned successfully"
-
 		
 def notify_tagged_user(doc, tagged_user, sender, messages):
 	# find the message text meant for this user (fallback: just show the last one)

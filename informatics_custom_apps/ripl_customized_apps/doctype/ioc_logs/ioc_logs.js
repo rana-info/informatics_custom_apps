@@ -13,62 +13,6 @@ frappe.ui.form.on("IOC Logs", {
   },
   refresh(frm) {
 
-    // Assign owners to a selected sub-task row
-    if (frm.fields_dict.sub_task) {
-      frm.fields_dict.sub_task.grid.add_custom_button(__('Assign Owner(s)'), () => {
-        const selected = frm.fields_dict.sub_task.grid.get_selected();
-
-        if (selected.length !== 1) {
-          frappe.msgprint(__('Please select exactly one Sub Task row (checkbox) to assign owners to.'));
-          return;
-        }
-
-        const row_name = selected[0];
-        const row = frappe.get_doc('zz Project RSLD Sub-Task Detail', row_name);
-        const existing_emails = row.sub_task_owner_emails
-          ? row.sub_task_owner_emails.split(',').map(e => e.trim()).filter(Boolean)
-          : [];
-
-        const dialog = new frappe.ui.Dialog({
-          title: __('Assign Sub-Task Owner(s)'),
-          fields: [
-            {
-              fieldname: 'users',
-              fieldtype: 'MultiSelectPills',
-              label: __('Users'),
-              reqd: 1,
-              get_data: function (txt) {
-                return frappe.db.get_link_options('User', txt);
-              }
-            }
-          ],
-          primary_action_label: __('Assign'),
-          primary_action(values) {
-            if (!values.users || !values.users.length) {
-              frappe.msgprint(__('Please select at least one user'));
-              return;
-            }
-            frappe.call({
-              method: 'assign_sub_task_owners',
-              doc: frm.doc,
-              args: {
-                row_name: row_name,
-                users: values.users
-              },
-              callback() {
-                frappe.msgprint(__('Owner(s) assigned'));
-                dialog.hide();
-                frm.reload_doc();
-              }
-            });
-          }
-        });
-
-        dialog.set_value('users', existing_emails);
-        dialog.show();
-      });
-    }
-
     if (frm.doc.task_id) {
       frm.add_custom_button(__('Add Message'), () => {
         show_message_dialog(frm);
@@ -144,5 +88,64 @@ frappe.ui.form.on("IOC Logs", {
         });
       });
     }
+  }
+});
+
+//Assign Owner for Sub-Task
+frappe.ui.form.on('zz Project RSLD Sub-Task Detail', {
+  assign_owners: function (frm, cdt, cdn) {
+    const row = locals[cdt][cdn];
+
+    const existing_emails = row.sub_task_owner_emails
+      ? row.sub_task_owner_emails.split(',').map(e => e.trim()).filter(Boolean)
+      : [];
+
+    const dialog = new frappe.ui.Dialog({
+      title: __('Assign Sub-Task Owner(s)'),
+      fields: [
+        {
+          fieldname: 'users',
+          fieldtype: 'MultiSelectPills',
+          label: __('Users'),
+          reqd: 1,
+          get_data: function (txt) {
+            return frappe.db.get_link_options('User', txt);
+          }
+        }
+      ],
+      primary_action(values) {
+        if (!values.users || !values.users.length) {
+          frappe.msgprint(__('Please select at least one user'));
+          return;
+        }
+
+        frappe.call({
+          method: 'frappe.client.get_list',
+          args: {
+            doctype: 'User',
+            filters: { name: ['in', values.users] },
+            fields: ['name', 'full_name']
+          },
+          callback: function (r) {
+            const users = r.message || [];
+
+            // Preserve the order the user picked them in
+            const full_names = values.users.map(email => {
+              const match = users.find(u => u.name === email);
+              return match ? (match.full_name || email) : email;
+            });
+
+            frappe.model.set_value(cdt, cdn, 'sub_task_owner_emails', values.users.join(', '));
+            frappe.model.set_value(cdt, cdn, 'sub_task_owner', full_names.join(', '));
+
+            dialog.hide();
+            frm.refresh_field('sub_task');
+          }
+        });
+      }
+    });
+
+    dialog.set_value('users', existing_emails);
+    dialog.show();
   }
 });
