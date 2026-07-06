@@ -7,8 +7,11 @@
  "engine": "InnoDB",
  "field_order": [
   "sub_task_description",
-  "sub_task_weightage",
-  "task_completed",
+  "sub_task_start_date",
+  "sub_task_target_date",
+  "sub_task_owner",
+  "sub_task_owner_emails",
+  "sub_task_status",
   "completion_date"
  ],
  "fields": [
@@ -16,37 +19,57 @@
    "fieldname": "sub_task_description",
    "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Sub Task description"
+   "label": "Sub Task Description"
   },
   {
-   "fieldname": "sub_task_weightage",
-   "fieldtype": "Percent",
+   "fieldname": "sub_task_start_date",
+   "fieldtype": "Date",
    "in_list_view": 1,
-   "label": "Sub Task Weightage"
+   "label": "Sub Task Start Date"
+  },
+  {
+   "fieldname": "sub_task_target_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Sub Task Target Date"
+  },
+  {
+   "fieldname": "sub_task_owner",
+   "fieldtype": "Small Text",
+   "in_list_view": 1,
+   "label": "Owner(s)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sub_task_owner_emails",
+   "fieldtype": "Small Text",
+   "label": "Owner Emails (internal)",
+   "read_only": 1
+  },
+  {
+   "default": "Open",
+   "fieldname": "sub_task_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Open\nIn Progress\nCompleted",
+   "reqd": 1
   },
   {
    "allow_on_submit": 1,
-   "depends_on": "eval:doc.task_completed;",
+   "depends_on": "eval:doc.sub_task_status==\"Completed\";",
    "fieldname": "completion_date",
    "fieldtype": "Date",
    "in_list_view": 1,
    "label": "Completion Date",
-   "mandatory_depends_on": "eval:doc.task_completed;"
-  },
-  {
-   "allow_on_submit": 1,
-   "default": "0",
-   "fieldname": "task_completed",
-   "fieldtype": "Check",
-   "in_list_view": 1,
-   "label": "Task Completed"
+   "mandatory_depends_on": "eval:doc.sub_task_status==\"Completed\";"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-01-06 12:32:08.839835",
+ "modified": "2026-07-06 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "zz Project RSLD Sub-Task Detail",
