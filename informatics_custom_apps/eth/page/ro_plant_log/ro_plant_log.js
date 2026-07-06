@@ -144,6 +144,40 @@ frappe.pages['ro-plant-log'].on_page_load = function(wrapper) {
         maybe_load();
     }, 300);
 
+    // ---------- strict float-only input filtering ----------
+    // Keeps only digits, a single decimal point, and an optional leading
+    // minus sign (needed for fields like pressure differentials that can
+    // legitimately go negative). Anything else typed or pasted is dropped
+    // immediately - no warning, it simply never appears, same as a DB
+    // float/int column would enforce.
+    function sanitize_float_string(value) {
+        let negative = value.charAt(0) === '-';
+        let body = value.replace(/-/g, '').replace(/[^0-9.]/g, '');
+        let firstDot = body.indexOf('.');
+        if (firstDot !== -1) {
+            body = body.slice(0, firstDot + 1) + body.slice(firstDot + 1).replace(/\./g, '');
+        }
+        return (negative ? '-' : '') + body;
+    }
+
+    function bind_float_sanitizer($input) {
+        $input.on('input', function () {
+            let el = this;
+            let original = el.value;
+            let sanitized = sanitize_float_string(original);
+            if (sanitized !== original) {
+                let pos = el.selectionStart - (original.length - sanitized.length);
+                el.value = sanitized;
+                if (pos < 0) pos = 0;
+                try { el.setSelectionRange(pos, pos); } catch (e) { /* ignore on unsupported input types */ }
+            }
+        });
+        // final safety net in case a browser fires neither 'input' on paste
+        $input.on('blur', function () {
+            this.value = sanitize_float_string(this.value);
+        });
+    }
+
     // ---------- header controls ----------
     let $filters = $(`<div class="log-header" style="display:flex; gap:10px; margin-bottom:15px;"></div>`).appendTo(page.body);
 
@@ -213,7 +247,8 @@ frappe.pages['ro-plant-log'].on_page_load = function(wrapper) {
             ordered_fieldnames.push(fieldname);
             time_slots.forEach((ts, i) => {
                 let $td = $(`<td class="slot-col-${i}"></td>`).appendTo($row);
-                let $input = $('<input type="number" step="0.01" class="form-control input-sm">').appendTo($td);
+                let $input = $('<input type="text" inputmode="decimal" autocomplete="off" class="form-control input-sm">').appendTo($td);
+                bind_float_sanitizer($input);
                 inputs[fieldname][ts] = $input;
             });
         });
