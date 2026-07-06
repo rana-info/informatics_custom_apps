@@ -124,6 +124,26 @@ frappe.pages['ro-plant-log'].on_page_load = function(wrapper) {
         </style>`).appendTo(document.head);
     }
 
+    // ---------- state (declared before any control that could fire onchange during setup) ----------
+    let inputs = {}; // inputs[fieldname][time_slot] = jquery input
+    let current_doc_name = null; // set when an existing record is loaded
+    let ordered_fieldnames = []; // row order, top to bottom, for keyboard navigation
+
+    // Frappe fires a control's onchange through more than one internal path
+    // (e.g. the datepicker's own change event AND the model set_value cycle),
+    // so a single user action can trigger the handler twice. Debouncing
+    // collapses those into a single execution.
+    let handle_filter_change = frappe.utils.debounce(function () { maybe_load(); }, 300);
+    let handle_date_change = frappe.utils.debounce(function () {
+        let selected = date_field.get_value();
+        if (selected && selected > frappe.datetime.get_today()) {
+            frappe.msgprint(__('Future dates are not allowed. Resetting to today.'));
+            date_field.set_value(frappe.datetime.get_today());
+            return; // set_value above will re-trigger this handler with a valid date
+        }
+        maybe_load();
+    }, 300);
+
     // ---------- header controls ----------
     let $filters = $(`<div class="log-header" style="display:flex; gap:10px; margin-bottom:15px;"></div>`).appendTo(page.body);
 
@@ -140,7 +160,7 @@ frappe.pages['ro-plant-log'].on_page_load = function(wrapper) {
                     return { filters: { company: company_field.get_value() } };
                 };
                 plant_field.refresh();
-                maybe_load();
+                handle_filter_change();
             }
         },
         render_input: true
@@ -156,7 +176,7 @@ frappe.pages['ro-plant-log'].on_page_load = function(wrapper) {
             get_query: () => {
                 return { filters: { company: company_field.get_value() } };
             },
-            onchange: function () { maybe_load(); }
+            onchange: function () { handle_filter_change(); }
         },
         render_input: true
     });
@@ -168,7 +188,7 @@ frappe.pages['ro-plant-log'].on_page_load = function(wrapper) {
             label: 'Date',
             default: 'Today',
             reqd: 1,
-            onchange: function () { maybe_load(); }
+            onchange: function () { handle_date_change(); }
         },
         render_input: true
     });
@@ -179,10 +199,6 @@ frappe.pages['ro-plant-log'].on_page_load = function(wrapper) {
         <thead><tr><th>Parameter</th>
         ${time_slots.map((t, i) => `<th class="slot-col-${i}">${t}</th>`).join('')}
         </tr></thead><tbody></tbody></table>`).appendTo(page.body);
-
-    let inputs = {}; // inputs[fieldname][time_slot] = jquery input
-    let current_doc_name = null; // set when an existing record is loaded
-    let ordered_fieldnames = []; // row order, top to bottom, for keyboard navigation
 
     sections.forEach(sec => {
         $table.find('tbody').append(

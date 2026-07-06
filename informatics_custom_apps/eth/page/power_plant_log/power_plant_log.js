@@ -129,6 +129,27 @@ frappe.pages['power-plant-log'].on_page_load = function(wrapper) {
         </style>`).appendTo(document.head);
     }
 
+    // ---------- state (declared before any control that could fire onchange during setup) ----------
+    let inputs = {}; // inputs[fieldname][time_slot] = jquery input
+    let current_doc_name = null;
+    let ordered_fieldnames = [];
+    let remarks_inputs = {};
+
+    // Frappe fires a control's onchange through more than one internal path
+    // (e.g. the datepicker's own change event AND the model set_value cycle),
+    // so a single user action can trigger the handler twice. Debouncing
+    // collapses those into a single execution.
+    let handle_filter_change = frappe.utils.debounce(function () { maybe_load(); }, 300);
+    let handle_date_change = frappe.utils.debounce(function () {
+        let selected = date_field.get_value();
+        if (selected && selected > frappe.datetime.get_today()) {
+            frappe.msgprint(__('Future dates are not allowed. Resetting to today.'));
+            date_field.set_value(frappe.datetime.get_today());
+            return; // set_value above will re-trigger this handler with a valid date
+        }
+        maybe_load();
+    }, 300);
+
     // ---------- header controls ----------
     let $filters = $(`<div class="log-header" style="display:flex; gap:10px; margin-bottom:15px;"></div>`).appendTo(page.body);
 
@@ -145,7 +166,7 @@ frappe.pages['power-plant-log'].on_page_load = function(wrapper) {
                     return { filters: { company: company_field.get_value() } };
                 };
                 plant_field.refresh();
-                maybe_load();
+                handle_filter_change();
             }
         },
         render_input: true
@@ -161,7 +182,7 @@ frappe.pages['power-plant-log'].on_page_load = function(wrapper) {
             get_query: () => {
                 return { filters: { company: company_field.get_value() } };
             },
-            onchange: function () { maybe_load(); }
+            onchange: function () { handle_filter_change(); }
         },
         render_input: true
     });
@@ -173,7 +194,7 @@ frappe.pages['power-plant-log'].on_page_load = function(wrapper) {
             label: 'Date',
             default: 'Today',
             reqd: 1,
-            onchange: function () { maybe_load(); }
+            onchange: function () { handle_date_change(); }
         },
         render_input: true
     });
@@ -184,10 +205,6 @@ frappe.pages['power-plant-log'].on_page_load = function(wrapper) {
         <thead><tr><th>Parameter</th>
         ${time_slots.map((t, i) => `<th class="slot-col-${i}">${t}</th>`).join('')}
         </tr></thead><tbody></tbody></table>`).appendTo(page.body);
-
-    let inputs = {}; // inputs[fieldname][time_slot] = jquery input
-    let current_doc_name = null;
-    let ordered_fieldnames = [];
 
     sections.forEach(sec => {
         $table.find('tbody').append(
@@ -213,7 +230,6 @@ frappe.pages['power-plant-log'].on_page_load = function(wrapper) {
         `<tr class="section-row"><td colspan="${time_slots.length + 1}"><b>REMARKS</b></td></tr>`
     );
     let $remarks_row = $(`<tr><td>Remarks</td></tr>`).appendTo($table.find('tbody'));
-    let remarks_inputs = {};
     time_slots.forEach((ts, i) => {
         let $td = $(`<td class="slot-col-${i}"></td>`).appendTo($remarks_row);
         let $input = $('<textarea rows="1" class="form-control input-sm"></textarea>').appendTo($td);
@@ -251,18 +267,29 @@ frappe.pages['power-plant-log'].on_page_load = function(wrapper) {
         });
     });
 
+    function normalize_ts(s) {
+        return (s || '').replace(/\s+/g, ' ').trim().toUpperCase();
+    }
+
+    let ts_lookup = {};
+    time_slots.forEach(ts => { ts_lookup[normalize_ts(ts)] = ts; });
+
     function clear_grid() {
         Object.keys(inputs).forEach(fieldname => {
             time_slots.forEach(ts => inputs[fieldname][ts].val(''));
         });
         time_slots.forEach(ts => remarks_inputs[ts].val(''));
-        current_doc_name = null;
     }
 
     function fill_grid(rows) {
         clear_grid();
+        let unmatched = [];
         rows.forEach(row => {
-            let ts = row.time_slot;
+            let ts = ts_lookup[normalize_ts(row.time_slot)];
+            if (!ts) {
+                unmatched.push(row.time_slot);
+                return;
+            }
             Object.keys(inputs).forEach(fieldname => {
                 if (row[fieldname] !== undefined && row[fieldname] !== null && inputs[fieldname][ts]) {
                     inputs[fieldname][ts].val(row[fieldname]);
@@ -272,6 +299,13 @@ frappe.pages['power-plant-log'].on_page_load = function(wrapper) {
                 remarks_inputs[ts].val(row.remarks);
             }
         });
+        if (unmatched.length) {
+            console.warn('Power Plant Log: could not match these saved time_slot values to a column:', unmatched);
+            frappe.show_alert({
+                message: __('Some saved rows had a Time Slot value that didn\'t match a column and were skipped. Check the browser console for details.'),
+                indicator: 'orange'
+            });
+        }
     }
 
     function maybe_load() {
@@ -280,6 +314,7 @@ frappe.pages['power-plant-log'].on_page_load = function(wrapper) {
         let log_date = date_field.get_value();
         if (!company || !plant || !log_date) {
             clear_grid();
+            current_doc_name = null;
             return;
         }
         frappe.call({
@@ -292,6 +327,7 @@ frappe.pages['power-plant-log'].on_page_load = function(wrapper) {
                     frappe.show_alert({ message: __('Existing entry loaded — edit and save to update.'), indicator: 'blue' });
                 } else {
                     clear_grid();
+                    current_doc_name = null;
                 }
             }
         });
