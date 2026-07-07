@@ -5,21 +5,28 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
+  "company",
+  "date",
+  "column_break_hppk",
+  "plant",
   "boiler_and_turbine_section",
   "float_zcpn",
   "float_jgdk",
+  "column_break_kamo",
   "float_smgv",
   "float_lcuw",
   "power_section",
   "float_pvrh",
   "float_iunw",
   "float_vjzq",
+  "column_break_rhaz",
   "float_dctr",
   "float_evng",
   "power_per_bl",
   "technical_parameters_of_bolier_and_turbine_section",
   "float_hrth",
   "float_reke",
+  "column_break_band",
   "percent_bman"
  ],
  "fields": [
@@ -102,12 +109,50 @@
    "fieldname": "power_per_bl",
    "fieldtype": "Float",
    "label": "Power Per BL"
+  },
+  {
+   "fieldname": "column_break_kamo",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "fieldname": "plant",
+   "fieldtype": "Link",
+   "label": "Plant",
+   "options": "Branch",
+   "reqd": 1
+  },
+  {
+   "fieldname": "date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_hppk",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_rhaz",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_band",
+   "fieldtype": "Column Break"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-06 18:32:55.939138",
+ "modified": "2026-07-07 10:19:24.159418",
  "modified_by": "Administrator",
  "module": "ETH",
  "name": "DMR Boiler And Turbine Parameters",

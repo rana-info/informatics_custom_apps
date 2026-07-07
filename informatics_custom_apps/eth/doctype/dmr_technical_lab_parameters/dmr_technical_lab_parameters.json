@@ -5,9 +5,16 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
+  "plant_details_section",
+  "company",
+  "date",
+  "column_break_rwjk",
+  "plant",
+  "section_break_wylk",
   "alcohol_percentage",
   "fermenter_rs",
   "fermenter_rst",
+  "column_break_serq",
   "average_starch__maize",
   "average_starch_dfg",
   "average_starch_fci"
@@ -42,12 +49,51 @@
    "fieldname": "average_starch_fci",
    "fieldtype": "Percent",
    "label": "Average Starch (FCI)"
+  },
+  {
+   "fieldname": "column_break_serq",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_wylk",
+   "fieldtype": "Section Break",
+   "label": "Lab Parameters"
+  },
+  {
+   "fieldname": "column_break_rwjk",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "plant",
+   "fieldtype": "Link",
+   "label": "Plant",
+   "options": "Branch",
+   "reqd": 1
+  },
+  {
+   "fieldname": "date",
+   "fieldtype": "Date",
+   "label": "Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "plant_details_section",
+   "fieldtype": "Section Break",
+   "label": "Plant Details"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-06 18:25:27.796951",
+ "modified": "2026-07-07 10:24:13.124817",
  "modified_by": "Administrator",
  "module": "ETH",
  "name": "DMR Technical Lab Parameters",

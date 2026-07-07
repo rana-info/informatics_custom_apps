@@ -5,17 +5,20 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
-  "cpu_plantetp_and_fresh_water_section",
+  "plant_details_section",
+  "company",
   "date",
+  "column_break_czcx",
   "plant",
+  "cpu_plantetp_and_fresh_water_section",
   "total_condensate_genration",
   "condensate_inlet_process",
   "condensate_inlet",
+  "effluent",
   "column_break_xqjc",
   "feed_in_cpuetp",
   "treated_water_recycle",
   "total_treated_water",
-  "effluent",
   "total_effluent_genration",
   "treated_water_use_section",
   "treated_water",
@@ -181,12 +184,27 @@
    "label": "Plant",
    "options": "Branch",
    "reqd": 1
+  },
+  {
+   "fieldname": "plant_details_section",
+   "fieldtype": "Section Break",
+   "label": "Plant Details"
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company"
+  },
+  {
+   "fieldname": "column_break_czcx",
+   "fieldtype": "Column Break"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-02 16:47:03.806033",
+ "modified": "2026-07-07 10:29:16.028997",
  "modified_by": "Administrator",
  "module": "ETH",
  "name": "Water Balance Log Book",

@@ -5,9 +5,13 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
+  "company",
+  "date",
   "liquification",
   "distillation",
   "msdh",
+  "column_break_bdqz",
+  "plant",
   "evaporation",
   "dryer",
   "deaerator",
@@ -48,12 +52,38 @@
    "fieldname": "other",
    "fieldtype": "Float",
    "label": "Other"
+  },
+  {
+   "fieldname": "date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "fieldname": "plant",
+   "fieldtype": "Link",
+   "label": "Plant",
+   "options": "Branch",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_bdqz",
+   "fieldtype": "Column Break"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-06 18:34:50.308022",
+ "modified": "2026-07-07 09:57:00.707293",
  "modified_by": "Administrator",
  "module": "ETH",
  "name": "DMR Process Data",
