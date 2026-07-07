@@ -139,7 +139,7 @@
    "fieldname": "plant",
    "fieldtype": "Select",
    "label": "Plant",
-   "options": "\nRSL Louhka\nRSLD Biofuels-Karnal\nRSL Buttar\nRSLD Biofuels-Chhattisgarh\nRSL Belwara\nRSLD Karnal\nSuperior Unn\nButtar Biofuels\nRana Power\nRSL Shahbad\nKarimganj Biofuels\nLakshmiji Sugar\nETH Louhka\nRana Logistics\nOutside Job",
+   "options": "\nRSL Louhka\nRSLD Biofuels-Karnal\nRSL Buttar\nRSLD Biofuels-Chhattisgarh\nRSL Belwara\nRSLD Karnal\nSuperior Unn\nButtar Biofuels\nRana Power\nRSL Shahbad\nKarimganj Biofuels\nLakshmiji Sugar\nETH Louhka\nRana Logistics\nAll Distillery\nAll Sugar\nRana Group\nOutside Job",
    "reqd": 1,
    "set_only_once": 1
   },
@@ -151,7 +151,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-06 16:28:23.286059",
+ "modified": "2026-07-07 11:01:28.335616",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "IOC Logs",
