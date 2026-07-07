@@ -25,6 +25,8 @@
   "treated_water1",
   "column_break_moed",
   "treated_water_transfer",
+  "dmro_water_generation",
+  "cost_of_generation",
   "raw_water_consumption_and_piezometer_section",
   "float_apqq",
   "ground_water_extraction",
@@ -199,12 +201,22 @@
   {
    "fieldname": "column_break_czcx",
    "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "dmro_water_generation",
+   "fieldtype": "Float",
+   "label": "DM/RO Water Generation"
+  },
+  {
+   "fieldname": "cost_of_generation",
+   "fieldtype": "Float",
+   "label": "Cost Of Generation"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-07 10:29:16.028997",
+ "modified": "2026-07-07 12:41:20.713206",
  "modified_by": "Administrator",
  "module": "ETH",
  "name": "Water Balance Log Book",
