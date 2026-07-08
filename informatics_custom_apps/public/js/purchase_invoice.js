@@ -33,7 +33,7 @@ frappe.ui.form.on("Purchase Invoice", {
                     (values) => {
 
                         frappe.call({
-                            method: "informatics_custom_apps.ripl_customized_apps.purchase_invoice.update_itc_claim_period",
+                            method: "informatics_custom_apps.ripl_customized_apps.custom_buttons.update_itc_claim_period",
                             args: {
                                 purchase_invoice: frm.doc.name,
                                 itc_claim_period: values.itc_claim_period

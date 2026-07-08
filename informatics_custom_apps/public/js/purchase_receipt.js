@@ -19,7 +19,7 @@ frappe.ui.form.on("Purchase Receipt", {
             __("Rejected Warehouse"),
             () => {
                 frappe.call({
-                    method: "informatics_custom_apps.ripl_customized_apps.purchase_receipt.update_rejected_warehouse",
+                    method: "informatics_custom_apps.ripl_customized_apps.custom_buttons.update_rejected_warehouse",
                     args: {
                         purchase_receipt: frm.doc.name
                     },
