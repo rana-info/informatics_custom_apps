@@ -150,7 +150,7 @@ class DMPlantLog {
 		});
 
 		this.$wrap = $(`
-			<div class="dm-plant-log-wrapper" style="padding: 10px 0;">
+			<div class="dm-plant-log-wrapper" style="padding: 20px 0;">
 				<style>
 					.dm-plant-log-wrapper table {
 						font-size: 13px;
@@ -159,7 +159,7 @@ class DMPlantLog {
 					}
 					.dm-plant-log-wrapper table th,
 					.dm-plant-log-wrapper table td {
-						padding: 2px 3px !important;
+						padding: 20px 5px !important;
 					}
 					.dm-plant-log-wrapper table tbody tr.dm-row-even { background: #ffffff; }
 					.dm-plant-log-wrapper table tbody tr.dm-row-odd { background: #f2f6fb; }

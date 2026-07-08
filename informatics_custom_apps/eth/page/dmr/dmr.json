@@ -1,0 +1,23 @@
+{
+ "content": null,
+ "creation": "2026-07-06 12:50:11.036490",
+ "docstatus": 0,
+ "doctype": "Page",
+ "idx": 0,
+ "modified": "2026-07-07 17:56:06.586030",
+ "modified_by": "Administrator",
+ "module": "ETH",
+ "name": "dmr",
+ "owner": "Administrator",
+ "page_name": "dmr",
+ "roles": [
+  {
+   "role": "System Manager"
+  }
+ ],
+ "script": null,
+ "standard": "Yes",
+ "style": null,
+ "system_page": 0,
+ "title": "Daily Manufacturing Report"
+}

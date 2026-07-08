@@ -9,6 +9,7 @@
   "date",
   "column_break_hppk",
   "plant",
+  "excel_file",
   "boiler_and_turbine_section",
   "float_zcpn",
   "float_jgdk",
@@ -147,12 +148,17 @@
   {
    "fieldname": "column_break_band",
    "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "excel_file",
+   "fieldtype": "Attach",
+   "label": "Excel File"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-07 10:19:24.159418",
+ "modified": "2026-07-07 15:57:35.708430",
  "modified_by": "Administrator",
  "module": "ETH",
  "name": "DMR Boiler And Turbine Parameters",
