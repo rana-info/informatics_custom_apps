@@ -3,19 +3,35 @@ import json
 import frappe
 
 LAB_PARAMETERS = [
-	(1, "PH", ""), (2, "Temperature", "Celcius"), (3, "TDS", "mg/l"), (4, "TCOD", "mg/l"),
-	(5, "SCOD", "mg/l"), (6, "BOD", "mg/l"), (7, "DO", "mg/l"), (8, "MLSS", "mg/l"),
-	(9, "SVI", "mg/l"), (10, "VSS", "mg/l"), (11, "VFA", "mg/l"), (12, "NH4 - N", "mg/l"),
-	(13, "FOG", "mg/l"), (14, "SO4", "mg/l"), (15, "TSS", "mg/l"), (16, "Alkalinity", "mg/l"),
-	(17, "Chlorides", "mg/l"), (18, "Total Hardness", "mg/l"), (19, "Calcium", "mg/l"),
-	(20, "P - Alkalinity", ""), (21, "Silica SiO2", "mg/l"), (22, "PO4 -P", "mg/l"),
-	(23, "TBC", ""), (24, "SRB", ""), (25, "FRC", "mg/l"), (26, "Delta - T", "deg C"),
-	(27, "CT - Evaporation", "m3/day"), (28, "COC", ""), (29, "SDI", "mg/l"),
-	(30, "Turbudity", "NTU"),
+    (1, "PH", ""),
+    (2, "Temperature", "Celcius"),
+    (3, "TDS", "mg/l"),
+    (4, "DO", "mg/l"),
+    (5, "MLSS", "mg/l"),
+    (6, "SVI", "mg/l"),
+    (7, "VSS", "mg/l"),
+    (8, "VFA", "mg/l"),
+    (9, "NH4 - N", "mg/l"),
+    (10, "FOG", "mg/l"),
+    (11, "SO4", "mg/l"),
+    (12, "TSS", "mg/l"),
+    (13, "Alkalinity", "mg/l"),
+    (14, "Chlorides", "mg/l"),
+    (15, "Total Hardness", "mg/l"),
+    (16, "Calcium", "mg/l"),
+    (17, "P - Alkalinity", ""),
+    (18, "Silica SiO2", "mg/l"),
+    (19, "PO4 -P", "mg/l"),
+    (20, "FRC", "mg/l"),
+    (21, "Delta - T", "deg C"),
+    (22, "CT - Evaporation", "m3/day"),
+    (23, "COC", ""),
+    (24, "SDI", "mg/l"),
+    (25, "Turbudity", "NTU"),
 ]
 
 LOCATION_FIELDS = [
-	"cpu_feed", "eqt_tank", "ct_tank", "reactor_inlet", "reactor_outlet", "aeration_tank",
+	 "eqt_tank", "ct_tank", "reactor_inlet", "reactor_outlet", "aeration_tank",
 	"sec_clarifier_outlet", "hrscc_outlet", "mgf_outlet", "acf_outlet", "uv_outlet",
 ]
 

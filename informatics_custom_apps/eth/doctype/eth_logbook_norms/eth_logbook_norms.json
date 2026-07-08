@@ -1,0 +1,56 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-07-04 14:47:45.783737",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "cpu_plant_logbook",
+  "section_break_cgep",
+  "dm_plant_logbook"
+ ],
+ "fields": [
+  {
+   "fieldname": "cpu_plant_logbook",
+   "fieldtype": "Table",
+   "label": "CPU Plant Logbook",
+   "options": "CPU Plant Lab Norms"
+  },
+  {
+   "fieldname": "section_break_cgep",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "dm_plant_logbook",
+   "fieldtype": "Table",
+   "label": "DM Plant Logbook",
+   "options": "DM Plant Log Norms"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-07-04 16:48:50.150055",
+ "modified_by": "Administrator",
+ "module": "ETH",
+ "name": "ETH Logbook Norms",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

@@ -40,6 +40,12 @@ frappe.query_reports["SRV Clearing Analysis"] = {
                 };
             }
         },
+        {
+            fieldname: "supplier",
+            label: "Supplier",
+            fieldtype: "Link",
+            options: "Supplier"
+        },
 
 
           {

@@ -5,5 +5,5 @@
 from frappe.tests.utils import FrappeTestCase
 
 
-class TestzzProjectRSLD(FrappeTestCase):
+class TestDMRProcessData(FrappeTestCase):
 	pass

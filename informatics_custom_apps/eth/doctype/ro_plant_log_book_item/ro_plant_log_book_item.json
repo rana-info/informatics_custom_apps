@@ -1,0 +1,352 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-07-02 17:25:42.625283",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "time_slot",
+  "unit_pressure_column",
+  "raw__water_pump_outlet",
+  "mgf_inlet",
+  "mgf_outlet",
+  "mcf_inlet",
+  "mcf_outlet",
+  "high_pressure_pump_outlet",
+  "ro_1st_stage",
+  "ro_2nd_stage",
+  "ro_reject",
+  "pressure_difference",
+  "dg_pump_outlet",
+  "sac_inlet",
+  "sac_outlet",
+  "sba_inlet",
+  "sba_outlet",
+  "mb_inlet",
+  "mb_outlet",
+  "column_break_uxmx",
+  "mgf_inlet1",
+  "ro_inlet",
+  "ro_outlet",
+  "reject",
+  "mb_outlet1",
+  "recovery",
+  "column_break_mgf_params",
+  "turbidity",
+  "ph",
+  "conductivity",
+  "total_alkalinity",
+  "silica_as_sio2",
+  "column_break_ro_inlet_params",
+  "ph1",
+  "total_hardness1",
+  "total_alkalinity1",
+  "silica_as_sio21",
+  "orp",
+  "column_break_ro_outlet_params",
+  "ph2",
+  "conductivity2",
+  "total_hardness2",
+  "silica_as_sio22",
+  "column_break_storage_tank",
+  "dm_water_tank",
+  "make_up_water_tank"
+ ],
+ "fields": [
+  {
+   "fieldname": "time_slot",
+   "fieldtype": "Select",
+   "label": "Time Slot",
+   "options": "9:30 AM-1:30 PM\n1:30 PM-5:30 PM\n5:30 PM-9:30 PM\n9:30 PM-1:30 AM\n1:30 AM-5:30 AM\n5:30 AM-9:30 AM",
+   "in_list_view": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "unit_pressure_column",
+   "fieldtype": "Column Break",
+   "in_list_view": 1,
+   "label": "UNIT PRESSURE"
+  },
+  {
+   "fieldname": "raw__water_pump_outlet",
+   "fieldtype": "Float",
+   "label": "Raw  Water Pump Outlet",
+   "in_list_view": 1,
+   "precision": "2"
+  },
+  {
+   "fieldname": "mgf_inlet",
+   "fieldtype": "Float",
+   "label": "MGF Inlet",
+   "in_list_view": 1,
+   "precision": "2"
+  },
+  {
+   "fieldname": "mgf_outlet",
+   "fieldtype": "Float",
+   "label": "MGF Outlet",
+   "in_list_view": 1,
+   "precision": "2"
+  },
+  {
+   "fieldname": "mcf_inlet",
+   "fieldtype": "Float",
+   "label": "MCF Inlet",
+   "in_list_view": 1,
+   "precision": "2"
+  },
+  {
+   "fieldname": "mcf_outlet",
+   "fieldtype": "Float",
+   "label": "MCF Outlet",
+   "in_list_view": 1,
+   "precision": "2"
+  },
+  {
+   "fieldname": "high_pressure_pump_outlet",
+   "fieldtype": "Float",
+   "label": "High Pressure Pump Outlet",
+   "precision": "2"
+  },
+  {
+   "fieldname": "ro_1st_stage",
+   "fieldtype": "Float",
+   "label": "RO 1st Stage",
+   "precision": "2"
+  },
+  {
+   "fieldname": "ro_2nd_stage",
+   "fieldtype": "Float",
+   "label": "RO 2nd Stage",
+   "precision": "2"
+  },
+  {
+   "fieldname": "ro_reject",
+   "fieldtype": "Float",
+   "label": "RO Reject",
+   "precision": "2"
+  },
+  {
+   "fieldname": "pressure_difference",
+   "fieldtype": "Float",
+   "label": "Pressure Difference",
+   "precision": "2",
+   "description": "(Across RO)\n"
+  },
+  {
+   "fieldname": "dg_pump_outlet",
+   "fieldtype": "Float",
+   "label": "DG Pump Outlet",
+   "precision": "2"
+  },
+  {
+   "fieldname": "sac_inlet",
+   "fieldtype": "Float",
+   "label": "SAC Inlet",
+   "precision": "2"
+  },
+  {
+   "fieldname": "sac_outlet",
+   "fieldtype": "Float",
+   "label": "SAC Outlet",
+   "precision": "2"
+  },
+  {
+   "fieldname": "sba_inlet",
+   "fieldtype": "Float",
+   "label": "SBA Inlet",
+   "precision": "2"
+  },
+  {
+   "fieldname": "sba_outlet",
+   "fieldtype": "Float",
+   "label": "SBA Outlet",
+   "precision": "2"
+  },
+  {
+   "fieldname": "mb_inlet",
+   "fieldtype": "Float",
+   "label": "MB Inlet",
+   "precision": "2"
+  },
+  {
+   "fieldname": "mb_outlet",
+   "fieldtype": "Float",
+   "label": "MB Outlet",
+   "precision": "2"
+  },
+  {
+   "fieldname": "column_break_uxmx",
+   "fieldtype": "Column Break",
+   "label": "WATER FLOW"
+  },
+  {
+   "fieldname": "mgf_inlet1",
+   "fieldtype": "Float",
+   "label": "MGF Inlet",
+   "precision": "2"
+  },
+  {
+   "fieldname": "ro_inlet",
+   "fieldtype": "Float",
+   "label": "RO Inlet",
+   "precision": "2"
+  },
+  {
+   "fieldname": "ro_outlet",
+   "fieldtype": "Float",
+   "label": "RO Outlet",
+   "precision": "2"
+  },
+  {
+   "fieldname": "reject",
+   "fieldtype": "Float",
+   "label": "Reject",
+   "precision": "2"
+  },
+  {
+   "fieldname": "mb_outlet1",
+   "fieldtype": "Float",
+   "label": "MB Outlet",
+   "precision": "2"
+  },
+  {
+   "fieldname": "recovery",
+   "fieldtype": "Percent",
+   "label": "Recovery",
+   "precision": "2"
+  },
+  {
+   "fieldname": "column_break_mgf_params",
+   "fieldtype": "Column Break",
+   "label": "MGF INLET PARAMETERS"
+  },
+  {
+   "fieldname": "turbidity",
+   "fieldtype": "Float",
+   "label": "Turbidity",
+   "precision": "2"
+  },
+  {
+   "fieldname": "ph",
+   "fieldtype": "Float",
+   "label": "PH",
+   "precision": "2"
+  },
+  {
+   "fieldname": "conductivity",
+   "fieldtype": "Float",
+   "label": "Conductivity",
+   "precision": "2"
+  },
+  {
+   "fieldname": "total_alkalinity",
+   "fieldtype": "Float",
+   "label": "Total Alkalinity",
+   "precision": "2"
+  },
+  {
+   "fieldname": "silica_as_sio2",
+   "fieldtype": "Float",
+   "label": "Silica as SiO2",
+   "precision": "2"
+  },
+  {
+   "fieldname": "column_break_ro_inlet_params",
+   "fieldtype": "Column Break",
+   "label": "R.O. INLET PARAMETERS"
+  },
+  {
+   "fieldname": "ph1",
+   "fieldtype": "Float",
+   "label": "PH",
+   "precision": "2"
+  },
+  {
+   "fieldname": "total_hardness1",
+   "fieldtype": "Float",
+   "label": "Total Hardness",
+   "precision": "2"
+  },
+  {
+   "fieldname": "total_alkalinity1",
+   "fieldtype": "Float",
+   "label": "Total Alkalinity",
+   "precision": "2"
+  },
+  {
+   "fieldname": "silica_as_sio21",
+   "fieldtype": "Float",
+   "label": "Silica as SiO2",
+   "precision": "2"
+  },
+  {
+   "fieldname": "orp",
+   "fieldtype": "Float",
+   "label": "ORP",
+   "precision": "2"
+  },
+  {
+   "fieldname": "column_break_ro_outlet_params",
+   "fieldtype": "Column Break",
+   "label": "R.O. OUTLET PARAMETERS"
+  },
+  {
+   "fieldname": "ph2",
+   "fieldtype": "Float",
+   "label": "PH",
+   "precision": "2"
+  },
+  {
+   "fieldname": "conductivity2",
+   "fieldtype": "Float",
+   "label": "Conductivity",
+   "precision": "2"
+  },
+  {
+   "fieldname": "total_hardness2",
+   "fieldtype": "Float",
+   "label": "Total Hardness",
+   "precision": "2"
+  },
+  {
+   "fieldname": "silica_as_sio22",
+   "fieldtype": "Float",
+   "label": "Silica as SiO2",
+   "precision": "2"
+  },
+  {
+   "fieldname": "column_break_storage_tank",
+   "fieldtype": "Column Break",
+   "label": "STORAGE TANK LEVEL"
+  },
+  {
+   "fieldname": "dm_water_tank",
+   "fieldtype": "Percent",
+   "label": "DM Water Tank",
+   "precision": "2"
+  },
+  {
+   "fieldname": "make_up_water_tank",
+   "fieldtype": "Percent",
+   "label": "Make-Up Water Tank",
+   "precision": "2"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-07-02 17:39:03.297570",
+ "modified_by": "Administrator",
+ "module": "ETH",
+ "name": "RO Plant Log Book Item",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

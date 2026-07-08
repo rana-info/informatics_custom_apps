@@ -1,7 +1,7 @@
 {
  "actions": [],
  "allow_rename": 1,
- "autoname": "ZPR.#####",
+ "autoname": "IOC.-.department.-.plant.-.#####",
  "creation": "2026-01-03 15:08:57.383793",
  "doctype": "DocType",
  "engine": "InnoDB",
@@ -12,22 +12,15 @@
   "task_short_name",
   "task_status",
   "column_break_olwy",
+  "plant",
   "task_start_date",
-  "task_target_date",
   "task_completion_date",
   "owner_details_section",
   "task_owner",
+  "column_break_umnp",
   "owner_name",
-  "column_break_gcjx",
-  "team_leader",
-  "leader_name",
-  "team_size",
   "section_break_aiei",
   "sub_task",
-  "section_break_frjm",
-  "task_percentage",
-  "column_break_cyhw",
-  "target_over_days",
   "messages_section",
   "messages",
   "communication_open"
@@ -60,6 +53,7 @@
    "in_standard_filter": 1,
    "label": "Task Status",
    "options": "Open\nIn Progress\nCompleted\nPostponed\nHalted",
+   "read_only": 1,
    "reqd": 1
   },
   {
@@ -75,19 +69,10 @@
    "set_only_once": 1
   },
   {
-   "fieldname": "task_target_date",
-   "fieldtype": "Date",
-   "in_list_view": 1,
-   "label": "Task Target Date",
-   "reqd": 1,
-   "set_only_once": 1
-  },
-  {
    "fieldname": "task_completion_date",
    "fieldtype": "Date",
    "label": "Task Completion Date",
-   "mandatory_depends_on": "eval:doc.task_status==\"Completed\";",
-   "read_only_depends_on": "eval:doc.task_percentage!=100;"
+   "read_only": 1
   },
   {
    "fieldname": "owner_details_section",
@@ -102,22 +87,11 @@
    "reqd": 1
   },
   {
-   "fieldname": "column_break_gcjx",
-   "fieldtype": "Column Break"
-  },
-  {
-   "fieldname": "team_leader",
-   "fieldtype": "Link",
-   "label": "Team Leader",
-   "options": "Employee",
-   "reqd": 1
-  },
-  {
-   "fieldname": "team_size",
-   "fieldtype": "Int",
-   "label": "Team Size",
-   "non_negative": 1,
-   "reqd": 1
+   "fetch_from": "task_owner.employee_name",
+   "fieldname": "owner_name",
+   "fieldtype": "Data",
+   "label": "Owner Name",
+   "read_only": 1
   },
   {
    "fieldname": "section_break_aiei",
@@ -131,50 +105,14 @@
    "reqd": 1
   },
   {
-   "fieldname": "section_break_frjm",
-   "fieldtype": "Section Break"
-  },
-  {
-   "allow_on_submit": 1,
-   "fieldname": "task_percentage",
-   "fieldtype": "Percent",
-   "in_list_view": 1,
-   "label": "Task Percentage",
-   "read_only": 1
-  },
-  {
-   "fieldname": "column_break_cyhw",
-   "fieldtype": "Column Break"
-  },
-  {
-   "fieldname": "target_over_days",
-   "fieldtype": "Int",
-   "in_list_view": 1,
-   "label": "Target  Days",
-   "read_only": 1
-  },
-  {
-   "fetch_from": "task_owner.employee_name",
-   "fieldname": "owner_name",
-   "fieldtype": "Data",
-   "label": "Owner Name",
-   "read_only": 1
-  },
-  {
-   "fetch_from": "team_leader.employee_name",
-   "fieldname": "leader_name",
-   "fieldtype": "Data",
-   "label": "Leader Name",
-   "read_only": 1
-  },
-  {
    "fieldname": "department",
    "fieldtype": "Select",
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Department",
    "options": "\nCivil\nEngineering\nProcess\nOther",
-   "reqd": 1
+   "reqd": 1,
+   "set_only_once": 1
   },
   {
    "fieldname": "messages_section",
@@ -196,15 +134,27 @@
    "in_standard_filter": 1,
    "label": "Communication Open",
    "read_only": 1
+  },
+  {
+   "fieldname": "plant",
+   "fieldtype": "Select",
+   "label": "Plant",
+   "options": "\nRSL Louhka\nRSLD Biofuels-Karnal\nRSL Buttar\nRSLD Biofuels-Chhattisgarh\nRSL Belwara\nRSLD Karnal\nSuperior Unn\nButtar Biofuels\nRana Power\nRSL Shahbad\nKarimganj Biofuels\nLakshmiji Sugar\nETH Louhka\nRana Logistics\nAll Distillery\nAll Sugar\nRana Group\nOutside Job",
+   "reqd": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "column_break_umnp",
+   "fieldtype": "Column Break"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-01-12 17:13:28.801442",
+ "modified": "2026-07-07 11:01:28.335616",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
- "name": "zz Project RSLD",
+ "name": "IOC Logs",
  "naming_rule": "By \"Naming Series\" field",
  "owner": "Administrator",
  "permissions": [

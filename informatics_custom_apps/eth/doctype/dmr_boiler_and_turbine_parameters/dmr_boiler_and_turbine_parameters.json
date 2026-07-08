@@ -1,0 +1,179 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-07-06 18:26:58.875732",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "company",
+  "date",
+  "column_break_hppk",
+  "plant",
+  "boiler_and_turbine_section",
+  "float_zcpn",
+  "float_jgdk",
+  "column_break_kamo",
+  "float_smgv",
+  "float_lcuw",
+  "power_section",
+  "float_pvrh",
+  "float_iunw",
+  "float_vjzq",
+  "column_break_rhaz",
+  "float_dctr",
+  "float_evng",
+  "power_per_bl",
+  "technical_parameters_of_bolier_and_turbine_section",
+  "float_hrth",
+  "float_reke",
+  "column_break_band",
+  "percent_bman"
+ ],
+ "fields": [
+  {
+   "fieldname": "boiler_and_turbine_section",
+   "fieldtype": "Section Break",
+   "label": "Boiler And Turbine"
+  },
+  {
+   "fieldname": "float_zcpn",
+   "fieldtype": "Float",
+   "label": "Steam Produced"
+  },
+  {
+   "fieldname": "float_jgdk",
+   "fieldtype": "Float",
+   "label": "Steam Purchased"
+  },
+  {
+   "fieldname": "float_smgv",
+   "fieldtype": "Float",
+   "label": "Steam Consumed Through PRDS"
+  },
+  {
+   "fieldname": "float_lcuw",
+   "fieldtype": "Float",
+   "label": "Steam Used Through Turbine"
+  },
+  {
+   "fieldname": "power_section",
+   "fieldtype": "Section Break",
+   "label": "Power"
+  },
+  {
+   "fieldname": "float_pvrh",
+   "fieldtype": "Float",
+   "label": "Power Generation"
+  },
+  {
+   "fieldname": "float_iunw",
+   "fieldtype": "Float",
+   "label": "Power Purchased"
+  },
+  {
+   "fieldname": "float_vjzq",
+   "fieldtype": "Float",
+   "label": "Power Export"
+  },
+  {
+   "fieldname": "float_dctr",
+   "fieldtype": "Float",
+   "label": "Power Sales"
+  },
+  {
+   "fieldname": "float_evng",
+   "fieldtype": "Float",
+   "label": "Power Consumed"
+  },
+  {
+   "fieldname": "technical_parameters_of_bolier_and_turbine_section",
+   "fieldtype": "Section Break",
+   "label": "Technical Parameters Of Bolier And Turbine"
+  },
+  {
+   "fieldname": "float_hrth",
+   "fieldtype": "Float",
+   "label": "Bolier Load Per Hour"
+  },
+  {
+   "fieldname": "float_reke",
+   "fieldtype": "Float",
+   "label": "ESP Outlet  Temp"
+  },
+  {
+   "fieldname": "percent_bman",
+   "fieldtype": "Percent",
+   "label": "Unburnt Ash % "
+  },
+  {
+   "fieldname": "power_per_bl",
+   "fieldtype": "Float",
+   "label": "Power Per BL"
+  },
+  {
+   "fieldname": "column_break_kamo",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "fieldname": "plant",
+   "fieldtype": "Link",
+   "label": "Plant",
+   "options": "Branch",
+   "reqd": 1
+  },
+  {
+   "fieldname": "date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_hppk",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_rhaz",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_band",
+   "fieldtype": "Column Break"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-07-07 10:19:24.159418",
+ "modified_by": "Administrator",
+ "module": "ETH",
+ "name": "DMR Boiler And Turbine Parameters",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
