@@ -39,7 +39,7 @@ def update_itc_claim_period(purchase_invoice, itc_claim_period):
     doc.db_set(
         "itc_claim_period",
         itc_claim_period,
-        update_modified=True
+        update_modified=False
     )
 
     frappe.db.commit()
