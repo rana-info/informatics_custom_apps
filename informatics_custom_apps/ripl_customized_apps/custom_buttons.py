@@ -47,3 +47,22 @@ def update_itc_claim_period(purchase_invoice, itc_claim_period):
     return {
         "itc_claim_period": itc_claim_period
     }
+    
+
+
+@frappe.whitelist()
+def update_transporter(sales_invoice, transporter):
+
+    doc = frappe.get_doc("Sales Invoice", sales_invoice)
+
+    if doc.docstatus == 2:
+        frappe.throw("Cancelled Sales Invoice cannot be updated.")
+
+    doc.db_set(
+        "transporter",
+        transporter,
+        update_modified=False,
+        commit=True
+    )
+
+    return "Success"
