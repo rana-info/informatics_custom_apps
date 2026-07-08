@@ -63,7 +63,8 @@ doctype_js = {
     "Loan": "public/js/loan_custom.js",
     "Asset": "public/js/asset_date_custom.js",
     "Purchase Receipt": "public/js/purchase_receipt.js",
-    "Purchase Invoice" : "public/js/purchase_invoice.js"
+    "Purchase Invoice" : "public/js/purchase_invoice.js",
+    "Sales Invoice": "public/js/sales_invoice.js"
 }
 # doc_events = {
 #     "Leave Application": {
