@@ -1,0 +1,144 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "MJR.-.abbr.-.#####",
+ "creation": "2026-07-09 12:22:54.462455",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "section_break_cccr",
+  "company",
+  "job_id",
+  "job_location",
+  "diagram_image",
+  "abbr",
+  "column_break_pbac",
+  "plant",
+  "job_description",
+  "status",
+  "section_break_eefa",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_break_cccr",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Maintenance Job Request",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "plant",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Plant",
+   "options": "Branch",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_eefa",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "column_break_pbac",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "fieldname": "diagram_image",
+   "fieldtype": "Attach Image",
+   "label": "Diagram Image",
+   "reqd": 1
+  },
+  {
+   "fieldname": "job_description",
+   "fieldtype": "Text Editor",
+   "label": "Job Description",
+   "reqd": 1
+  },
+  {
+   "fieldname": "job_location",
+   "fieldtype": "Data",
+   "label": "Job Location",
+   "reqd": 1
+  },
+  {
+   "fieldname": "job_id",
+   "fieldtype": "Data",
+   "label": "Job ID",
+   "read_only": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Status"
+  },
+  {
+   "fetch_from": "plant.custom_invoice_abbr",
+   "fieldname": "abbr",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Abbr",
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-07-09 13:25:19.648506",
+ "modified_by": "Administrator",
+ "module": "RIPL Customized Apps",
+ "name": "Maintenance Job Request",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Master Admin",
+   "select": 1,
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
