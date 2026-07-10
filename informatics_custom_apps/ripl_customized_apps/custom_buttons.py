@@ -58,11 +58,24 @@ def update_transporter(sales_invoice, transporter):
     if doc.docstatus == 2:
         frappe.throw("Cancelled Sales Invoice cannot be updated.")
 
+    transporter_name = frappe.db.get_value(
+        "Supplier",
+        transporter,
+        "supplier_name"
+    )
+
     doc.db_set(
         "transporter",
         transporter,
-        update_modified=False,
-        commit=True
+        update_modified=False
     )
+
+    doc.db_set(
+        "transporter_name",
+        transporter_name,
+        update_modified=False
+    )
+
+    frappe.db.commit()
 
     return "Success"
