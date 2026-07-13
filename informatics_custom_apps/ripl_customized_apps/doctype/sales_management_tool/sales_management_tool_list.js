@@ -19,44 +19,38 @@ frappe.listview_settings["Sales Management Tool"] = {
 
 	formatters: {
 		correction_type(value) {
-			const correction_colors = {
-				"Wrong Vehicle Number": "blue",
-				"Wrong Driver Name": "green",
-				"Wrong Transporter": "grey",
-				"Wrong Card Number": "yellow",
-				"Wrong Vehicle Type": "pink",
 
-				"Reset Second Weight (Not Manual)": "custom-orange",
-				"Reset Second Weight (Manual)": "custom-sky",
+		const correction_classes = {
+			"Wrong Vehicle Number": "smt-ct-vehicle",
+			"Wrong Driver Name": "smt-ct-driver",
+			"Wrong Transporter": "smt-ct-transporter",
+			"Wrong Card Number": "smt-ct-card",
+			"Wrong Vehicle Type": "smt-ct-vehicle-type",
+			"Reset Second Weight (Not Manual)": "smt-ct-reset-auto",
+			"Reset Second Weight (Manual)": "smt-ct-reset-manual",
+			"Wrong Item Group": "smt-ct-item",
+			"Wrong Delivery Note": "smt-ct-delivery",
+			"Inward/Outward Wrong Entry (Manual)": "smt-ct-inout",
+			"Wrong Sales Partner": "smt-ct-sales-partner",
+			"Change First Weight(Tare)": "smt-ct-first-weight",
+			"Wrong Segment": "smt-ct-segment",
+			"Unlink Weighment": "smt-ct-unlink",
+			"Wrong Segment(Deal)": "smt-ct-segment-deal",
+			"Wrong Weight(Sale)": "smt-ct-weight-sale",
+		};
 
-				"Wrong Item Group": "cyan",
-				"Wrong Delivery Note": "purple",
+		if (!value) return "";
 
-				"Inward/Outward Wrong Entry (Manual)": "red",
+		const cls = correction_classes[value] || "smt-ct-default";
 
-				"Wrong Sales Partner": "custom-darkgreen",
-
-				"Change First Weight(Tare)": "custom-magenta",
-
-				"Wrong Segment": "custom-teal",
-
-				"Unlink Weighment": "custom-brown",
-				"Wrong Segment(Deal)": "custom-darkblue",
-				"Wrong Weight(Sale)": "custom-coral",
-			};
-
-			if (!value) return "";
-
-			const color = correction_colors[value] || "grey";
-
-			return `
-				<span class="filterable indicator-pill ellipsis ${color}"
-					data-filter="correction_type,=,${value}">
-					<span class="indicator-dot"></span>
-					${value}
-				</span>
-			`;
-		},
+		return `
+			<span class="filterable indicator-pill ellipsis smt-correction-tag ${cls}"
+				data-filter="correction_type,=,${value}">
+				<span class="indicator-dot"></span>
+				${value}
+			</span>
+		`;
+	},
 
 		deal_correction(value) {
 			if (!value) return "";
