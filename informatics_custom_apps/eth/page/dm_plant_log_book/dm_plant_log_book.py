@@ -3,9 +3,9 @@ import json
 import frappe
 
 TIME_SLOTS = [
-	(1, "6 AM - 08 AM"), (2, "8 AM - 10 AM"), (3, "10 AM - 12 PM"), (4, "12 PM - 2 PM"),
-	(5, "2 PM - 4 PM"), (6, "4 PM - 6 PM"), (7, "6 PM - 8 PM"), (8, "8 PM - 10 PM"),
-	(9, "10 PM - 12 AM"), (10, "12 AM - 2 AM"), (11, "2 AM - 4 AM"), (12, "4 AM - 6 AM"),
+	(1, "6 AM - 10 AM"), (2, "10 AM - 2 PM"),
+	(3, "2 PM - 6 PM"), (4, "6 PM - 10 PM"),
+	(5, "10 PM - 2 AM"), (6, "2 AM - 6 AM"),
 ]
 
 TEXT_FIELDS = [

@@ -21,7 +21,8 @@
    "fieldname": "sub_task_description",
    "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Sub Task Description"
+   "label": "Sub Task Description",
+   "reqd": 1
   },
   {
    "columns": 1,
@@ -83,7 +84,7 @@
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-07-06 17:57:47.134890",
+ "modified": "2026-07-08 13:06:01.049640",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "zz Project RSLD Sub-Task Detail",

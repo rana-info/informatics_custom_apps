@@ -1,4 +1,5 @@
 import frappe
+import math
 from frappe.utils.data import flt, cint
 import unicodedata
 from frappe.utils import getdate
@@ -56,11 +57,22 @@ def get_data(filters):
         row["pf_salary"] = flt(data_dict.get("pf_salary"))
         row["pension_salary"] = flt(data_dict.get("pension_salary"))
         row["edli"] = flt(data_dict.get("edli"))
-        row["employee_pf"] = flt(data_dict.get("employee_pf"))
-        row["employee_pension_amount"] = flt(data_dict.get("employee_pension_amount"))
-        row["pf_12_per"] = flt(data_dict.get("pf_12_per"))
-        
+        row["pf_12_per"] = 0
+        row["employee_pension_amount"] = 0
+        row["employee_pf"] = 0
 
+        for d in slip_doc.deductions:
+            sc = frappe.get_cached_doc("Salary Component", d.salary_component)
+
+            if sc.custom_pf_12_per:
+                row["pf_12_per"] = flt(d.amount)
+
+            if sc.custom_employee_pension_amount:
+                row["employee_pension_amount"] = flt(d.amount)
+
+            if sc.custom_employee_pf:
+                row["employee_pf"] = flt(d.amount)
+        
         data.append(row)
 
     return data
@@ -84,9 +96,6 @@ def add_structure_components(slip, component_type, data_dict):
 
         amount = flt(amount) or 0
         sc = frappe.get_cached_doc("Salary Component", comp.salary_component)
-         # Log the details of the component, formula, and calculation
-
-
 
         if sc.custom_pension_salary:
             data_dict["pension_salary"] = amount
@@ -104,8 +113,6 @@ def get_data_for_retaining_eval(slip):
     data = frappe._dict()
 
     employee = frappe.get_cached_doc("Employee", slip.employee).as_dict()
-   
-
     ssa = frappe.db.get_value(
         "Salary Structure Assignment",
         {
@@ -145,25 +152,34 @@ def get_data_for_retaining_eval(slip):
 
     return data, default_data
 
-
 def eval_condition_and_formula(struct_row, data):
     whitelisted_globals = {
         "int": int,
         "float": float,
         "long": int,
         "round": round,
+        "ceil": math.ceil,
     }
 
     condition, formula, amount = struct_row.condition, struct_row.formula, struct_row.amount
 
-    if condition and not safe_eval(condition, whitelisted_globals, data):
-        return None
+    if condition:
+        try:
+            if not safe_eval(condition, whitelisted_globals, data):
+                return None
+        except Exception as e:
+            frappe.msgprint(f"Error in Condition for component {struct_row.salary_component}: {condition}<br>Error: {str(e)}", indicator="orange")
+            return None
 
     if struct_row.amount_based_on_formula and formula:
-        amount = flt(
-            safe_eval(formula, whitelisted_globals, data),
-            struct_row.precision("amount")
-        )
+        try:
+            amount = flt(
+                safe_eval(formula, whitelisted_globals, data),
+                struct_row.precision("amount")
+            )
+        except Exception as e:
+            frappe.msgprint(f"Syntax Error in Formula for component <b>{struct_row.salary_component}</b>.<br>Formula: <code>{formula}</code><br>Please correct this in the Salary Structure.", indicator="red")
+            amount = 0
 
     if amount:
         data[struct_row.abbr] = amount
@@ -182,6 +198,7 @@ def safe_eval(code: str, eval_globals=None, eval_locals=None):
         "round": round,
         "long": int,
         "getdate": getdate,
+        "ceil": math.ceil,
     }
 
     eval_globals["__builtins__"] = {}

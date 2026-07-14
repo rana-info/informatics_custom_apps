@@ -3,13 +3,16 @@
 
 frappe.ui.form.on("IOC Logs", {
   onload(frm) {
-    frm.set_query("task_owner", function () {
-        return {
-            filters: {
-                branch: frm.doc.plant
-            }
-        };
+    user=frappe.session.user;
+    frappe.db.get_value('User', user,'full_name', function (r) {
+      if (r && r.full_name) {
+        frm.set_value('owner_name', r.full_name);
+        frm.set_value('task_owner', user);
+      }
     });
+  },
+  task1(frm){
+    frm.set_value('task_short_name','');
   },
   refresh(frm) {
 

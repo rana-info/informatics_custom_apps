@@ -9,12 +9,11 @@
   "section_break_cpps",
   "task_id",
   "department",
-  "task_short_name",
   "task_status",
+  "task_short_name",
   "column_break_olwy",
   "plant",
-  "task_start_date",
-  "task_completion_date",
+  "task1",
   "owner_details_section",
   "task_owner",
   "column_break_umnp",
@@ -41,10 +40,12 @@
    "unique": 1
   },
   {
+   "depends_on": "eval:doc.task1==\"Other\";",
    "fieldname": "task_short_name",
    "fieldtype": "Data",
    "label": "Task Short Name",
-   "reqd": 1
+   "mandatory_depends_on": "eval:doc.task1==\"Other\";",
+   "set_only_once": 1
   },
   {
    "fieldname": "task_status",
@@ -61,20 +62,6 @@
    "fieldtype": "Column Break"
   },
   {
-   "fieldname": "task_start_date",
-   "fieldtype": "Date",
-   "in_list_view": 1,
-   "label": "Task Start Date",
-   "reqd": 1,
-   "set_only_once": 1
-  },
-  {
-   "fieldname": "task_completion_date",
-   "fieldtype": "Date",
-   "label": "Task Completion Date",
-   "read_only": 1
-  },
-  {
    "fieldname": "owner_details_section",
    "fieldtype": "Section Break",
    "label": "Owner Details"
@@ -83,11 +70,11 @@
    "fieldname": "task_owner",
    "fieldtype": "Link",
    "label": "Task Owner",
-   "options": "Employee",
+   "options": "User",
+   "read_only": 1,
    "reqd": 1
   },
   {
-   "fetch_from": "task_owner.employee_name",
    "fieldname": "owner_name",
    "fieldtype": "Data",
    "label": "Owner Name",
@@ -137,21 +124,29 @@
   },
   {
    "fieldname": "plant",
-   "fieldtype": "Select",
+   "fieldtype": "Link",
    "label": "Plant",
-   "options": "\nRSL Louhka\nRSLD Biofuels-Karnal\nRSL Buttar\nRSLD Biofuels-Chhattisgarh\nRSL Belwara\nRSLD Karnal\nSuperior Unn\nButtar Biofuels\nRana Power\nRSL Shahbad\nKarimganj Biofuels\nLakshmiji Sugar\nETH Louhka\nRana Logistics\nAll Distillery\nAll Sugar\nRana Group\nOutside Job",
+   "options": "Branch",
    "reqd": 1,
    "set_only_once": 1
   },
   {
    "fieldname": "column_break_umnp",
    "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "task1",
+   "fieldtype": "Select",
+   "label": "Task",
+   "options": "\nM.O.M\nTechnical Review\nDebt Meeting\nIndividual Task\nOther",
+   "reqd": 1,
+   "set_only_once": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-07 11:01:28.335616",
+ "modified": "2026-07-08 13:20:52.174143",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "IOC Logs",
