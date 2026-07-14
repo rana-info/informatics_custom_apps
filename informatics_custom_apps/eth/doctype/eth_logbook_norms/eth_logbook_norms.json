@@ -7,7 +7,9 @@
  "field_order": [
   "cpu_plant_logbook",
   "section_break_cgep",
-  "dm_plant_logbook"
+  "dm_plant_logbook",
+  "power_plant_norms_section",
+  "power_plant_log_norms"
  ],
  "fields": [
   {
@@ -25,13 +27,24 @@
    "fieldtype": "Table",
    "label": "DM Plant Logbook",
    "options": "DM Plant Log Norms"
+  },
+  {
+   "fieldname": "power_plant_norms_section",
+   "fieldtype": "Section Break",
+   "label": "Power Plant Norms"
+  },
+  {
+   "allow_bulk_edit": 1,
+   "fieldname": "power_plant_log_norms",
+   "fieldtype": "Table",
+   "options": "Power Plant Log Norms"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-07-04 16:48:50.150055",
+ "modified": "2026-07-14 16:26:31.479041",
  "modified_by": "Administrator",
  "module": "ETH",
  "name": "ETH Logbook Norms",

@@ -8,13 +8,18 @@
  "field_order": [
   "section_break_cccr",
   "company",
+  "nature_of_job_work",
   "job_id",
   "job_location",
-  "diagram_image",
+  "work_status",
   "abbr",
+  "before_image",
   "column_break_pbac",
   "plant",
   "job_description",
+  "contractor_invoice_number",
+  "contractor_invoice_date",
+  "after_image",
   "status",
   "section_break_eefa",
   "amended_from"
@@ -58,12 +63,6 @@
    "reqd": 1
   },
   {
-   "fieldname": "diagram_image",
-   "fieldtype": "Attach Image",
-   "label": "Diagram Image",
-   "reqd": 1
-  },
-  {
    "fieldname": "job_description",
    "fieldtype": "Text Editor",
    "label": "Job Description",
@@ -94,13 +93,56 @@
    "hidden": 1,
    "label": "Abbr",
    "read_only": 1
+  },
+  {
+   "fieldname": "nature_of_job_work",
+   "fieldtype": "Select",
+   "label": "Nature Of Job Work",
+   "options": "\nCapital\nRevenue",
+   "reqd": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "after_image",
+   "fieldtype": "Attach Image",
+   "label": "After Image",
+   "set_only_once": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "contractor_invoice_number",
+   "fieldtype": "Data",
+   "label": "Contractor Invoice Number",
+   "set_only_once": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "contractor_invoice_date",
+   "fieldtype": "Date",
+   "label": "Contractor Invoice Date",
+   "set_only_once": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "default": "Open",
+   "fieldname": "work_status",
+   "fieldtype": "Select",
+   "label": "Work Status",
+   "options": "\nOpen\nIn Progress\nCompleted",
+   "reqd": 1
+  },
+  {
+   "fieldname": "before_image",
+   "fieldtype": "Attach Image",
+   "label": "Before Image",
+   "reqd": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-07-09 13:25:19.648506",
+ "modified": "2026-07-10 17:13:44.773478",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "Maintenance Job Request",
