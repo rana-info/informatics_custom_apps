@@ -88,7 +88,7 @@ def get_parameters():
 
         parameters.append({
             "fieldname": row.fieldname,
-            "label": row.label or frappe.get_meta("Power Plant Log Book Item").get_field(row.fieldname).label,
+            "label": frappe.get_meta("Power Plant Log Book Item").get_field(row.fieldname).label,
             "section": row.section or ""
         })
 
