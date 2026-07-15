@@ -78,17 +78,24 @@ def get_norms():
 def get_parameters():
 
     meta = frappe.get_meta("Power Plant Log Book Item")
+    norms = get_norms()
 
     parameters = []
 
     for df in meta.fields:
 
-        if df.fieldtype in ("Float", "Currency", "Int"):
+        if df.fieldtype not in ("Float", "Currency", "Int"):
+            continue
 
-            parameters.append({
-                "fieldname": df.fieldname,
-                "label": df.label
-            })
+        norm = norms.get(df.fieldname, {})
+
+        section = norm.get("section", "Other")
+
+        parameters.append({
+            "fieldname": df.fieldname,
+            "label": df.label,
+            "section": norms.get(df.fieldname, {}).get("section")
+        })
 
     parameters.sort(key=lambda x: x["label"])
 

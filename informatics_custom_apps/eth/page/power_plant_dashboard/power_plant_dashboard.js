@@ -83,6 +83,78 @@ frappe.pages["power-plant-dashboard"].on_page_load = function (wrapper) {
 
     $("#refresh-dashboard").click(loadDashboard);
 
+$(page.body).on("click", "#show-trend", function () {
+    console.log("Show Trend Clicked");
+
+    let from_date = $("#from-date").val();
+    let to_date = $("#to-date").val();
+    let plant = $("#trend-plant").val();
+    let parameter = $("#trend-parameter").val();
+
+    if (!from_date || !to_date || !plant || !parameter) {
+        frappe.msgprint("Please select all filters.");
+        return;
+    }
+
+    frappe.call({
+        method: "informatics_custom_apps.eth.page.power_plant_dashboard.power_plant_dashboard.get_parameter_trend",
+        args: {
+            from_date,
+            to_date,
+            plant,
+            parameter
+        },
+        callback(r) {
+            console.log("Trend Response");
+            console.log(r.message);
+
+            renderTrendChart(r.message);
+        }
+    });
+});
+
+}
+function populatePlants() {
+
+    const plants = [
+        "Buttar Biofuels",
+        "RSL Belwara",
+        "RSL Buttar",
+        "RSL Louhka",
+        "RSLD Karnal",
+        "Superior Biofuels"
+    ];
+
+    let options = '<option value="">Select Plant</option>';
+
+    plants.forEach(function(plant) {
+        options += `<option value="${plant}">${plant}</option>`;
+    });
+
+    $("#trend-plant").html(options);
+}
+function loadParameters() {
+
+    frappe.call({
+        method:
+        "informatics_custom_apps.eth.page.power_plant_dashboard.power_plant_dashboard.get_parameters",
+
+        callback(r) {
+
+            let options = '<option value="">Select Parameter</option>';
+
+            r.message.forEach(p => {
+
+                options += `
+                <option value="${p.fieldname}">
+                    ${p.section ? p.section + " → " : ""}${p.label}
+                </option>`;
+            });
+
+            $("#trend-parameter").html(options);
+        }
+    });
+
 }
 function loadDashboard() {
 
@@ -93,20 +165,17 @@ function loadDashboard() {
             date: $("#dashboard-date").val()
         },
 
-       callback(r) {
+        callback(r) {
 
-    console.log("========== DASHBOARD ==========");
-    console.log("Complete Response:");
-    console.log(r);
+            console.log("========== DASHBOARD ==========");
+            console.table(r.message.plants);
 
-    console.log("Message:");
-    console.log(r.message);
+            renderPlantSummary(r.message.plants);
 
-    console.log("Plants:");
-    console.table(r.message.plants);
-
-    renderPlantSummary(r.message.plants);
-}
+            // Populate trend filters
+            populatePlants();
+            loadParameters();
+        }
     });
 
 }
@@ -347,34 +416,114 @@ function renderPlantLogbook(target, data) {
     $(target).html(html);
 
 }
-$("#show-trend").click(function () {
 
-    frappe.call({
+function renderTrendChart(result) {
 
-        method:
-        "informatics_custom_apps.eth.page.power_plant_dashboard.power_plant_dashboard.get_parameter_trend",
+    if (!result.data || !result.data.length) {
 
-        args: {
+        $("#trend-chart").html(`
+            <div class="alert alert-warning">
+                No data found.
+            </div>
+        `);
 
-            from_date: $("#from-date").val(),
+        return;
+    }
 
-            to_date: $("#to-date").val(),
+    let labels = [];
+    let actual = [];
+    let minLine = [];
+    let maxLine = [];
 
-            plant: $("#trend-plant").val(),
+    let high = 0;
+    let low = 0;
+    let normal = 0;
 
-            parameter: $("#trend-parameter").val()
+    const min = result.norm?.min;
+    const max = result.norm?.max;
 
-        },
+    result.data.forEach(d => {
 
-        callback(r) {
+        labels.push(`${d.date}\n${d.time_slot}`);
 
-            console.log("Plant Logbook Response");
-            console.log(r.message);
+        actual.push(d.value);
 
-            renderPlantLogbook(target, r.message);
+        minLine.push(min ?? null);
+        maxLine.push(max ?? null);
 
-        }
+        if (min != null && d.value < min)
+            low++;
 
+        else if (max != null && d.value > max)
+            high++;
+
+        else
+            normal++;
     });
 
-});
+    $("#trend-chart").empty();
+
+    $("#trend-chart").append(`
+        <div class="mb-2">
+            <b>Plant :</b> ${$("#trend-plant").val()}<br>
+            <b>Parameter :</b> ${$("#trend-parameter option:selected").text()}<br>
+            <b>Normal Range :</b>
+            ${min ?? "-"} - ${max ?? "-"} ${result.norm?.unit || ""}
+            <br><br>
+
+            <span class="badge badge-success">
+                Normal : ${normal}
+            </span>
+
+            <span class="badge badge-warning">
+                Low : ${low}
+            </span>
+
+            <span class="badge badge-danger">
+                High : ${high}
+            </span>
+        </div>
+
+        <div id="trend-chart-area"></div>
+    `);
+
+    new frappe.Chart("#trend-chart-area", {
+
+        title: `${$("#trend-parameter option:selected").text()} Trend`,
+
+        type: "line",
+
+        height: 380,
+
+        data: {
+
+            labels: labels,
+
+            datasets: [
+
+                {
+                    name: "Actual",
+                    values: actual
+                },
+
+                {
+                    name: "Min",
+                    values: minLine
+                },
+
+                {
+                    name: "Max",
+                    values: maxLine
+                }
+
+            ]
+        },
+
+        colors: [
+            "#ff4d94",   // Actual
+            "#1976d2",   // Min
+            "#1976d2"    // Max
+        ]
+    });
+
+}
