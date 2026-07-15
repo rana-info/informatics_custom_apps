@@ -77,27 +77,20 @@ def get_norms():
 @frappe.whitelist()
 def get_parameters():
 
-    meta = frappe.get_meta("Power Plant Log Book Item")
-    norms = get_norms()
+    doc = frappe.get_single("ETH Logbook Norms")
 
     parameters = []
 
-    for df in meta.fields:
+    for row in doc.power_plant_log_norms:
 
-        if df.fieldtype not in ("Float", "Currency", "Int"):
+        if not row.fieldname:
             continue
 
-        norm = norms.get(df.fieldname, {})
-
-        section = norm.get("section", "Other")
-
         parameters.append({
-            "fieldname": df.fieldname,
-            "label": df.label,
-            "section": norms.get(df.fieldname, {}).get("section")
+            "fieldname": row.fieldname,
+            "label": row.label or frappe.get_meta("Power Plant Log Book Item").get_field(row.fieldname).label,
+            "section": row.section or ""
         })
-
-    parameters.sort(key=lambda x: x["label"])
 
     return parameters
 
