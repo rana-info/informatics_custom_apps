@@ -417,9 +417,10 @@ function renderPlantLogbook(target, data) {
 
 }
 
+
 function renderTrendChart(result) {
 
-    if (!result.data || !result.data.length) {
+    if (!result.data.length) {
 
         $("#trend-chart").html(`
             <div class="alert alert-warning">
@@ -430,46 +431,83 @@ function renderTrendChart(result) {
         return;
     }
 
+    const hasMin = result.norm &&
+        result.norm.min !== null &&
+        result.norm.min !== "" &&
+        result.norm.min !== 0;
+
+    const hasMax = result.norm &&
+        result.norm.max !== null &&
+        result.norm.max !== "" &&
+        result.norm.max !== 0;
+
     let labels = [];
-    let actual = [];
-    let minLine = [];
-    let maxLine = [];
+    let values = [];
+    let minValues = [];
+    let maxValues = [];
 
-    let high = 0;
-    let low = 0;
     let normal = 0;
-
-    const min = result.norm?.min;
-    const max = result.norm?.max;
+    let low = 0;
+    let high = 0;
 
     result.data.forEach(d => {
 
-        labels.push(`${d.date}\n${d.time_slot}`);
+        labels.push(`${d.date} ${d.time_slot}`);
+        values.push(d.value);
 
-        actual.push(d.value);
+        if (hasMin) {
+            minValues.push(result.norm.min);
+        }
 
-        minLine.push(min ?? null);
-        maxLine.push(max ?? null);
+        if (hasMax) {
+            maxValues.push(result.norm.max);
+        }
 
-        if (min != null && d.value < min)
+        if (hasMin && d.value < result.norm.min) {
             low++;
-
-        else if (max != null && d.value > max)
+        }
+        else if (hasMax && d.value > result.norm.max) {
             high++;
-
-        else
+        }
+        else {
             normal++;
+        }
+
     });
 
-    $("#trend-chart").empty();
+    let rangeText = "";
 
-    $("#trend-chart").append(`
-        <div class="mb-2">
-            <b>Plant :</b> ${$("#trend-plant").val()}<br>
-            <b>Parameter :</b> ${$("#trend-parameter option:selected").text()}<br>
+    if (hasMin || hasMax) {
+
+        rangeText = `
             <b>Normal Range :</b>
-            ${min ?? "-"} - ${max ?? "-"} ${result.norm?.unit || ""}
-            <br><br>
+            ${hasMin ? result.norm.min : "-"}
+            -
+            ${hasMax ? result.norm.max : "-"}
+            ${result.norm.unit || ""}
+        `;
+
+    } else {
+
+        rangeText = `
+            <b>Normal Range :</b> Not Configured
+        `;
+
+    }
+
+    $("#trend-chart").html(`
+        <div style="margin-bottom:15px;">
+
+            <div><b>Plant :</b> ${$("#trend-plant").val()}</div>
+
+            <div>
+                <b>Parameter :</b>
+                ${$("#trend-parameter option:selected").text()}
+            </div>
+
+            <div>${rangeText}</div>
+
+            <br>
 
             <span class="badge badge-success">
                 Normal : ${normal}
@@ -482,48 +520,51 @@ function renderTrendChart(result) {
             <span class="badge badge-danger">
                 High : ${high}
             </span>
+
         </div>
 
-        <div id="trend-chart-area"></div>
+        <div id="trend-graph"></div>
     `);
 
-    new frappe.Chart("#trend-chart-area", {
+    let datasets = [
+        {
+            name: "Actual",
+            values: values
+        }
+    ];
+
+    if (hasMin) {
+        datasets.push({
+            name: "Min",
+            values: minValues
+        });
+    }
+
+    if (hasMax) {
+        datasets.push({
+            name: "Max",
+            values: maxValues
+        });
+    }
+
+    new frappe.Chart("#trend-graph", {
 
         title: `${$("#trend-parameter option:selected").text()} Trend`,
 
-        type: "line",
-
-        height: 380,
-
         data: {
-
             labels: labels,
-
-            datasets: [
-
-                {
-                    name: "Actual",
-                    values: actual
-                },
-
-                {
-                    name: "Min",
-                    values: minLine
-                },
-
-                {
-                    name: "Max",
-                    values: maxLine
-                }
-
-            ]
+            datasets: datasets
         },
 
-        colors: [
-            "#ff4d94",   // Actual
-            "#1976d2",   // Min
-            "#1976d2"    // Max
-        ]
+        type: "line",
+
+        height: 350,
+
+        lineOptions: {
+            hideDots: false,
+            regionFill: false
+        }
+
     });
 
 }
