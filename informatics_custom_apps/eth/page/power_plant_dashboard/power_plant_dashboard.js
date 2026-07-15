@@ -243,93 +243,106 @@ function renderPlantLogbook(target, data) {
         return;
     }
 
-    let html = "";
+    const slots = [
+        "9:30 AM",
+        "1:30 PM",
+        "5:30 PM",
+        "9:30 PM",
+        "1:30 AM",
+        "5:30 AM"
+    ];
 
-    data.forEach(slot => {
+    let html = `
+        <table class="table table-bordered table-sm">
 
-        html += `
-            <h5 class="mt-3 mb-2">${slot.time_slot}</h5>
+            <thead>
 
-            <table class="table table-bordered table-sm">
-                <thead>
-                    <tr>
-                        <th width="30%">Parameter</th>
-                        <th width="12%">Value</th>
-                        <th width="10%">Unit</th>
-                        <th width="12%">Min</th>
-                        <th width="12%">Max</th>
-                        <th width="14%">Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-        `;
+                <tr>
 
-        // Group parameters by section
-        let grouped = {};
+                    <th>Parameter</th>
 
-        slot.values.forEach(v => {
+                    <th>Unit</th>
+    `;
 
-            let section = v.section || "Other";
+    slots.forEach(slot => {
+        html += `<th>${slot}</th>`;
+    });
 
-            if (!grouped[section]) {
-                grouped[section] = [];
-            }
+    html += `
+                    <th style="background:#eef5ff;">Min</th>
+                    <th style="background:#eef5ff;">Max</th>
 
-            grouped[section].push(v);
+                </tr>
 
-        });
+            </thead>
 
-        Object.keys(grouped).forEach(section => {
+            <tbody>
+    `;
+
+    let current_section = "";
+
+    data.forEach(p => {
+
+        if (p.section !== current_section) {
+
+            current_section = p.section;
 
             html += `
                 <tr class="table-secondary">
-                    <th colspan="6">
-                        ${section}
+                    <th colspan="${slots.length + 4}">
+                        ${current_section || "Other"}
                     </th>
                 </tr>
             `;
+        }
 
-            grouped[section].forEach(v => {
+        html += `<tr>`;
 
-                let style = "";
+        html += `<td>${p.label}</td>`;
 
-                if (v.status === "Low") {
-                    style = 'style="background:#fff3cd;"';
-                }
-                else if (v.status === "High") {
-                    style = 'style="background:#f8d7da;"';
-                }
+        html += `<td>${p.unit || ""}</td>`;
 
-                let value = (v.value === 0 || v.value === null) ? "" : v.value;
+        slots.forEach(slot => {
 
-                let min = (v.min === null || v.min === undefined || v.min === 0)
-                    ? "-"
-                    : v.min;
+            let cell = p.values[slot] || {};
 
-                let max = (v.max === null || v.max === undefined || v.max === 0)
-                    ? "-"
-                    : v.max;
+            let value = cell.value ?? "";
 
-                html += `
-                    <tr ${style}>
-                        <td>${v.label}</td>
-                        <td>${value}</td>
-                        <td>${v.unit || "-"}</td>
-                        <td>${min}</td>
-                        <td>${max}</td>
-                        <td>${v.status || ""}</td>
-                    </tr>
-                `;
-            });
+            let status = cell.status || "";
 
+            let style = "";
+
+            if (status === "High") {
+                style = 'background:#f8d7da;';
+            }
+            else if (status === "Low") {
+                style = 'background:#fff3cd;';
+            }
+
+            html += `
+                <td style="${style}">
+                    ${value}
+                </td>
+            `;
         });
 
         html += `
-                </tbody>
-            </table>
+            <td style="background:#eef5ff;font-weight:600;">
+                ${p.min ?? "-"}
+            </td>
+
+            <td style="background:#eef5ff;font-weight:600;">
+                ${p.max ?? "-"}
+            </td>
         `;
 
+        html += `</tr>`;
     });
+
+    html += `
+            </tbody>
+        </table>
+    `;
 
     $(target).html(html);
 

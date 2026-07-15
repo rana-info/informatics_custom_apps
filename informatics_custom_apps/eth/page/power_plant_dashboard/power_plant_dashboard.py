@@ -259,7 +259,7 @@ def get_plant_logbook(plant, date):
     norms = get_norms()
     labels = get_field_labels()
 
-    log_name = frappe.get_value(
+    log = frappe.get_value(
         "Power Plant Log Book",
         {
             "plant": plant,
@@ -268,15 +268,19 @@ def get_plant_logbook(plant, date):
         "name"
     )
 
-    if not log_name:
+    if not log:
         return []
 
-    doc = frappe.get_doc("Power Plant Log Book", log_name)
+    rows = frappe.get_all(
+        "Power Plant Log Book Item",
+        filters={"parent": log},
+        fields=["*"],
+        order_by="idx"
+    )
 
     meta = frappe.get_meta("Power Plant Log Book Item")
 
-    skip_fields = {
-        "idx",
+    skip_fields = (
         "name",
         "owner",
         "creation",
@@ -285,66 +289,63 @@ def get_plant_logbook(plant, date):
         "parent",
         "parentfield",
         "parenttype",
-        "doctype"
-    }
+        "doctype",
+        "idx",
+        "time_slot"
+    )
 
-    result = []
+    parameters = {}
 
-    for row in doc.logs:
+    for row in rows:
 
-        row_data = {
-            "time_slot": row.time_slot,
-            "values": []
-        }
+        time_slot = row.time_slot
 
         for df in meta.fields:
 
-            if df.fieldname in skip_fields:
-                continue
-
-            # Skip non-value fields
-            if df.fieldtype not in (
-                "Float",
-                "Int",
-                "Currency",
-                "Percent",
-                "Data"
-            ):
+            if df.fieldtype not in ("Float", "Int", "Currency"):
                 continue
 
             fieldname = df.fieldname
+
+            if fieldname in skip_fields:
+                continue
+
+            if fieldname not in parameters:
+
+                norm = norms.get(fieldname, {})
+
+                parameters[fieldname] = {
+                    "fieldname": fieldname,
+                    "label": labels.get(fieldname, fieldname),
+                    "section": norm.get("section"),
+                    "unit": norm.get("unit", ""),
+                    "min": norm.get("min"),
+                    "max": norm.get("max"),
+                    "values": {}
+                }
+
             value = row.get(fieldname)
 
-            status = None
-            min_value = None
-            max_value = None
+            if value in (None, 0, 0.0):
+                value = ""
 
-            if fieldname in norms:
+            status = ""
 
-                min_value = norms[fieldname]["min"]
-                max_value = norms[fieldname]["max"]
+            norm = norms.get(fieldname)
 
-                if value not in (None, "", 0, 0.0):
-                    status = get_status(value, min_value, max_value)
+            if norm and value != "":
+                status = get_status(
+                    value,
+                    norm.get("min"),
+                    norm.get("max")
+                ) or ""
 
-            row_data["values"].append({
-                "fieldname": fieldname,
-                "label": labels.get(fieldname, df.label),
-                "section": norms.get(fieldname, {}).get("section", ""),
-                "value": "" if value is None else value,
-                "status": status,
-                "min": min_value,
-                "max": max_value,
-                "unit": norms.get(fieldname, {}).get("unit", ""),
-                "has_norm": fieldname in norms
-            })
+            parameters[fieldname]["values"][time_slot] = {
+                "value": value,
+                "status": status
+            }
 
-        result.append(row_data)
-    print("Returned rows:", len(result))
-
-    if result:
-        pprint.pprint(result[0])
-    return result
+    return list(parameters.values())
 
 
 @frappe.whitelist()
