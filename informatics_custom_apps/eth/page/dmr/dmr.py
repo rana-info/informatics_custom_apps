@@ -1,5 +1,69 @@
 import frappe
 from frappe.utils import getdate, add_days, formatdate
+from collections import defaultdict
+
+# =============================================================================
+# REPORT DAY WINDOW
+# =============================================================================
+# The plant's operational "day" does not run midnight-to-midnight — it runs
+# DAY_START_TIME to DAY_START_TIME the next calendar day (e.g. 6:00 AM to
+# 6:00 AM). A Stock Entry / Stock Ledger Entry posted at 2:00 AM on the 17th
+# belongs to the "16th" report day, not the 17th.
+#
+# This ONLY applies to data sources with a real posting timestamp (Stock
+# Entry, Stock Ledger Entry). Per-day master doctypes (DMR Technical Lab
+# Parameters, DMR Boiler And Turbine Parameters) already store one row per
+# plant per REPORT day against a plain Date field — the shift is baked into
+# how that field gets filled in at data-entry time, so their date-range
+# filters are left as plain date `between` and need no further adjustment.
+DAY_START_TIME = "06:00:00"
+
+
+def get_report_datetime_range(from_date, to_date, day_start_time=DAY_START_TIME):
+    """
+    Convert report from_date/to_date (both report-day dates) into the actual
+    [from_datetime, to_datetime) window to filter real posting timestamps
+    against.
+
+    e.g. from_date=16-Jul, to_date=16-Jul, day_start_time=06:00:00 ->
+         ("2026-07-16 06:00:00", "2026-07-17 06:00:00")
+    to_datetime is exclusive — a doc posted exactly at the next day's
+    06:00:00 belongs to the next report day, not this one.
+    """
+    from_dt = f"{getdate(from_date)} {day_start_time}"
+    to_dt = f"{add_days(getdate(to_date), 1)} {day_start_time}"
+    return from_dt, to_dt
+
+
+# =============================================================================
+# DATA SOURCE MAP (quick reference — see per-section comments below for detail)
+# =============================================================================
+#   A  Production of FG              -> Stock Entry (Material Receipt)
+#   B  Consumption of Raw Material   -> Stock Entry (Material Issue)
+#   C  Recovery of FG                -> calculated from A / B
+#   D  Fermentation Parameters       -> DMR Technical Lab Parameters
+#   E  Production of By Products     -> Stock Entry (Material Receipt)
+#   F  Recovery of By Products       -> calculated, mixed formula per item
+#                                        (Maize rows use A / E, DFG/FCI/Crude
+#                                        Oil rows use E / B -- see that section)
+#   G  Boiler Performance            -> DMR Boiler And Turbine Parameters
+#   H  Fuel used for Boiler          -> Stock Entry (Material Issue)
+#   I  Steam Raising Ratio           -> Steam Raising Ratio (fixed master,
+#                                        not date-dependent) + H for weighting;
+#                                        I.11-I.18 also carry a reverse-
+#                                        calculated ideal vs actual stock
+#                                        comparison in a single row (value is
+#                                        {ideal, actual}, not a plain number)
+#   J  Section wise Steam Consumed   -> DMR Boiler And Turbine Parameters
+#                                        (DMR Process Data doctype was
+#                                        deleted; these fields were merged
+#                                        onto this doctype — see note by
+#                                        PROCESS_DATA_SUM_FIELDS below)
+#   K  Steam Consumed per BL         -> calculated from J / (A total BL)
+#   L  Technical Parameters (Boiler) -> DMR Boiler And Turbine Parameters
+#   M  Power Performance             -> DMR Boiler And Turbine Parameters
+#   N  Stock                         -> Stock Ledger Entry
+# =============================================================================
 
 # NOTE: "Plant" is not a real fieldname on Stock Entry — the underlying
 # field is "branch" (Branch doctype). It is only labeled/translated as
@@ -46,6 +110,72 @@ FUEL_ITEMS = [
 
 STOCK_ITEMS = [r[0] for r in PRODUCTION_ITEMS] + [r[0] for r in BYPRODUCT_ITEMS]
 
+# Fieldnames for "DMR Technical Lab Parameters" — confirmed from DocType JSON.
+# Maps our semantic key -> real fieldname (note the real fieldname has a
+# double underscore: "average_starch__maize").
+LAB_PARAM_FIELDS = {
+    "alcohol_percentage": "alcohol_percentage",
+    "fermenter_rs": "fermenter_rs",
+    "fermenter_rst": "fermenter_rst",
+    "average_starch_maize": "average_starch__maize",
+    "average_starch_dfg": "average_starch_dfg",
+    "average_starch_fci": "average_starch_fci",
+}
+
+# Fieldnames for "DMR Boiler And Turbine Parameters" — confirmed from DocType
+# JSON. This doctype uses auto-generated names (float_xxxx / percent_xxxx),
+# so an explicit label -> fieldname map is required (there's no pattern to
+# derive it from). Maps our semantic key -> real fieldname.
+BOILER_SUM_FIELD_MAP = {
+    "steam_produced": "float_zcpn",
+    "steam_purchased": "float_jgdk",
+    "steam_consumed_through_prds": "float_smgv",
+    "steam_used_through_turbine": "float_lcuw",
+    "power_generation": "float_pvrh",
+    "power_purchased": "float_iunw",
+    "power_export": "float_vjzq",
+    "power_sales": "float_dctr",
+    "power_consumed": "float_evng",
+}
+BOILER_AVG_FIELD_MAP = {
+    "bolier_load_per_hour": "float_hrth",
+    "esp_outlet_temp": "float_reke",
+    "unburnt_ash": "percent_bman",
+}
+# NOTE: the doctype also has a real, directly-stored "power_per_bl" field.
+# We deliberately do NOT read it — M.6 is calculated dynamically instead
+# (power_consumed / total production BL for the selected period) so it
+# stays correct for whatever date range/plant filter is applied, rather
+# than depending on what happens to be saved in each daily record.
+
+
+PROCESS_DATA_FIELDS = [
+    # Section J labels. These used to live on "DMR Process Data" (now
+    # deleted) and were queried by plain fieldname == label, no mapping
+    # needed. That doctype's fields have been merged onto
+    # "DMR Boiler And Turbine Parameters".
+    ("liquification", "Liquification"),
+    ("distillation", "Distillation"),
+    ("msdh", "MSDH"),
+    ("evaporation", "Evaporation"),
+    ("dryer", "Dryer"),
+    ("deaerator", "Deaerator"),
+    ("other", "Other"),
+]
+# ASSUMPTION FLAGGED: fieldnames above are carried over unchanged from the
+# old "DMR Process Data" doctype. I don't have the new merged DocType JSON
+# to confirm they landed with the same names on "DMR Boiler And Turbine
+# Parameters" — please verify before relying on this.
+#
+# LIKELY COLLISION: "DMR Boiler And Turbine Parameters" already has a field
+# named "deaerator" used for the boiler's own FT102 tag reading (Deaerator
+# flow, wired up in the Excel-import PLANT_CONFIG in that doctype's
+# controller). Section J.6 "Deaerator" here is a DIFFERENT quantity (steam
+# consumed by the deaerator process). These cannot both be the same column
+# — check the actual DocType JSON and rename this entry (e.g.
+# "deaerator_steam_consumed") to whatever the real merged fieldname is.
+PROCESS_DATA_SUM_FIELDS = [f for f, _ in PROCESS_DATA_FIELDS]
+
 
 def get_fiscal_year_start(date):
     fy = frappe.db.sql("""
@@ -69,11 +199,19 @@ def build_plant_segment_conditions(plants, segments):
     return conditions, values
 
 
+# =============================================================================
+# SECTIONS A / E — Production of Finished Goods & By Products
+# Source: Stock Entry (stock_entry_type = "Material Receipt") joined to
+# Stock Entry Detail, summed over the report period for the given item
+# codes. Filtered on the actual posting TIMESTAMP (date + time) against the
+# shifted report-day window (DAY_START_TIME), not the bare posting_date.
+# =============================================================================
 def get_production_qty(companies, from_date, to_date, item_codes, plants=None, segments=None):
     if not item_codes:
         return {}
+    from_dt, to_dt = get_report_datetime_range(from_date, to_date)
     extra_sql, extra_vals = build_plant_segment_conditions(plants, segments)
-    values = {"companies": companies, "from_date": from_date, "to_date": to_date, "items": item_codes}
+    values = {"companies": companies, "from_dt": from_dt, "to_dt": to_dt, "items": item_codes}
     values.update(extra_vals)
     rows = frappe.db.sql(f"""
         select sed.item_code, sum(sed.qty * sed.conversion_factor) as qty
@@ -82,7 +220,8 @@ def get_production_qty(companies, from_date, to_date, item_codes, plants=None, s
         where se.docstatus = 1
             and se.stock_entry_type = 'Material Receipt'
             and se.company in %(companies)s
-            and se.posting_date between %(from_date)s and %(to_date)s
+            and timestamp(se.posting_date, se.posting_time) >= %(from_dt)s
+            and timestamp(se.posting_date, se.posting_time) < %(to_dt)s
             and sed.item_code in %(items)s
             {extra_sql}
         group by sed.item_code
@@ -90,11 +229,18 @@ def get_production_qty(companies, from_date, to_date, item_codes, plants=None, s
     return {r.item_code: r.qty or 0 for r in rows}
 
 
+# =============================================================================
+# SECTIONS B / H — Consumption of Raw Material & Fuel used for Boiler
+# Source: Stock Entry (stock_entry_type = "Material Issue") joined to
+# Stock Entry Detail, summed over the report period for the given item
+# codes. Same shifted report-day timestamp window as get_production_qty.
+# =============================================================================
 def get_issue_qty(companies, from_date, to_date, item_codes, plants=None, segments=None):
     if not item_codes:
         return {}
+    from_dt, to_dt = get_report_datetime_range(from_date, to_date)
     extra_sql, extra_vals = build_plant_segment_conditions(plants, segments)
-    values = {"companies": companies, "from_date": from_date, "to_date": to_date, "items": item_codes}
+    values = {"companies": companies, "from_dt": from_dt, "to_dt": to_dt, "items": item_codes}
     values.update(extra_vals)
     rows = frappe.db.sql(f"""
         select sed.item_code, sum(sed.qty * sed.conversion_factor) as qty
@@ -103,7 +249,8 @@ def get_issue_qty(companies, from_date, to_date, item_codes, plants=None, segmen
         where se.docstatus = 1
             and se.stock_entry_type = 'Material Issue'
             and se.company in %(companies)s
-            and se.posting_date between %(from_date)s and %(to_date)s
+            and timestamp(se.posting_date, se.posting_time) >= %(from_dt)s
+            and timestamp(se.posting_date, se.posting_time) < %(to_dt)s
             and sed.item_code in %(items)s
             {extra_sql}
         group by sed.item_code
@@ -111,9 +258,16 @@ def get_issue_qty(companies, from_date, to_date, item_codes, plants=None, segmen
     return {r.item_code: r.qty or 0 for r in rows}
 
 
+# =============================================================================
+# SECTION N — Stock
+# Source: Stock Ledger Entry — latest qty_after_transaction as of the END of
+# the report day for to_date (i.e. up to but not including the next
+# DAY_START_TIME), per item across all warehouses of the selected companies.
+# =============================================================================
 def get_stock_balance(companies, to_date, item_codes):
     if not item_codes:
         return {}
+    _, to_dt = get_report_datetime_range(to_date, to_date)
     rows = frappe.db.sql("""
         select i.item_code, round(coalesce(sum(sle.qty_after_transaction), 0), 3) as qty
         from `tabItem` i
@@ -125,7 +279,7 @@ def get_stock_balance(companies, to_date, item_codes):
                     max(concat(posting_date,' ',posting_time,' ',creation)) as last_entry
                 from `tabStock Ledger Entry`
                 where company in %(companies)s
-                    and posting_date <= %(to_date)s
+                    and timestamp(posting_date, posting_time) < %(to_dt)s
                     and is_cancelled = 0
                 group by item_code, warehouse
             ) x on x.item_code = s1.item_code
@@ -134,12 +288,155 @@ def get_stock_balance(companies, to_date, item_codes):
         ) sle on sle.item_code = i.item_code
         where i.item_code in %(items)s
         group by i.item_code
-    """, {"companies": companies, "to_date": to_date, "items": item_codes}, as_dict=1)
+    """, {"companies": companies, "to_dt": to_dt, "items": item_codes}, as_dict=1)
     return {r.item_code: r.qty or 0 for r in rows}
 
 
+# =============================================================================
+# SECTION D — Fermentation Parameters
+# Source: "DMR Technical Lab Parameters" doctype (Company + Plant + Date,
+# one record per plant per REPORT day). These are lab readings / percentages,
+# not cumulative quantities, so for a multi-day range we AVERAGE each field
+# rather than summing it. Filtered on the plain Date field — see the REPORT
+# DAY WINDOW note at the top of this file for why that's correct here.
+# =============================================================================
+def get_lab_parameters(companies, from_date, to_date, plants=None):
+    if not frappe.db.exists("DocType", "DMR Technical Lab Parameters"):
+        return {}
+    filters = {
+        "company": ["in", companies],
+        "date": ["between", [from_date, to_date]],
+    }
+    if plants:
+        filters["plant"] = ["in", plants]
+    field_map = _existing_field_map("DMR Technical Lab Parameters", LAB_PARAM_FIELDS)
+    select_fields = [f"avg(`{real}`) as {semantic}" for semantic, real in field_map.items()]
+    if not select_fields:
+        return {}
+    rows = frappe.get_all("DMR Technical Lab Parameters", filters=filters, fields=select_fields)
+    return rows[0] if rows else {}
+
+
+# =============================================================================
+# SECTIONS G, J, L, M — Boiler Performance / Section-wise Steam Consumed /
+# Technical Parameters / Power
+# Source: "DMR Boiler And Turbine Parameters" doctype (Company + Plant +
+# Date, one record per plant per REPORT day). Filtered on the plain Date
+# field — see the REPORT DAY WINDOW note at the top of this file.
+#   - Flow/production quantities (steam, power) are SUMMED over the period.
+#   - Instrument readings (boiler load/hr, ESP temp, unburnt ash %) are
+#     AVERAGED over the period since summing them would be meaningless.
+#   - Section J (Section wise Steam Consumed) fields are SUMMED — merged in
+#     here since the old "DMR Process Data" doctype was deleted and its
+#     fields moved onto this doctype (see PROCESS_DATA_SUM_FIELDS note above
+#     for a flagged fieldname collision that needs confirming).
+# =============================================================================
+def get_boiler_turbine_parameters(companies, from_date, to_date, plants=None):
+    if not frappe.db.exists("DocType", "DMR Boiler And Turbine Parameters"):
+        return {}
+    filters = {
+        "company": ["in", companies],
+        "date": ["between", [from_date, to_date]],
+    }
+    if plants:
+        filters["plant"] = ["in", plants]
+    sum_map = _existing_field_map("DMR Boiler And Turbine Parameters", BOILER_SUM_FIELD_MAP)
+    avg_map = _existing_field_map("DMR Boiler And Turbine Parameters", BOILER_AVG_FIELD_MAP)
+    process_fields = _existing_fields("DMR Boiler And Turbine Parameters", PROCESS_DATA_SUM_FIELDS)
+    select_fields = (
+        [f"sum(`{real}`) as {semantic}" for semantic, real in sum_map.items()]
+        + [f"avg(`{real}`) as {semantic}" for semantic, real in avg_map.items()]
+        + [f"sum(`{f}`) as {f}" for f in process_fields]
+    )
+    if not select_fields:
+        return {}
+    rows = frappe.get_all("DMR Boiler And Turbine Parameters", filters=filters, fields=select_fields)
+    return rows[0] if rows else {}
+
+
+# =============================================================================
+# SECTION I — Steam Raising Ratio
+# Source: "Steam Raising Ratio" doctype — a FIXED master (parent = Company,
+# child table "Steam Ratio Item" = Plant + Item + Ratio). It does NOT depend
+# on the report's date range, only on Company (and Plant, if filtered).
+# Returns {item_code: ratio}. If more than one plant's ratio matches an item
+# (e.g. no plant filter applied, or multiple plants selected), the ratios
+# are AVERAGED — flag if you'd rather pick a specific plant's ratio instead.
+# =============================================================================
+def get_steam_raising_ratios(companies, plants=None):
+    if not frappe.db.exists("DocType", "Steam Raising Ratio"):
+        return {}
+    required_cols = [("Steam Raising Ratio", "company"), ("Steam Ratio Item", "plant"),
+                      ("Steam Ratio Item", "item"), ("Steam Ratio Item", "ratio")]
+    missing = [f"{dt}.{col}" for dt, col in required_cols if not frappe.db.has_column(dt, col)]
+    if missing:
+        frappe.log_error(
+            title="DMR Report: missing fields on Steam Raising Ratio",
+            message=f"Fieldnames not found, check DocType JSON: {missing}",
+        )
+        return {}
+    conditions = "srr.company in %(companies)s"
+    values = {"companies": companies}
+    if plants:
+        conditions += " and sri.plant in %(plants)s"
+        values["plants"] = plants
+    rows = frappe.db.sql(f"""
+        select sri.item, sri.ratio
+        from `tabSteam Raising Ratio` srr
+        inner join `tabSteam Ratio Item` sri on sri.parent = srr.name
+        where {conditions}
+    """, values, as_dict=1)
+    item_ratios = defaultdict(list)
+    for r in rows:
+        item_ratios[r.item].append(r.ratio or 0)
+    return {item: sum(vals) / len(vals) for item, vals in item_ratios.items()}
+
+
 def safe_div(n, d):
+    # SQL SUM()/AVG() over zero matching rows returns NULL -> None in Python,
+    # not 0 -- so a dict .get(field, 0) default won't catch it (the key
+    # exists, just with value None). Guard against that here rather than at
+    # every call site.
+    n = n or 0
+    d = d or 0
     return (n / d) if d else 0
+
+
+def _existing_fields(doctype, fieldnames):
+    """
+    Filter fieldnames down to ones that actually exist on the doctype, so a
+    wrong fieldname guess (renamed/typo'd field) degrades to returning None
+    for that one value instead of throwing an OperationalError and taking
+    down the whole report. Logs a warning once per doctype per request so
+    the gap is visible in the Error Log without blocking the page.
+    """
+    meta = frappe.get_meta(doctype)
+    valid = [f for f in fieldnames if meta.has_field(f)]
+    missing = [f for f in fieldnames if f not in valid]
+    if missing:
+        frappe.log_error(
+            title=f"DMR Report: missing fields on {doctype}",
+            message=f"Fieldnames not found, check DocType JSON: {missing}",
+        )
+    return valid
+
+
+def _existing_field_map(doctype, field_map):
+    """
+    Same purpose as _existing_fields, but for doctypes where the real
+    fieldname differs from our semantic key (e.g. auto-generated
+    "float_zcpn" on DMR Boiler And Turbine Parameters). field_map is
+    {semantic_key: real_fieldname}; returns only the entries that exist.
+    """
+    meta = frappe.get_meta(doctype)
+    valid = {k: v for k, v in field_map.items() if meta.has_field(v)}
+    missing = {k: v for k, v in field_map.items() if k not in valid}
+    if missing:
+        frappe.log_error(
+            title=f"DMR Report: missing fields on {doctype}",
+            message=f"Fieldnames not found, check DocType JSON: {missing}",
+        )
+    return valid
 
 
 def build_section_rows(companies, from_date, to_date, plants=None, segments=None):
@@ -156,6 +453,7 @@ def build_section_rows(companies, from_date, to_date, plants=None, segments=None
     maize_prod = prod.get("100114", 0) + prod.get("100122", 0) + prod.get("100130", 0)
     dfg_prod = prod.get("100112", 0) + prod.get("100120", 0) + prod.get("100128", 0)
     fci_prod = prod.get("100113", 0)
+    total_production_bl = maize_prod + dfg_prod + fci_prod
 
     maize_rm = rm.get("106444", 0)
     dfg_rm = rm.get("100474", 0)
@@ -167,70 +465,170 @@ def build_section_rows(companies, from_date, to_date, plants=None, segments=None
     crude_oil = by.get("129946", 0)
 
     rows = []
+
+    # --- SECTION A: Production of Finished Goods -- Stock Entry (Material Receipt) ---
     rows.append({"sr": "A", "label": "Production of Finished Goods", "header": True})
     for code, label, sr in PRODUCTION_ITEMS:
         rows.append({"sr": sr, "label": label, "uom": "BL", "value": prod.get(code, 0), "item_code": code})
 
+    # --- SECTION B: Consumption of Raw Material -- Stock Entry (Material Issue) ---
     rows.append({"sr": "B", "label": "Consumption of Raw Material", "header": True})
     for code, label, sr in RM_ITEMS:
         rows.append({"sr": sr, "label": label, "uom": "Qtl", "value": rm.get(code, 0), "item_code": code})
 
+    # --- SECTION C: Recovery of Finished Goods -- calculated, A / B ---
     rows.append({"sr": "C", "label": "Recovery of Finished Goods", "header": True})
     rows.append({"sr": "C.1", "label": "Recovery from Maize", "uom": "BL/Qtl", "value": safe_div(maize_prod, maize_rm)})
     rows.append({"sr": "C.2", "label": "Recovery from DFG", "uom": "BL/Qtl", "value": safe_div(dfg_prod, dfg_rm)})
     rows.append({"sr": "C.3", "label": "Recovery from FCI Rice", "uom": "BL/Qtl", "value": safe_div(fci_prod, fci_rm)})
 
+    # --- SECTION D: Fermentation Parameters -- DMR Technical Lab Parameters (averaged) ---
     rows.append({"sr": "D", "label": "Fermentation Parameters", "header": True})
-    for sr, label in [("D.1", "Alcohol Percentage"), ("D.2", "Fermenter -RS"), ("D.3", "Fermenter -RST"),
-                       ("D.4", "Average Starch - Maize"), ("D.5", "Average Starch - DFG"), ("D.6", "Average Starch - FCI")]:
-        rows.append({"sr": sr, "label": label, "uom": "%", "value": None})
+    lab = get_lab_parameters(companies, from_date, to_date, plants)
+    for sr, label, field in [
+        ("D.1", "Alcohol Percentage", "alcohol_percentage"),
+        ("D.2", "Fermenter -RS", "fermenter_rs"),
+        ("D.3", "Fermenter -RST", "fermenter_rst"),
+        ("D.4", "Average Starch - Maize", "average_starch_maize"),
+        ("D.5", "Average Starch - DFG", "average_starch_dfg"),
+        ("D.6", "Average Starch - FCI", "average_starch_fci"),
+    ]:
+        rows.append({"sr": sr, "label": label, "uom": "%", "value": lab.get(field)})
 
+    # --- SECTION E: Production of By Products -- Stock Entry (Material Receipt) ---
     rows.append({"sr": "E", "label": "Production of by Products", "header": True})
     for code, label, sr in BYPRODUCT_ITEMS:
         uom = "Ltr" if code == "129946" else "Qtl"
         rows.append({"sr": sr, "label": label, "uom": uom, "value": by.get(code, 0), "item_code": code})
 
+    # --- SECTION F: Recovery of By Products -- calculated, mixed formulas per item ---
+    # This is NOT a uniform pattern across rows -- confirmed per-item:
+    #   F.1 DWGS from Maize = (Ethanol+ENA+RS from Maize) / DWGS from Maize   (FG production / byproduct)
+    #   F.2 DWGS from DFG   = DWGS from DFG produced / DFG Consumed (RM)      (byproduct / RM)
+    #   F.3 DWGS from FCI   = DWGS from FCI produced / FCI net consumed (RM) (byproduct / RM)
+    #   F.4 Average DWGS    = total DWGS produced / total RM consumed        (byproduct / RM)
+    #   F.5-F.8 same pattern as F.1-F.4, for DDGS
+    #   F.9 Crude Corn Oil  = Crude Corn Oil produced / Maize Consumed (RM) -- note: against
+    #                          Maize RM specifically, not total RM
+    # None of the above were specified as a "%", so these are left as plain
+    # ratios (uom reflects the actual units involved -- BL/Qtl where FG
+    # production is the numerator, Qtl/Qtl or Ltr/Qtl otherwise). Multiply
+    # by 100 on the frontend if you want these displayed as percentages.
     rows.append({"sr": "F", "label": "Recovery of By Products", "header": True})
-    rows.append({"sr": "F.1", "label": "DWGS from Maize", "uom": "%", "value": safe_div(dwgs_maize, maize_rm) * 100})
-    rows.append({"sr": "F.2", "label": "DWGS from DFG", "uom": "%", "value": safe_div(dwgs_dfg, dfg_rm) * 100})
-    rows.append({"sr": "F.3", "label": "DWGS from FCI", "uom": "%", "value": safe_div(dwgs_fci, fci_rm) * 100})
-    rows.append({"sr": "F.4", "label": "Average DWGS", "uom": "%", "value": safe_div(dwgs_maize + dwgs_dfg + dwgs_fci, total_rm) * 100})
-    rows.append({"sr": "F.5", "label": "DDGS from Maize", "uom": "%", "value": safe_div(ddgs_maize, maize_rm) * 100})
-    rows.append({"sr": "F.6", "label": "DDGS from DFG", "uom": "%", "value": safe_div(ddgs_dfg, dfg_rm) * 100})
-    rows.append({"sr": "F.7", "label": "DDGS from FCI", "uom": "%", "value": safe_div(ddgs_fci, fci_rm) * 100})
-    rows.append({"sr": "F.8", "label": "Average DDGS", "uom": "%", "value": safe_div(ddgs_maize + ddgs_dfg + ddgs_fci, total_rm) * 100})
-    rows.append({"sr": "F.9", "label": "Crude Corn Oil", "uom": "%", "value": safe_div(crude_oil, total_rm) * 100})
+    rows.append({"sr": "F.1", "label": "DWGS from Maize", "uom": "BL/Qtl", "value": safe_div(maize_prod, dwgs_maize)})
+    rows.append({"sr": "F.2", "label": "DWGS from DFG", "uom": "Qtl/Qtl", "value": safe_div(dwgs_dfg, dfg_rm)})
+    rows.append({"sr": "F.3", "label": "DWGS from FCI", "uom": "Qtl/Qtl", "value": safe_div(dwgs_fci, fci_rm)})
+    rows.append({"sr": "F.4", "label": "Average DWGS", "uom": "Qtl/Qtl", "value": safe_div(dwgs_maize + dwgs_dfg + dwgs_fci, total_rm)})
+    rows.append({"sr": "F.5", "label": "DDGS from Maize", "uom": "BL/Qtl", "value": safe_div(maize_prod, ddgs_maize)})
+    rows.append({"sr": "F.6", "label": "DDGS from DFG", "uom": "Qtl/Qtl", "value": safe_div(ddgs_dfg, dfg_rm)})
+    rows.append({"sr": "F.7", "label": "DDGS from FCI", "uom": "Qtl/Qtl", "value": safe_div(ddgs_fci, fci_rm)})
+    rows.append({"sr": "F.8", "label": "Average DDGS", "uom": "Qtl/Qtl", "value": safe_div(ddgs_maize + ddgs_dfg + ddgs_fci, total_rm)})
+    rows.append({"sr": "F.9", "label": "Crude Corn Oil", "uom": "Ltr/Qtl", "value": safe_div(crude_oil, maize_rm)})
 
+    # --- SECTION G: Boiler Performance -- DMR Boiler And Turbine Parameters (summed) ---
     rows.append({"sr": "G", "label": "Boiler Performance", "header": True})
-    for sr, label in [("G.1", "Steam produced"), ("G.2", "Steam Purchased"),
-                       ("G.3", "Steam consumed Through PRDS"), ("G.4", "Steam Used Through Turbine")]:
-        rows.append({"sr": sr, "label": label, "uom": "MT", "value": None})
+    boiler = get_boiler_turbine_parameters(companies, from_date, to_date, plants)
+    for sr, label, field in [
+        ("G.1", "Steam produced", "steam_produced"),
+        ("G.2", "Steam Purchased", "steam_purchased"),
+        ("G.3", "Steam consumed Through PRDS", "steam_consumed_through_prds"),
+        ("G.4", "Steam Used Through Turbine", "steam_used_through_turbine"),
+    ]:
+        rows.append({"sr": sr, "label": label, "uom": "MT", "value": boiler.get(field)})
 
+    # --- SECTION H: Fuel used for Boiler -- Stock Entry (Material Issue) ---
     rows.append({"sr": "H", "label": "Fuel used for Boiler", "header": True})
     for code, label, sr in FUEL_ITEMS:
         rows.append({"sr": sr, "label": label, "uom": "MT", "value": fuel.get(code, 0), "item_code": code})
 
+    # --- SECTION I: Steam Raising Ratio -- Steam Raising Ratio master (fixed, not date-dependent) ---
+    # I.9 Weighted Average = sum(ratio_i * fuel_qty_i) / sum(fuel_qty_i), weighted by Section H quantities.
     rows.append({"sr": "I", "label": "Steam Raising Ratio", "header": True})
+    ratios = get_steam_raising_ratios(companies, plants)
+    weighted_num, weighted_den = 0, 0
     for i, (code, label, sr) in enumerate(FUEL_ITEMS):
-        rows.append({"sr": f"I.{i+1}", "label": label, "uom": "Ratio", "value": None, "item_code": code})
-    rows.append({"sr": "I.9", "label": "Weighted Average", "uom": "Ratio", "value": None})
+        ratio = ratios.get(code)
+        rows.append({"sr": f"I.{i+1}", "label": label, "uom": "Ratio", "value": ratio, "item_code": code})
+        qty = fuel.get(code, 0)
+        if ratio is not None and qty:
+            weighted_num += ratio * qty
+            weighted_den += qty
+    rows.append({
+        "sr": "I.9", "label": "Weighted Average", "uom": "Ratio",
+        "value": safe_div(weighted_num, weighted_den) if weighted_den else None,
+    })
 
-    for section, section_label in [("J", "Section wise Steam Consumed"), ("K", "Section wise Steam Consumed per BL")]:
-        rows.append({"sr": section, "label": section_label, "header": True})
-        uom = "MT" if section == "J" else "KG/BL"
-        for i, label in enumerate(["Liquification", "Distillation", "MSDH", "Evaporation", "Dryer", "Deaerator", "Other"]):
-            rows.append({"sr": f"{section}.{i+1}", "label": label, "uom": uom, "value": None})
+    # Reverse-calculate the "ideal" stock per fuel at the fixed standard
+    # ratio, shown alongside the actual stock consumed (Section H) in the
+    # SAME row for direct comparison (value is a dict: {ideal, actual}
+    # instead of a plain number, since this row carries two figures).
+    # Total Steam Produced (G.1) is a single boiler-wide figure -- it isn't
+    # broken down per fuel -- so per your confirmation it's allocated across
+    # fuels proportionally to each fuel's actual share of total fuel
+    # consumed, by weight:
+    #   allocated_steam_i = total_steam_produced * (actual_qty_i / total_fuel_qty)
+    #   ideal_stock_i      = allocated_steam_i / standard_ratio_i
+    total_fuel_qty = sum(fuel.get(code, 0) for code, _, _ in FUEL_ITEMS)
+    total_steam_produced = boiler.get("steam_produced") or 0
 
+    rows.append({"sr": "I.10", "label": "Ideal vs Actual Stock Consumed (at standard ratio)", "header": True})
+    for i, (code, label, sr) in enumerate(FUEL_ITEMS):
+        ratio = ratios.get(code)
+        actual_qty = fuel.get(code, 0)
+        allocated_steam = safe_div(total_steam_produced * actual_qty, total_fuel_qty)
+        ideal_qty = safe_div(allocated_steam, ratio) if ratio else None
+        rows.append({
+            "sr": f"I.{11 + i}", "label": label, "uom": "MT",
+            "value": {"ideal": ideal_qty, "actual": actual_qty},
+            "item_code": code,
+        })
+
+    # --- SECTIONS J & K: Section-wise Steam Consumed (+ per BL) ---
+    # J now comes from the same "boiler" dict fetched above for Section G/L/M
+    # -- "DMR Process Data" was deleted and its fields merged onto
+    # "DMR Boiler And Turbine Parameters", so it's the same query/date-range,
+    # no need to hit the DB again separately.
+    process = boiler
+
+    rows.append({"sr": "J", "label": "Section wise Steam Consumed", "header": True})
+    for i, (field, label) in enumerate(PROCESS_DATA_FIELDS):
+        rows.append({"sr": f"J.{i+1}", "label": label, "uom": "MT", "value": process.get(field)})
+
+    rows.append({"sr": "K", "label": "Section wise Steam Consumed per BL", "header": True})
+    for i, (field, label) in enumerate(PROCESS_DATA_FIELDS):
+        mt_val = process.get(field)
+        kg_per_bl = safe_div(mt_val * 1000, total_production_bl) if mt_val is not None else None
+        rows.append({"sr": f"K.{i+1}", "label": label, "uom": "KG/BL", "value": kg_per_bl})
+
+    # --- SECTION L: Technical Parameters Of Boiler & Turbine -- DMR Boiler And Turbine Parameters (averaged) ---
     rows.append({"sr": "L", "label": "Technical Parameters Of Boiler & Turbine", "header": True})
-    for sr, label, uom in [("L.1", "Bolier Load Per Hour", "MT/Hr"), ("L.2", "ESP Outlet Temp", "Degree"), ("L.3", "Unburnt Ash %", "%")]:
-        rows.append({"sr": sr, "label": label, "uom": uom, "value": None})
+    for sr, label, uom, field in [
+        ("L.1", "Bolier Load Per Hour", "MT/Hr", "bolier_load_per_hour"),
+        ("L.2", "ESP Outlet Temp", "Degree", "esp_outlet_temp"),
+        ("L.3", "Unburnt Ash %", "%", "unburnt_ash"),
+    ]:
+        rows.append({"sr": sr, "label": label, "uom": uom, "value": boiler.get(field)})
 
+    # --- SECTION M: Power Performance -- DMR Boiler And Turbine Parameters (summed) ---
+    # M.6 Power Per BL is CALCULATED (not read directly) as
+    # sum(power_consumed) over the period / total finished-goods production (BL),
+    # so it stays consistent with whatever plant/date filters are applied,
+    # rather than trusting a possibly-stale stored value on each record.
     rows.append({"sr": "M", "label": "Power Performance", "header": True})
-    for sr, label in [("M.1", "Power Generation"), ("M.2", "Power Purchased"), ("M.3", "Power Export"),
-                       ("M.4", "Power Sales"), ("M.5", "Power Consumed")]:
-        rows.append({"sr": sr, "label": label, "uom": "MW", "value": None})
-    rows.append({"sr": "M.6", "label": "Power Per BL", "uom": "MW", "value": None})
+    for sr, label, field in [
+        ("M.1", "Power Generation", "power_generation"),
+        ("M.2", "Power Purchased", "power_purchased"),
+        ("M.3", "Power Export", "power_export"),
+        ("M.4", "Power Sales", "power_sales"),
+        ("M.5", "Power Consumed", "power_consumed"),
+    ]:
+        rows.append({"sr": sr, "label": label, "uom": "MW", "value": boiler.get(field)})
+    rows.append({
+        "sr": "M.6", "label": "Power Per BL", "uom": "MW",
+        "value": safe_div(boiler.get("power_consumed", 0), total_production_bl),
+    })
 
+    # --- SECTION N: Stock -- Stock Ledger Entry (latest balance as of to_date) ---
     rows.append({"sr": "N", "label": "Stock", "header": True})
     stock = get_stock_balance(companies, to_date, STOCK_ITEMS)
     rows.append({"sr": "N.1", "label": "Wash Available", "uom": "Ltrs", "value": None})
@@ -290,12 +688,12 @@ def get_report_data(companies, from_date, to_date, plants=None, segments=None):
     columns = []
     for dt in date_list:
         rows = build_section_rows(companies, dt, dt, plants, segments)
-        columns.append({"label": formatdate(dt, "d.MM"), "values": {r["sr"]: r.get("value") for r in rows}})
+        columns.append({"label": formatdate(dt, "dd/mm/yy"), "values": {r["sr"]: r.get("value") for r in rows}})
 
     todate_rows = build_section_rows(companies, fy_start, to_date, plants, segments)
     # Show the actual date range this "To Date" column covers (fiscal-year
     # start through the selected to_date) rather than a bare "To Date" label.
-    todate_label = f"To Date ({formatdate(fy_start, 'd.MM.yy')} - {formatdate(to_date, 'd.MM.yy')})"
+    todate_label = f"To Date ({formatdate(fy_start, 'dd/mm/yy')} - {formatdate(to_date, 'dd/mm/yy')})"
     columns.append({"label": todate_label, "values": {r["sr"]: r.get("value") for r in todate_rows}})
 
     return {"meta": meta, "columns": columns}

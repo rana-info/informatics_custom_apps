@@ -5,5 +5,5 @@
 from frappe.model.document import Document
 
 
-class DMRProcessData(Document):
+class PowerPlantLogNorms(Document):
 	pass

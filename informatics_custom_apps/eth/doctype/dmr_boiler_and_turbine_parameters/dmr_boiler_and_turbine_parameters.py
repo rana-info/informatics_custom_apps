@@ -16,24 +16,40 @@ PLANT_CONFIG = {
 	"RSL Louhka": {
 		"tag_name_col": "B",
 		"hourly_start_col": "K",
-		"hourly_end_col": "AB",
-		"next_day_start_col": "AC",
+		"hourly_end_col": "AH",
+		"next_day_start_col": None,
 		"next_day_end_col": None,
+		# "agg": "sum" for cumulative quantities (flow/energy totals for the day),
+		# "agg": "avg" for instantaneous readings (pressure/temperature/analyzer %).
+		# NOTE: several of these keys still collide (see flagged duplicate-key issue —
+		# pending confirmed fieldnames from the mail out to other plants). Left as-is
+		# for now; only the last "float_pvrh" entry is actually live.
 		"field_tag_map": {
-			"float_zcpn": {"tag": "FT302", "label": "Steam Produced"},
-			"float_pvrh": {"tag": "EKW2000", "label": "Power Generation"},
+			"float_zcpn": {"tag": "FT302", "label": "Steam Produced", "agg": "sum"},
+			"float_pvrh": {"tag": "EKW2000", "label": "Power Generation", "agg": "sum"},
+   			"float_reke": {"tag": "TE414", "label": "ESP Outlet Temp", "agg": "avg"},
+   			"deaerator": {"tag": "FT102", "label": "Deartor", "agg": "sum"},
+
+			# "float_pvrh": {"tag": "PT302", "label": "Mainsteam Pressure", "agg": "avg"},
+			# "float_pvrh": {"tag": "TT303", "label": "Mainsteamline Temperature", "agg": "avg"},
+			# "float_pvrh": {"tag": "AT401", "label": "O(2) percentage", "agg": "avg"},
+			# "float_pvrh": {"tag": "FT301", "label": "Boiler Feed Water Flow", "agg": "sum"},
+            # "float_pvrh": {"tag": "FT101", "label": "DM Water Flow to Boiler", "agg": "sum"},
+
+
 		},
 	},
 	"Superior Biofuels": {
 		"tag_name_col": "B",
 		"hourly_start_col": "K",
-		"hourly_end_col": "AB",
-		"next_day_start_col": "AC",
+		"hourly_end_col": "AH",
+		"next_day_start_col": None,
 		"next_day_end_col": None,
 		"field_tag_map": {
-			"float_zcpn": {"tag": "FT303", "label": "Steam Produced"}
+			"float_zcpn": {"tag": "FT303", "label": "Steam Produced", "agg": "sum"}
 		},
 	},
+ 
 }
 
 XLSX_ZIP_SIGNATURE = b"PK\x03\x04"
@@ -63,11 +79,16 @@ class DMRBoilerAndTurbineParameters(Document):
 
 		tag_row_map = self.build_tag_row_map(ws, header_row, tag_col)
 
-		next_day_start_col = column_index_from_string(config["next_day_start_col"])
-		next_day_end_col = (
-			column_index_from_string(config["next_day_end_col"])
-			if config["next_day_end_col"] else ws.max_column
-		)
+		# Plants with no next_day_start_col configured don't carry any
+		# values forward — skip next-day column resolution and the
+		# per-field carry-over sum entirely.
+		has_next_day = config["next_day_start_col"] is not None
+		if has_next_day:
+			next_day_start_col = column_index_from_string(config["next_day_start_col"])
+			next_day_end_col = (
+				column_index_from_string(config["next_day_end_col"])
+				if config["next_day_end_col"] else ws.max_column
+			)
 
 		missing = []
 		carry_over_values = {}
@@ -79,22 +100,35 @@ class DMRBoilerAndTurbineParameters(Document):
 				missing.append(f"{tag} ({cfg['label']})")
 				continue
 
-			total = self.sum_row_range(ws, row_idx, start_col, end_col)
+			# "sum" for cumulative quantities (flow/energy), "avg" for instantaneous
+			# readings (pressure/temperature/analyzer %). Defaults to "sum" for any
+			# entry that hasn't been classified yet, matching prior behaviour.
+			agg = cfg.get("agg", "sum")
 
-			# Add to whatever is already stored for this field, rather than
-			# overwriting it, so re-uploads accumulate instead of replacing.
-			previous_value = self.get_stored_value(fieldname)
-			self.set(fieldname, previous_value + total)
+			if agg == "avg":
+				value = self.average_row_range(ws, row_idx, start_col, end_col)
+				# Averages aren't cumulative — re-uploads replace, they don't stack.
+				self.set(fieldname, value)
+			else:
+				total = self.sum_row_range(ws, row_idx, start_col, end_col)
+				# Add to whatever is already stored for this field, rather than
+				# overwriting it, so re-uploads accumulate instead of replacing.
+				previous_value = self.get_stored_value(fieldname)
+				self.set(fieldname, previous_value + total)
 
-			carry_total = self.sum_row_range(ws, row_idx, next_day_start_col, next_day_end_col)
-			carry_over_values[fieldname] = carry_total
+			# Only cumulative (sum) fields get carried forward into next day's
+			# opening total — carrying an average forward doesn't mean anything.
+			if has_next_day and agg == "sum":
+				carry_total = self.sum_row_range(ws, row_idx, next_day_start_col, next_day_end_col)
+				carry_over_values[fieldname] = carry_total
 
 		if missing:
 			frappe.msgprint(
 				f"Tag(s) not found in uploaded sheet, field(s) left unchanged: {', '.join(missing)}"
 			)
 
-		if carry_over_values:
+		# No next-day config -> no carry-over entry is created at all.
+		if has_next_day and carry_over_values:
 			self.upsert_next_day_carry_over(carry_over_values)
 
 	def get_stored_value(self, fieldname):
@@ -211,6 +245,24 @@ class DMRBoilerAndTurbineParameters(Document):
 				except (ValueError, TypeError):
 					pass
 		return total
+
+	@staticmethod
+	def average_row_range(ws, row_idx, start_col, end_col):
+		total = 0
+		count = 0
+		for col in range(start_col, end_col + 1):
+			val = ws.cell(row=row_idx, column=col).value
+			if isinstance(val, (int, float)):
+				total += val
+				count += 1
+			elif isinstance(val, str):
+				try:
+					total += float(val.strip())
+					count += 1
+				except (ValueError, TypeError):
+					pass
+		# No numeric readings in range -> 0 rather than a ZeroDivisionError.
+		return total / count if count else 0
 
 
 class _XlrdSheetAdapter:

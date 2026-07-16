@@ -1,0 +1,61 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-07-13 11:50:47.344969",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "section",
+  "parameter",
+  "fieldname",
+  "unit",
+  "min_value",
+  "max_value",
+  "enabled"
+ ],
+ "fields": [
+  {
+   "fieldname": "section",
+   "fieldtype": "Select",
+   "label": "Section",
+   "options": "Feed Water\nBoiler Water\nSteam Quality\nTurbine Condensate\nCommon Exhaust Condensate\nCooling Tower Water\nDM Plant\nFuel",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "fieldname",
+   "fieldtype": "Select",
+   "label": "Power Plant Log Field",
+   "reqd": 1,
+   "in_list_view": 1,
+   "options": "ph\nconductivity\nsilica\nresidual_oxygen_scavenger\niron_as_fe\ndissolve_oxygen\ntotal_hardness\nph1\nconductivity1\ntds\nsilica1\nphosphate_as_po4\np_alkalinity\ntotal_hardness1\nchloride_as_caco3\nph2\nconductivity2\nsilica2\niron_as_fe1\nph3\nconductivity3\nsilica3\nph4\nconductivity4\nsilica4\ntotal_hardness2\niron_as_fe2\ndm_plant_running_hours\ndm_water_consumption\nph5\nconductivity5\ntds1\nt_hardness\ncalcium_hardness\nmagnesium_hardness\nchloride_as_caco31\nsulphate_as_so4\nsilica5\ncw_inlet_pressure\ncw_outlet_pressure\ncw_inlet_temperature\ncw_outlet_temperature\nturbine_condensate_temperature\nvacuum_in_condensor\nmoisture\ng_cal_value\ndust"
+  },
+  {
+   "fieldname": "unit",
+   "fieldtype": "Data",
+   "label": "Unit"
+  },
+  {
+   "fieldname": "min_value",
+   "fieldtype": "Float",
+   "label": "Minimum Value"
+  },
+  {
+   "fieldname": "max_value",
+   "fieldtype": "Float",
+   "label": "Maximum Value"
+  },
+  {
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled",
+   "default": "1"
+  }
+ ],
+ "grid_page_length": 50,
+ "istable": 1,
+ "module": "ETH",
+ "name": "Power Plant Log Norms",
+ "row_format": "Dynamic"
+}

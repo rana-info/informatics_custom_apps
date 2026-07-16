@@ -28,7 +28,17 @@
   "float_hrth",
   "float_reke",
   "column_break_band",
-  "percent_bman"
+  "percent_bman",
+  "process_data_tab",
+  "dmr_process_data_section",
+  "liquification",
+  "dryer",
+  "deaerator",
+  "other",
+  "column_break_vdmo",
+  "evaporation",
+  "distillation",
+  "msdh"
  ],
  "fields": [
   {
@@ -153,12 +163,61 @@
    "fieldname": "excel_file",
    "fieldtype": "Attach",
    "label": "Excel File"
+  },
+  {
+   "fieldname": "process_data_tab",
+   "fieldtype": "Tab Break",
+   "label": "Process Data"
+  },
+  {
+   "fieldname": "dmr_process_data_section",
+   "fieldtype": "Section Break",
+   "label": "DMR Process Data"
+  },
+  {
+   "fieldname": "liquification",
+   "fieldtype": "Float",
+   "label": "Liquification"
+  },
+  {
+   "fieldname": "dryer",
+   "fieldtype": "Float",
+   "label": "Dryer"
+  },
+  {
+   "fieldname": "deaerator",
+   "fieldtype": "Float",
+   "label": "Deaerator"
+  },
+  {
+   "fieldname": "other",
+   "fieldtype": "Float",
+   "label": "Other"
+  },
+  {
+   "fieldname": "column_break_vdmo",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "evaporation",
+   "fieldtype": "Float",
+   "label": "Evaporation"
+  },
+  {
+   "fieldname": "distillation",
+   "fieldtype": "Float",
+   "label": "Distillation"
+  },
+  {
+   "fieldname": "msdh",
+   "fieldtype": "Float",
+   "label": "MSDH"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-07 15:57:35.708430",
+ "modified": "2026-07-16 09:59:55.721235",
  "modified_by": "Administrator",
  "module": "ETH",
  "name": "DMR Boiler And Turbine Parameters",
