@@ -90,7 +90,7 @@ def get_columns():
         {
             "label": "Posting Date", 
             "fieldname": "posting_date", 
-            "fieldtype": "Date", 
+            "fieldtype": "Data", 
             "width": 120
             },
         {
