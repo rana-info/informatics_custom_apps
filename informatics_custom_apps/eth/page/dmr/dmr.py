@@ -3,6 +3,39 @@ from frappe.utils import getdate, add_days, formatdate
 from collections import defaultdict
 
 # =============================================================================
+# REPORT DAY WINDOW
+# =============================================================================
+# The plant's operational "day" does not run midnight-to-midnight — it runs
+# DAY_START_TIME to DAY_START_TIME the next calendar day (e.g. 6:00 AM to
+# 6:00 AM). A Stock Entry / Stock Ledger Entry posted at 2:00 AM on the 17th
+# belongs to the "16th" report day, not the 17th.
+#
+# This ONLY applies to data sources with a real posting timestamp (Stock
+# Entry, Stock Ledger Entry). Per-day master doctypes (DMR Technical Lab
+# Parameters, DMR Boiler And Turbine Parameters) already store one row per
+# plant per REPORT day against a plain Date field — the shift is baked into
+# how that field gets filled in at data-entry time, so their date-range
+# filters are left as plain date `between` and need no further adjustment.
+DAY_START_TIME = "06:00:00"
+
+
+def get_report_datetime_range(from_date, to_date, day_start_time=DAY_START_TIME):
+    """
+    Convert report from_date/to_date (both report-day dates) into the actual
+    [from_datetime, to_datetime) window to filter real posting timestamps
+    against.
+
+    e.g. from_date=16-Jul, to_date=16-Jul, day_start_time=06:00:00 ->
+         ("2026-07-16 06:00:00", "2026-07-17 06:00:00")
+    to_datetime is exclusive — a doc posted exactly at the next day's
+    06:00:00 belongs to the next report day, not this one.
+    """
+    from_dt = f"{getdate(from_date)} {day_start_time}"
+    to_dt = f"{add_days(getdate(to_date), 1)} {day_start_time}"
+    return from_dt, to_dt
+
+
+# =============================================================================
 # DATA SOURCE MAP (quick reference — see per-section comments below for detail)
 # =============================================================================
 #   A  Production of FG              -> Stock Entry (Material Receipt)
@@ -21,7 +54,11 @@ from collections import defaultdict
 #                                        calculated ideal vs actual stock
 #                                        comparison in a single row (value is
 #                                        {ideal, actual}, not a plain number)
-#   J  Section wise Steam Consumed   -> DMR Process Data
+#   J  Section wise Steam Consumed   -> DMR Boiler And Turbine Parameters
+#                                        (DMR Process Data doctype was
+#                                        deleted; these fields were merged
+#                                        onto this doctype — see note by
+#                                        PROCESS_DATA_SUM_FIELDS below)
 #   K  Steam Consumed per BL         -> calculated from J / (A total BL)
 #   L  Technical Parameters (Boiler) -> DMR Boiler And Turbine Parameters
 #   M  Power Performance             -> DMR Boiler And Turbine Parameters
@@ -113,8 +150,10 @@ BOILER_AVG_FIELD_MAP = {
 
 
 PROCESS_DATA_FIELDS = [
-    # Fieldnames for "DMR Process Data" — confirmed from DocType JSON, match
-    # the labels exactly, no mapping needed.
+    # Section J labels. These used to live on "DMR Process Data" (now
+    # deleted) and were queried by plain fieldname == label, no mapping
+    # needed. That doctype's fields have been merged onto
+    # "DMR Boiler And Turbine Parameters".
     ("liquification", "Liquification"),
     ("distillation", "Distillation"),
     ("msdh", "MSDH"),
@@ -123,6 +162,19 @@ PROCESS_DATA_FIELDS = [
     ("deaerator", "Deaerator"),
     ("other", "Other"),
 ]
+# ASSUMPTION FLAGGED: fieldnames above are carried over unchanged from the
+# old "DMR Process Data" doctype. I don't have the new merged DocType JSON
+# to confirm they landed with the same names on "DMR Boiler And Turbine
+# Parameters" — please verify before relying on this.
+#
+# LIKELY COLLISION: "DMR Boiler And Turbine Parameters" already has a field
+# named "deaerator" used for the boiler's own FT102 tag reading (Deaerator
+# flow, wired up in the Excel-import PLANT_CONFIG in that doctype's
+# controller). Section J.6 "Deaerator" here is a DIFFERENT quantity (steam
+# consumed by the deaerator process). These cannot both be the same column
+# — check the actual DocType JSON and rename this entry (e.g.
+# "deaerator_steam_consumed") to whatever the real merged fieldname is.
+PROCESS_DATA_SUM_FIELDS = [f for f, _ in PROCESS_DATA_FIELDS]
 
 
 def get_fiscal_year_start(date):
@@ -150,13 +202,16 @@ def build_plant_segment_conditions(plants, segments):
 # =============================================================================
 # SECTIONS A / E — Production of Finished Goods & By Products
 # Source: Stock Entry (stock_entry_type = "Material Receipt") joined to
-# Stock Entry Detail, summed over the report period for the given item codes.
+# Stock Entry Detail, summed over the report period for the given item
+# codes. Filtered on the actual posting TIMESTAMP (date + time) against the
+# shifted report-day window (DAY_START_TIME), not the bare posting_date.
 # =============================================================================
 def get_production_qty(companies, from_date, to_date, item_codes, plants=None, segments=None):
     if not item_codes:
         return {}
+    from_dt, to_dt = get_report_datetime_range(from_date, to_date)
     extra_sql, extra_vals = build_plant_segment_conditions(plants, segments)
-    values = {"companies": companies, "from_date": from_date, "to_date": to_date, "items": item_codes}
+    values = {"companies": companies, "from_dt": from_dt, "to_dt": to_dt, "items": item_codes}
     values.update(extra_vals)
     rows = frappe.db.sql(f"""
         select sed.item_code, sum(sed.qty * sed.conversion_factor) as qty
@@ -165,7 +220,8 @@ def get_production_qty(companies, from_date, to_date, item_codes, plants=None, s
         where se.docstatus = 1
             and se.stock_entry_type = 'Material Receipt'
             and se.company in %(companies)s
-            and se.posting_date between %(from_date)s and %(to_date)s
+            and timestamp(se.posting_date, se.posting_time) >= %(from_dt)s
+            and timestamp(se.posting_date, se.posting_time) < %(to_dt)s
             and sed.item_code in %(items)s
             {extra_sql}
         group by sed.item_code
@@ -176,13 +232,15 @@ def get_production_qty(companies, from_date, to_date, item_codes, plants=None, s
 # =============================================================================
 # SECTIONS B / H — Consumption of Raw Material & Fuel used for Boiler
 # Source: Stock Entry (stock_entry_type = "Material Issue") joined to
-# Stock Entry Detail, summed over the report period for the given item codes.
+# Stock Entry Detail, summed over the report period for the given item
+# codes. Same shifted report-day timestamp window as get_production_qty.
 # =============================================================================
 def get_issue_qty(companies, from_date, to_date, item_codes, plants=None, segments=None):
     if not item_codes:
         return {}
+    from_dt, to_dt = get_report_datetime_range(from_date, to_date)
     extra_sql, extra_vals = build_plant_segment_conditions(plants, segments)
-    values = {"companies": companies, "from_date": from_date, "to_date": to_date, "items": item_codes}
+    values = {"companies": companies, "from_dt": from_dt, "to_dt": to_dt, "items": item_codes}
     values.update(extra_vals)
     rows = frappe.db.sql(f"""
         select sed.item_code, sum(sed.qty * sed.conversion_factor) as qty
@@ -191,7 +249,8 @@ def get_issue_qty(companies, from_date, to_date, item_codes, plants=None, segmen
         where se.docstatus = 1
             and se.stock_entry_type = 'Material Issue'
             and se.company in %(companies)s
-            and se.posting_date between %(from_date)s and %(to_date)s
+            and timestamp(se.posting_date, se.posting_time) >= %(from_dt)s
+            and timestamp(se.posting_date, se.posting_time) < %(to_dt)s
             and sed.item_code in %(items)s
             {extra_sql}
         group by sed.item_code
@@ -201,12 +260,14 @@ def get_issue_qty(companies, from_date, to_date, item_codes, plants=None, segmen
 
 # =============================================================================
 # SECTION N — Stock
-# Source: Stock Ledger Entry — latest qty_after_transaction on/before to_date
-# per item across all warehouses of the selected companies.
+# Source: Stock Ledger Entry — latest qty_after_transaction as of the END of
+# the report day for to_date (i.e. up to but not including the next
+# DAY_START_TIME), per item across all warehouses of the selected companies.
 # =============================================================================
 def get_stock_balance(companies, to_date, item_codes):
     if not item_codes:
         return {}
+    _, to_dt = get_report_datetime_range(to_date, to_date)
     rows = frappe.db.sql("""
         select i.item_code, round(coalesce(sum(sle.qty_after_transaction), 0), 3) as qty
         from `tabItem` i
@@ -218,7 +279,7 @@ def get_stock_balance(companies, to_date, item_codes):
                     max(concat(posting_date,' ',posting_time,' ',creation)) as last_entry
                 from `tabStock Ledger Entry`
                 where company in %(companies)s
-                    and posting_date <= %(to_date)s
+                    and timestamp(posting_date, posting_time) < %(to_dt)s
                     and is_cancelled = 0
                 group by item_code, warehouse
             ) x on x.item_code = s1.item_code
@@ -227,16 +288,17 @@ def get_stock_balance(companies, to_date, item_codes):
         ) sle on sle.item_code = i.item_code
         where i.item_code in %(items)s
         group by i.item_code
-    """, {"companies": companies, "to_date": to_date, "items": item_codes}, as_dict=1)
+    """, {"companies": companies, "to_dt": to_dt, "items": item_codes}, as_dict=1)
     return {r.item_code: r.qty or 0 for r in rows}
 
 
 # =============================================================================
 # SECTION D — Fermentation Parameters
 # Source: "DMR Technical Lab Parameters" doctype (Company + Plant + Date,
-# one record per plant per day). These are lab readings / percentages, not
-# cumulative quantities, so for a multi-day range we AVERAGE each field
-# rather than summing it.
+# one record per plant per REPORT day). These are lab readings / percentages,
+# not cumulative quantities, so for a multi-day range we AVERAGE each field
+# rather than summing it. Filtered on the plain Date field — see the REPORT
+# DAY WINDOW note at the top of this file for why that's correct here.
 # =============================================================================
 def get_lab_parameters(companies, from_date, to_date, plants=None):
     if not frappe.db.exists("DocType", "DMR Technical Lab Parameters"):
@@ -256,12 +318,18 @@ def get_lab_parameters(companies, from_date, to_date, plants=None):
 
 
 # =============================================================================
-# SECTIONS G, L, M — Boiler Performance / Technical Parameters / Power
+# SECTIONS G, J, L, M — Boiler Performance / Section-wise Steam Consumed /
+# Technical Parameters / Power
 # Source: "DMR Boiler And Turbine Parameters" doctype (Company + Plant +
-# Date, one record per plant per day).
+# Date, one record per plant per REPORT day). Filtered on the plain Date
+# field — see the REPORT DAY WINDOW note at the top of this file.
 #   - Flow/production quantities (steam, power) are SUMMED over the period.
 #   - Instrument readings (boiler load/hr, ESP temp, unburnt ash %) are
 #     AVERAGED over the period since summing them would be meaningless.
+#   - Section J (Section wise Steam Consumed) fields are SUMMED — merged in
+#     here since the old "DMR Process Data" doctype was deleted and its
+#     fields moved onto this doctype (see PROCESS_DATA_SUM_FIELDS note above
+#     for a flagged fieldname collision that needs confirming).
 # =============================================================================
 def get_boiler_turbine_parameters(companies, from_date, to_date, plants=None):
     if not frappe.db.exists("DocType", "DMR Boiler And Turbine Parameters"):
@@ -274,9 +342,11 @@ def get_boiler_turbine_parameters(companies, from_date, to_date, plants=None):
         filters["plant"] = ["in", plants]
     sum_map = _existing_field_map("DMR Boiler And Turbine Parameters", BOILER_SUM_FIELD_MAP)
     avg_map = _existing_field_map("DMR Boiler And Turbine Parameters", BOILER_AVG_FIELD_MAP)
+    process_fields = _existing_fields("DMR Boiler And Turbine Parameters", PROCESS_DATA_SUM_FIELDS)
     select_fields = (
         [f"sum(`{real}`) as {semantic}" for semantic, real in sum_map.items()]
         + [f"avg(`{real}`) as {semantic}" for semantic, real in avg_map.items()]
+        + [f"sum(`{f}`) as {f}" for f in process_fields]
     )
     if not select_fields:
         return {}
@@ -320,30 +390,6 @@ def get_steam_raising_ratios(companies, plants=None):
     for r in rows:
         item_ratios[r.item].append(r.ratio or 0)
     return {item: sum(vals) / len(vals) for item, vals in item_ratios.items()}
-
-
-# =============================================================================
-# SECTIONS J, K — Section-wise Steam Consumed / per BL
-# Source: "DMR Process Data" doctype (Company + Plant + Date, one record
-# per plant per day). Quantities (MT) are SUMMED over the period for J.
-# K converts each J value to KG/BL of finished goods produced in the same
-# period (MT -> KG is *1000, divided by total production in BL).
-# =============================================================================
-def get_process_data(companies, from_date, to_date, plants=None):
-    if not frappe.db.exists("DocType", "DMR Process Data"):
-        return {}
-    filters = {
-        "company": ["in", companies],
-        "date": ["between", [from_date, to_date]],
-    }
-    if plants:
-        filters["plant"] = ["in", plants]
-    fields = _existing_fields("DMR Process Data", [f for f, _ in PROCESS_DATA_FIELDS])
-    select_fields = [f"sum({f}) as {f}" for f in fields]
-    if not select_fields:
-        return {}
-    rows = frappe.get_all("DMR Process Data", filters=filters, fields=select_fields)
-    return rows[0] if rows else {}
 
 
 def safe_div(n, d):
@@ -537,8 +583,12 @@ def build_section_rows(companies, from_date, to_date, plants=None, segments=None
             "item_code": code,
         })
 
-    # --- SECTIONS J & K: Section-wise Steam Consumed (+ per BL) -- DMR Process Data (summed) ---
-    process = get_process_data(companies, from_date, to_date, plants)
+    # --- SECTIONS J & K: Section-wise Steam Consumed (+ per BL) ---
+    # J now comes from the same "boiler" dict fetched above for Section G/L/M
+    # -- "DMR Process Data" was deleted and its fields merged onto
+    # "DMR Boiler And Turbine Parameters", so it's the same query/date-range,
+    # no need to hit the DB again separately.
+    process = boiler
 
     rows.append({"sr": "J", "label": "Section wise Steam Consumed", "header": True})
     for i, (field, label) in enumerate(PROCESS_DATA_FIELDS):

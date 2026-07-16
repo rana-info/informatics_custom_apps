@@ -60,7 +60,7 @@ class DistilleryProductionReport {
             fieldname: 'from_date',
             label: 'From Date',
             fieldtype: 'Date',
-            default: frappe.datetime.month_start(),
+            default: frappe.datetime.get_today(),
             change: () => this.refresh()
         });
 
