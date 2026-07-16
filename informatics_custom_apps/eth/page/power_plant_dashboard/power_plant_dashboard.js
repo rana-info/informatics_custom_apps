@@ -62,6 +62,19 @@ frappe.pages["power-plant-dashboard"].on_page_load = function (wrapper) {
                 </div>
 
                 <div class="col-md-2">
+                <div class="form-check" style="margin-top:32px;">
+                    <input
+                        class="form-check-input"
+                        type="checkbox"
+                        id="show-limits"
+                    >
+                    <label class="form-check-label" for="show-limits">
+                        Show Limits
+                    </label>
+                </div>
+                </div>
+
+                <div class="col-md-2">
                     <br>
                     <button class="btn btn-primary" id="show-trend">
                         Show Trend
@@ -419,7 +432,6 @@ function renderPlantLogbook(target, data) {
 
 
 function renderTrendChart(result) {
-
     if (!result.data.length) {
 
         $("#trend-chart").html(`
@@ -522,9 +534,10 @@ function renderTrendChart(result) {
             </span>
 
         </div>
-
-        <div id="trend-graph"></div>
+    <div id="trend-graph"></div>
     `);
+
+    const showLimits = $("#show-limits").is(":checked");
 
     let datasets = [
         {
@@ -533,14 +546,14 @@ function renderTrendChart(result) {
         }
     ];
 
-    if (hasMin) {
+    if (showLimits && hasMin) {
         datasets.push({
             name: "Min",
             values: minValues
         });
     }
 
-    if (hasMax) {
+    if (showLimits && hasMax) {
         datasets.push({
             name: "Max",
             values: maxValues
@@ -563,8 +576,66 @@ function renderTrendChart(result) {
         lineOptions: {
             hideDots: false,
             regionFill: false
+        },
+        axisOptions: {
+            min: 0
         }
 
     });
+    let table = `
+    <br>
+   <details style="margin-top:20px;">
+    <summary><b>Recorded Values (${result.data.length})</b></summary>
+
+    <table class="table table-bordered table-sm table-hover">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Time Slot</th>
+                <th>Value</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+        </details>
+`;
+
+result.data.forEach(d => {
+
+    let status = "Normal";
+    let badge = "success";
+
+    if (hasMin && d.value < result.norm.min) {
+        status = "Low";
+        badge = "warning";
+    }
+    else if (hasMax && d.value > result.norm.max) {
+        status = "High";
+        badge = "danger";
+    }
+
+    table += `
+        <tr>
+            <td>${d.date}</td>
+            <td>${d.time_slot}</td>
+            <td>
+                <b>${d.value}</b>
+                ${result.norm.unit || ""}
+            </td>
+            <td>
+                <span class="badge badge-${badge}">
+                    ${status}
+                </span>
+            </td>
+        </tr>
+    `;
+});
+
+table += `
+        </tbody>
+    </table>
+`;
+
+$("#trend-chart").append(table);
 
 }
