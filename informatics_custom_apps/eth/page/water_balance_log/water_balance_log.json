@@ -1,15 +1,15 @@
 {
  "content": null,
- "creation": "2026-07-18 10:51:22.994236",
+ "creation": "2026-07-18 16:06:55.109925",
  "docstatus": 0,
  "doctype": "Page",
  "idx": 0,
- "modified": "2026-07-18 16:07:24.000458",
+ "modified": "2026-07-18 16:07:06.424923",
  "modified_by": "Administrator",
  "module": "ETH",
- "name": "ro-plant-dashboard",
+ "name": "water-balance-log",
  "owner": "Administrator",
- "page_name": "ro-plant-dashboard",
+ "page_name": "water-balance-log",
  "roles": [
   {
    "role": "Management"
@@ -22,5 +22,5 @@
  "standard": "Yes",
  "style": null,
  "system_page": 0,
- "title": "RO Plant Dashboard"
+ "title": "Water Balance Dashboard"
 }
