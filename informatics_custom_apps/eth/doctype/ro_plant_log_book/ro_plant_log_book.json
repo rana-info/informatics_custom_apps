@@ -1,5 +1,6 @@
 {
  "actions": [],
+ "allow_import": 1,
  "autoname": "RO-LOG-.abbr.-.log_date.-.#####",
  "creation": "2026-07-02 17:58:19.481074",
  "doctype": "DocType",
@@ -52,7 +53,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-03 11:05:17.432941",
+ "modified": "2026-07-18 11:56:05.501323",
  "modified_by": "Administrator",
  "module": "ETH",
  "name": "RO Plant Log Book",

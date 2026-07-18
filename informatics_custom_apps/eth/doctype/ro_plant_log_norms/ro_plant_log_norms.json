@@ -1,0 +1,74 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-07-17 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "section",
+  "fieldname",
+  "unit",
+  "min_value",
+  "max_value",
+  "show_in_trend"
+ ],
+ "fields": [
+  {
+    "fieldname": "section",
+    "fieldtype": "Select",
+    "in_list_view": 1,
+    "label": "Section",
+    "options": "Unit Pressure\nWater Flow\nMGF Inlet Parameters\nRO Inlet Parameters\nRO Outlet Parameters\nStorage Tank Level",
+    "reqd": 1
+    },
+  {
+    "fieldname": "fieldname",
+    "fieldtype": "Select",
+    "in_list_view": 1,
+    "label": "Field Name",
+    "reqd": 1,
+    "options": "raw__water_pump_outlet\nmgf_inlet\nmgf_outlet\nmcf_inlet\nmcf_outlet\nhigh_pressure_pump_outlet\nro_1st_stage\nro_2nd_stage\nro_reject\npressure_difference\ndg_pump_outlet\nsac_inlet\nsac_outlet\nsba_inlet\nsba_outlet\nmb_inlet\nmb_outlet\nmgf_inlet1\nro_inlet\nro_outlet\nreject\nmb_outlet1\nrecovery\nturbidity\nph\nconductivity\ntotal_alkalinity\nsilica_as_sio2\nph1\ntotal_hardness1\ntotal_alkalinity1\nsilica_as_sio21\norp\nph2\nconductivity2\ntotal_hardness2\nsilica_as_sio22\ndm_water_tank\nmake_up_water_tank"
+    },
+  {
+   "fieldname": "unit",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Unit"
+  },
+  {
+   "fieldname": "min_value",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Min Value",
+   "precision": "2"
+  },
+  {
+   "fieldname": "max_value",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Max Value",
+   "precision": "2"
+  },
+  {
+   "default": "1",
+   "fieldname": "show_in_trend",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Show in Trend"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "module": "ETH",
+ "name": "RO Plant Log Norms",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
