@@ -1,0 +1,83 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-07-20 16:49:44.089505",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "parameter_name",
+  "field_name",
+  "engg_units",
+  "max_value",
+  "max_value_time",
+  "min_value",
+  "min_value_time",
+  "average_value"
+ ],
+ "fields": [
+  {
+   "fieldname": "parameter_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Parameter Name"
+  },
+  {
+   "fieldname": "field_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Field Name"
+  },
+  {
+   "fieldname": "engg_units",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Engg Units"
+  },
+  {
+   "fieldname": "max_value",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Max Value"
+  },
+  {
+   "fieldname": "max_value_time",
+   "fieldtype": "Time",
+   "in_list_view": 1,
+   "label": "Max Value Time"
+  },
+  {
+   "fieldname": "min_value",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Min Value"
+  },
+  {
+   "fieldname": "min_value_time",
+   "fieldtype": "Time",
+   "in_list_view": 1,
+   "label": "Min Value Time"
+  },
+  {
+   "fieldname": "average_value",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Average Value"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-07-20 16:53:04.161741",
+ "modified_by": "Administrator",
+ "module": "ETH",
+ "name": "DMR Parameters Range",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
