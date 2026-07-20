@@ -1,6 +1,7 @@
 # Copyright (c) 2026, Monil Kamboj and contributors
 # For license information, please see license.txt
 
+import datetime
 from io import BytesIO
 import frappe
 from frappe.model.document import Document
@@ -12,6 +13,17 @@ from openpyxl.utils import column_index_from_string
 
 TAG_NAME_HEADER_TEXT = "Tag Name"
 
+# Columns for the Min/Max/Avg child table (min_max_avg) — same layout for
+# every plant, regardless of PLANT_CONFIG's hourly column range.
+MIN_MAX_AVG_COLUMNS = {
+	"engg_units_col": "D",
+	"max_col": "F",
+	"max_time_col": "G",
+	"min_col": "H",
+	"min_time_col": "I",
+	"avg_col": "J",
+}
+
 PLANT_CONFIG = {
 	"RSL Louhka": {
 		"tag_name_col": "B",
@@ -19,22 +31,19 @@ PLANT_CONFIG = {
 		"hourly_end_col": "AH",
 		"next_day_start_col": None,
 		"next_day_end_col": None,
-		# "agg": "sum" for cumulative quantities (flow/energy totals for the day),
-		# "agg": "avg" for instantaneous readings (pressure/temperature/analyzer %).
-		# NOTE: several of these keys still collide (see flagged duplicate-key issue —
-		# pending confirmed fieldnames from the mail out to other plants). Left as-is
-		# for now; only the last "float_pvrh" entry is actually live.
+
 		"field_tag_map": {
 			"float_zcpn": {"tag": "FT302", "label": "Steam Produced", "agg": "sum"},
 			"float_pvrh": {"tag": "EKW2000", "label": "Power Generation", "agg": "sum"},
    			"float_reke": {"tag": "TE414", "label": "ESP Outlet Temp", "agg": "avg"},
    			"deaerator": {"tag": "FT102", "label": "Deartor", "agg": "sum"},
 
-			# "float_pvrh": {"tag": "PT302", "label": "Mainsteam Pressure", "agg": "avg"},
-			# "float_pvrh": {"tag": "TT303", "label": "Mainsteamline Temperature", "agg": "avg"},
-			# "float_pvrh": {"tag": "AT401", "label": "O(2) percentage", "agg": "avg"},
-			# "float_pvrh": {"tag": "FT301", "label": "Boiler Feed Water Flow", "agg": "sum"},
-            # "float_pvrh": {"tag": "FT101", "label": "DM Water Flow to Boiler", "agg": "sum"},
+			"main_steam_pressure": {"tag": "PT302", "label": "Main Steam Pressure", "agg": "avg"},
+			"main_steam_temprature": {"tag": "TT303", "label": "Main Steam Temprature", "agg": "avg"},
+			"oxygen__at_eco_ol": {"tag": "AT401", "label": "Oxygen % At Eco O/L", "agg": "avg"},
+			"boiler_feed_water_flow": {"tag": "FT301", "label": "Boiler Feed Water Flow", "agg": "sum"},
+            "dm_flow_to_dearator": {"tag": "FT101", "label": "DM Flow To Dearator ", "agg": "sum"},
+            "turbine_steam": {"tag": "FT2001", "label": "Turbine Steam", "agg": "sum"},
 
 
 		},
@@ -70,6 +79,14 @@ class DMRBoilerAndTurbineParameters(Document):
 		start_col = column_index_from_string(config["hourly_start_col"])
 		end_col = column_index_from_string(config["hourly_end_col"])
 
+		# Columns for the Min/Max/Avg child table (same layout for every plant).
+		engg_col = column_index_from_string(MIN_MAX_AVG_COLUMNS["engg_units_col"])
+		max_col = column_index_from_string(MIN_MAX_AVG_COLUMNS["max_col"])
+		max_time_col = column_index_from_string(MIN_MAX_AVG_COLUMNS["max_time_col"])
+		min_col = column_index_from_string(MIN_MAX_AVG_COLUMNS["min_col"])
+		min_time_col = column_index_from_string(MIN_MAX_AVG_COLUMNS["min_time_col"])
+		avg_col = column_index_from_string(MIN_MAX_AVG_COLUMNS["avg_col"])
+
 		header_row = self.find_header_row(ws, tag_col)
 		if not header_row:
 			frappe.throw(
@@ -92,6 +109,11 @@ class DMRBoilerAndTurbineParameters(Document):
 
 		missing = []
 		carry_over_values = {}
+
+		# min_max_avg is rebuilt fresh on every upload rather than accumulated —
+		# it's a Min/Max/Avg-with-Time snapshot of the file just uploaded, so
+		# old rows are cleared before appending the new ones.
+		self.set("min_max_avg", [])
 
 		for fieldname, cfg in config["field_tag_map"].items():
 			tag = cfg["tag"]
@@ -121,6 +143,18 @@ class DMRBoilerAndTurbineParameters(Document):
 			if has_next_day and agg == "sum":
 				carry_total = self.sum_row_range(ws, row_idx, next_day_start_col, next_day_end_col)
 				carry_over_values[fieldname] = carry_total
+
+			# Append the Min/Max/Avg-with-Time snapshot row for this tag.
+			self.append("min_max_avg", {
+				"parameter_name": cfg["label"],
+				"field_name": fieldname,
+				"engg_units": self.get_cell_str(ws, row_idx, engg_col),
+				"max_value": self.get_cell_float(ws, row_idx, max_col),
+				"max_value_time": self.get_cell_time(ws, row_idx, max_time_col),
+				"min_value": self.get_cell_float(ws, row_idx, min_col),
+				"min_value_time": self.get_cell_time(ws, row_idx, min_time_col),
+				"average_value": self.get_cell_float(ws, row_idx, avg_col),
+			})
 
 		if missing:
 			frappe.msgprint(
@@ -263,6 +297,42 @@ class DMRBoilerAndTurbineParameters(Document):
 					pass
 		# No numeric readings in range -> 0 rather than a ZeroDivisionError.
 		return total / count if count else 0
+
+	@staticmethod
+	def get_cell_str(ws, row_idx, col):
+		val = ws.cell(row=row_idx, column=col).value
+		return str(val).strip() if val not in (None, "") else None
+
+	@staticmethod
+	def get_cell_float(ws, row_idx, col):
+		val = ws.cell(row=row_idx, column=col).value
+		if isinstance(val, (int, float)):
+			return val
+		if isinstance(val, str):
+			try:
+				return float(val.strip())
+			except (ValueError, TypeError):
+				return None
+		return None
+
+	@staticmethod
+	def get_cell_time(ws, row_idx, col):
+		"""Return HH:MM:SS for a time-only cell, or None if unreadable.
+		openpyxl gives datetime.time/datetime.datetime; xlrd gives a raw
+		day-fraction float (e.g. 0.25 == 06:00:00)."""
+		val = ws.cell(row=row_idx, column=col).value
+		if val is None or val == "":
+			return None
+		if isinstance(val, datetime.datetime):
+			return val.time().strftime("%H:%M:%S")
+		if isinstance(val, datetime.time):
+			return val.strftime("%H:%M:%S")
+		if isinstance(val, (int, float)):
+			total_seconds = round(val * 86400) % 86400
+			hh, rem = divmod(total_seconds, 3600)
+			mm, ss = divmod(rem, 60)
+			return f"{hh:02d}:{mm:02d}:{ss:02d}"
+		return None
 
 
 class _XlrdSheetAdapter:
