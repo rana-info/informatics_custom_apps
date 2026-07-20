@@ -175,6 +175,8 @@ class DistilleryProductionReport {
 
         .table-responsive {
             overflow-x: auto;
+            overflow-y: auto;
+            max-height: 75vh;
             -webkit-overflow-scrolling: touch;
             border-radius: 10px;
             border: 2px solid #aab8c3;
@@ -330,6 +332,59 @@ class DistilleryProductionReport {
             filter: brightness(0.99);
         }
 
+        /* Ideal vs Actual split cell (Section I.11-I.18) */
+        .ideal-actual-cell {
+            display: flex;
+            align-items: stretch;
+            justify-content: flex-end;
+            gap: 0;
+            white-space: nowrap;
+        }
+
+        .ideal-actual-cell .ia-half {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            padding: 0 10px;
+        }
+
+        .ideal-actual-cell .ia-half:first-child {
+            padding-left: 0;
+        }
+
+        .ideal-actual-cell .ia-half:last-child {
+            padding-right: 0;
+        }
+
+        .ideal-actual-cell .ia-divider {
+            width: 0;
+            border-left: 2px solid #b6c3cd;
+            margin: 0 2px;
+        }
+
+        .ideal-actual-cell .ia-num {
+            font-size: 13px;
+            font-weight: 700;
+            color: #2d3942;
+            margin-top: 2px;
+        }
+
+        .ideal-actual-cell .ia-actual .ia-num {
+            color: #45596a;
+        }
+
+        .ideal-actual-cell .ia-tag {
+            display: inline-block;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .3px;
+            color: #6b7f8c;
+            background: #eef2f5;
+            border-radius: 20px;
+            padding: 1px 7px;
+        }
+
         </style>`).appendTo('head');
     }
 
@@ -406,12 +461,38 @@ class DistilleryProductionReport {
             columns.forEach((col, i) => {
                 const val = col.values[row.sr];
                 const cls = i === last_col_index ? 'num-cell to-date-col' : 'num-cell';
-                body += `<td class="${cls}">${this.format_value(val)}</td>`;
+                body += `<td class="${cls}">${this.render_cell(val)}</td>`;
             });
             body += `</tr>`;
         });
 
         this.$container.html(body);
+    }
+
+
+    render_cell(val) {
+        if (val && typeof val === 'object' && ('ideal' in val || 'actual' in val)) {
+            return `<div class="ideal-actual-cell">
+                <div class="ia-half ia-ideal">
+                    <span class="ia-tag">Ideal</span>
+                    <span class="ia-num">${this.format_value_labeled(val.ideal)}</span>
+                </div>
+                <div class="ia-divider"></div>
+                <div class="ia-half ia-actual">
+                    <span class="ia-tag">Actual</span>
+                    <span class="ia-num">${this.format_value_labeled(val.actual)}</span>
+                </div>
+            </div>`;
+        }
+        return this.format_value(val);
+    }
+
+    format_value_labeled(val) {
+        if (val === null || val === undefined || val === '') return 'No data';
+        const n = parseFloat(val);
+        if (isNaN(n)) return 'No data';
+        const precision = (Math.abs(n) < 0.1 && n !== 0) ? 3 : 2;
+        return frappe.format(n, { fieldtype: 'Float', precision: precision });
     }
 
     format_value(val) {

@@ -339,37 +339,26 @@ function apply_purchase_order_filter(frm) {
 	if (!frm.doc.company || !frm.doc.plant) return;
 
 	let existing_purchase_orders = [];
-	let item_codes = [];
 
-	// Collect data from child table
+	// Collect existing POs from child table
 	(frm.doc.items || []).forEach((row) => {
 		if (row.purchase_order) {
 			existing_purchase_orders.push(row.purchase_order);
-		}
-		if (row.item_code) {
-			item_codes.push(row.item_code);
 		}
 	});
 
 	// Remove duplicates
 	existing_purchase_orders = [...new Set(existing_purchase_orders)];
-	item_codes = [...new Set(item_codes)];
 
 	frm.set_query("new_purchase_order", () => {
-		let query_filters = {
-			company: frm.doc.company,
-			plant: frm.doc.plant,
-			status: ["not in", ["Closed", "Completed"]],
-			existing_pos: existing_purchase_orders,
-		};
-
-		if (item_codes.length) {
-			query_filters.item_codes = item_codes;
-		}
-
 		return {
 			query: "informatics_custom_apps.ripl_customized_apps.doctype.purchase_management_system.purchase_management_system.get_filtered_purchase_orders",
-			filters: query_filters,
+			filters: {
+				company: frm.doc.company,
+				plant: frm.doc.plant,
+				status: ["not in", ["Closed", "Completed"]],
+				existing_pos: existing_purchase_orders,
+			},
 		};
 	});
 }
