@@ -890,13 +890,18 @@ class PurchaseManagementSystem(Document):
             if not row.purchase_order_item:
                 continue
 
+            # Match by idx (row position) instead of item_code to allow different items
             new_po_item_name = frappe.db.get_value(
                 "Purchase Order Item",
-                {"parent": self.new_purchase_order, "item_code": row.item_code},
+                {"parent": self.new_purchase_order, "idx": row.idx},
                 "name",
             )
             if not new_po_item_name:
-                frappe.throw(f"Item {row.item_code} not found in new PO")
+                frappe.throw(
+                    f"No item found at row {row.idx} in new Purchase Order "
+                    f"<b>{self.new_purchase_order}</b>. "
+                    f"The new PO must have at least {row.idx} item(s)."
+                )
 
             old_po_item = frappe.get_doc("Purchase Order Item", row.purchase_order_item)
             new_po_item = frappe.get_doc("Purchase Order Item", new_po_item_name)
@@ -922,18 +927,34 @@ class PurchaseManagementSystem(Document):
             affected_po_items.add(old_po_item.name)
             affected_po_items.add(new_po_item.name)
 
+            # Update PO reference + item details on GE Purchase Details row
             frappe.db.set_value(
                 "Purchase Details", row.gate_entry_item,
-                {"purchase_order": self.new_purchase_order,
-                "purchase_order_item": new_po_item.name},
+                {
+                    "purchase_order": self.new_purchase_order,
+                    "purchase_order_item": new_po_item.name,
+                    "item_code": new_po_item.item_code,
+                    "item_name": new_po_item.item_name,
+                    "description": new_po_item.description or new_po_item.item_name,
+                },
                 update_modified=False,
             )
 
+            # Update PO reference + item details on Weighment Purchase Details rows
             for weigh_doc in weigh_docs:
                 for w_item in weigh_doc.items:
                     if w_item.purchase_order_item == row.purchase_order_item:
-                        w_item.db_set("purchase_order", self.new_purchase_order, update_modified=False)
-                        w_item.db_set("purchase_order_item", new_po_item.name, update_modified=False)
+                        frappe.db.set_value(
+                            "Purchase Details", w_item.name,
+                            {
+                                "purchase_order": self.new_purchase_order,
+                                "purchase_order_item": new_po_item.name,
+                                "item_code": new_po_item.item_code,
+                                "item_name": new_po_item.item_name,
+                                "description": new_po_item.description or new_po_item.item_name,
+                            },
+                            update_modified=False,
+                        )
 
         for po_item_name in affected_po_items:
             self.update_po_received_percentage(po_item_name)
@@ -967,11 +988,15 @@ class PurchaseManagementSystem(Document):
 
             new_po_item_name = frappe.db.get_value(
                 "Purchase Order Item",
-                {"parent": self.new_purchase_order, "item_code": row.item_code},
+                {"parent": self.new_purchase_order, "idx": row.idx},
                 "name",
             )
             if not new_po_item_name:
-                frappe.throw(f"Item {row.item_code} not found in new PO")
+                frappe.throw(
+                    f"No item found at row {row.idx} in new Purchase Order "
+                    f"<b>{self.new_purchase_order}</b>. "
+                    f"The new PO must have at least {row.idx} item(s)."
+                )
 
             old_po_item = frappe.get_doc("Purchase Order Item", row.purchase_order_item)
             new_po_item = frappe.get_doc("Purchase Order Item", new_po_item_name)
@@ -999,17 +1024,31 @@ class PurchaseManagementSystem(Document):
 
             frappe.db.set_value(
                 "Purchase Details", row.gate_entry_item,
-                {"purchase_order": self.new_purchase_order,
-                "purchase_order_item": new_po_item.name},
+                {
+                    "purchase_order": self.new_purchase_order,
+                    "purchase_order_item": new_po_item.name,
+                    "item_code": new_po_item.item_code,
+                    "item_name": new_po_item.item_name,
+                    "description": new_po_item.description or new_po_item.item_name,
+                },
                 update_modified=False,
             )
 
+            # Update PO reference + item details on Weighment Purchase Details rows
             for weigh_doc in weigh_docs:
                 for w_item in weigh_doc.items:
                     if w_item.purchase_order_item == row.purchase_order_item:
-                        w_item.db_set("purchase_order", self.new_purchase_order,update_modified=False)
-                        w_item.db_set("purchase_order_item", new_po_item.name,
-                        update_modified=False)
+                        frappe.db.set_value(
+                            "Purchase Details", w_item.name,
+                            {
+                                "purchase_order": self.new_purchase_order,
+                                "purchase_order_item": new_po_item.name,
+                                "item_code": new_po_item.item_code,
+                                "item_name": new_po_item.item_name,
+                                "description": new_po_item.description or new_po_item.item_name,
+                            },
+                            update_modified=False,
+                        )
 
         for po_item_name in affected_po_items:
             self.update_po_received_percentage(po_item_name)
@@ -1596,7 +1635,6 @@ class PurchaseManagementSystem(Document):
 def get_filtered_purchase_orders(doctype, txt, searchfield, start, page_len, filters):
     company = filters.get("company")
     plant = filters.get("plant")
-    item_codes = filters.get("item_codes") or []
     existing_pos = filters.get("existing_pos") or []
 
     if not company or not plant:
@@ -1604,8 +1642,6 @@ def get_filtered_purchase_orders(doctype, txt, searchfield, start, page_len, fil
 
     existing_pos = tuple(existing_pos) if existing_pos else ("",)
     searchfield = searchfield or "name"
-
-    item_condition = "AND poi.item_code IN %(item_codes)s" if item_codes else ""
 
     return frappe.db.sql(f"""
         SELECT DISTINCT
@@ -1616,21 +1652,17 @@ def get_filtered_purchase_orders(doctype, txt, searchfield, start, page_len, fil
                 po.rounded_total
             ) AS description
         FROM `tabPurchase Order` po
-        INNER JOIN `tabPurchase Order Item` poi
-            ON poi.parent = po.name
         WHERE po.company = %(company)s
         AND po.branch = %(plant)s
         AND po.docstatus = 1
         AND po.status NOT IN ('Closed', 'Completed')
         AND po.name NOT IN %(existing_pos)s
-        {item_condition}
         AND po.{searchfield} LIKE %(txt)s
         ORDER BY po.modified DESC
         LIMIT %(start)s, %(page_len)s
     """, {
         "company": company,
         "plant": plant,
-        "item_codes": tuple(item_codes) if item_codes else (),
         "existing_pos": existing_pos,
         "txt": f"%{txt}%",
         "start": start,
