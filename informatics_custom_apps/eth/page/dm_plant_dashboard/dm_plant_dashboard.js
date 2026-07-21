@@ -347,7 +347,7 @@ function renderPlantLogbook(target, data) {
 
                     <th>Parameter</th>
 
-                    <th>Unit</th>
+                    <th></th>
     `;
 
     slots.forEach(slot => {
@@ -369,18 +369,18 @@ function renderPlantLogbook(target, data) {
 
     data.forEach(p => {
 
-        if (p.section !== current_section) {
+        // if (p.section !== current_section) {
 
-            current_section = p.section;
+        //     // current_section = p.section;
 
-            html += `
-                <tr class="table-secondary">
-                    <th colspan="${slots.length + 4}">
-                        ${current_section || "Other"}
-                    </th>
-                </tr>
-            `;
-        }
+        //     // html += `
+        //     //     <tr class="table-secondary">
+        //     //         <th colspan="${slots.length + 4}">
+        //     //             ${current_section || ""}
+        //     //         </th>
+        //     //     </tr>
+        //     // `;
+        // }
 
         html += `<tr>`;
 

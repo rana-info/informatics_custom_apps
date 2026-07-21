@@ -118,6 +118,7 @@ def get_parameters():
 
         fieldname = df.fieldname
 
+        # Only process fields ending with _min
         if not fieldname.endswith("_min"):
             continue
 
@@ -128,10 +129,14 @@ def get_parameters():
         if not norm_meta.get_field(max_field):
             continue
 
-        # Make sure parameter exists in DM Plant Log Row
+        # Get corresponding field from DM Plant Log Row
         parameter_df = meta.get_field(parameter)
 
         if not parameter_df:
+            continue
+
+        # Exclude non-numeric fields
+        if parameter_df.fieldtype not in ("Float", "Int", "Currency", "Percent"):
             continue
 
         if parameter in added:
@@ -141,13 +146,10 @@ def get_parameters():
 
         parameters.append({
             "fieldname": parameter,
-            "label": parameter_df.label,
-            "min": None,
-            "max": None
+            "label": parameter_df.label
         })
 
     return parameters
-
 # def calculate_plant_summary(norms, filters=None):
 
 #     logbooks = get_logs(filters or {})
@@ -345,7 +347,8 @@ def get_plant_logbook(plant, date):
         "parenttype",
         "doctype",
         "idx",
-        "time_slot"
+        "time_slot",
+        "s_no"
     )
 
     parameters = {}
