@@ -90,14 +90,14 @@
    "precision": "2"
   },
   {
-   "fieldname": "acf_inlet",
+   "fieldname": "mcf_inlet",
    "fieldtype": "Float",
    "label": "ACF Inlet",
    "in_list_view": 1,
    "precision": "2"
   },
   {
-   "fieldname": "acf_outlet",
+   "fieldname": "mcf_outlet",
    "fieldtype": "Float",
    "label": "ACF Outlet",
    "in_list_view": 1,
