@@ -60,16 +60,47 @@ def get_norms():
 
     norms = {}
 
-    for row in doc.dm_plant_logbook:
+    # Get metadata of the norms child table
+    norms_meta = frappe.get_meta("DM Plant Log Norms")
 
-        if not row.fieldname:
+    # Get actual fields from DM Plant Log Row
+    log_meta = frappe.get_meta("DM Plant Log Row")
+
+    # Get the single child row containing all norms
+    if not doc.dm_plant_logbook:
+        return norms
+
+    norm_row = doc.dm_plant_logbook[0]
+
+    for df in norms_meta.fields:
+
+        fieldname = df.fieldname
+
+        # Only process *_min fields
+        if not fieldname.endswith("_min"):
             continue
 
-        norms[row.fieldname] = {
-            "section": row.section,
-            "min": row.min_value,
-            "max": row.max_value,
-            "unit": row.unit or ""
+        parameter = fieldname[:-4]
+
+        max_fieldname = f"{parameter}_max"
+
+        # Make sure corresponding max field exists
+        if not norms_meta.get_field(max_fieldname):
+            continue
+
+        # Make sure parameter exists in DM Plant Log Row
+        parameter_df = log_meta.get_field(parameter)
+
+        if not parameter_df:
+            continue
+
+        min_value = norm_row.get(fieldname)
+        max_value = norm_row.get(max_fieldname)
+
+        norms[parameter] = {
+            "min": min_value,
+            "max": max_value,
+            "label": parameter_df.label
         }
 
     return norms
@@ -77,18 +108,42 @@ def get_norms():
 @frappe.whitelist()
 def get_parameters():
 
-    doc = frappe.get_single("ETH Logbook Norms")
+    meta = frappe.get_meta("DM Plant Log Row")
+    norm_meta = frappe.get_meta("DM Plant Log Norms")
 
     parameters = []
+    added = set()
 
-    for row in doc.dm_plant_logbook:
+    for df in norm_meta.fields:
 
-        if not row.fieldname:
+        fieldname = df.fieldname
+
+        if not fieldname.endswith("_min"):
             continue
 
+        parameter = fieldname[:-4]  # Remove "_min"
+        max_field = f"{parameter}_max"
+
+        # Make sure corresponding max field exists
+        if not norm_meta.get_field(max_field):
+            continue
+
+        # Make sure parameter exists in DM Plant Log Row
+        parameter_df = meta.get_field(parameter)
+
+        if not parameter_df:
+            continue
+
+        if parameter in added:
+            continue
+
+        added.add(parameter)
+
         parameters.append({
-            "fieldname": row.fieldname,
-            "label": frappe.get_meta("DM Plant Log Row").get_field(row.fieldname).label
+            "fieldname": parameter,
+            "label": parameter_df.label,
+            "min": None,
+            "max": None
         })
 
     return parameters
