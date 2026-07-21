@@ -1,5 +1,6 @@
 {
  "actions": [],
+ "allow_import": 1,
  "autoname": "format:{plant}-{log_date}",
  "creation": "2026-07-02 00:00:00",
  "doctype": "DocType",
@@ -52,7 +53,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-02 16:42:55.880803",
+ "modified": "2026-07-21 11:36:44.772893",
  "modified_by": "Administrator",
  "module": "ETH",
  "name": "CPU Plant Lab Log",

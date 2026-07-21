@@ -15,6 +15,7 @@
  ],
  "fields": [
   {
+   "allow_bulk_edit": 1,
    "fieldname": "cpu_plant_logbook",
    "fieldtype": "Table",
    "label": "CPU Plant Logbook",
@@ -25,6 +26,7 @@
    "fieldtype": "Section Break"
   },
   {
+   "allow_bulk_edit": 1,
    "fieldname": "dm_plant_logbook",
    "fieldtype": "Table",
    "label": "DM Plant Logbook",
@@ -57,7 +59,7 @@
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-07-18 11:01:28.980458",
+ "modified": "2026-07-21 11:34:27.501360",
  "modified_by": "Administrator",
  "module": "ETH",
  "name": "ETH Logbook Norms",
