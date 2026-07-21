@@ -38,7 +38,17 @@
   "column_break_vdmo",
   "evaporation",
   "distillation",
-  "msdh"
+  "msdh",
+  "section_break_glnk",
+  "main_steam_pressure",
+  "oxygen__at_eco_ol",
+  "dm_flow_to_dearator",
+  "column_break_hcih",
+  "main_steam_temprature",
+  "boiler_feed_water_flow",
+  "turbine_steam",
+  "section_break_viww",
+  "min_max_avg"
  ],
  "fields": [
   {
@@ -212,12 +222,60 @@
    "fieldname": "msdh",
    "fieldtype": "Float",
    "label": "MSDH"
+  },
+  {
+   "fieldname": "section_break_glnk",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "main_steam_pressure",
+   "fieldtype": "Float",
+   "label": "Main Steam Pressure"
+  },
+  {
+   "fieldname": "oxygen__at_eco_ol",
+   "fieldtype": "Float",
+   "label": "Oxygen % At Eco O/L"
+  },
+  {
+   "fieldname": "column_break_hcih",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "main_steam_temprature",
+   "fieldtype": "Float",
+   "label": "Main Steam Temprature"
+  },
+  {
+   "fieldname": "boiler_feed_water_flow",
+   "fieldtype": "Float",
+   "label": "Boiler Feed Water Flow"
+  },
+  {
+   "fieldname": "dm_flow_to_dearator",
+   "fieldtype": "Float",
+   "label": "DM Flow To Dearator"
+  },
+  {
+   "fieldname": "turbine_steam",
+   "fieldtype": "Float",
+   "label": "Turbine Steam"
+  },
+  {
+   "fieldname": "section_break_viww",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "min_max_avg",
+   "fieldtype": "Table",
+   "label": "Min Max Avg",
+   "options": "DMR Parameters Range"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-16 09:59:55.721235",
+ "modified": "2026-07-20 16:53:37.081882",
  "modified_by": "Administrator",
  "module": "ETH",
  "name": "DMR Boiler And Turbine Parameters",

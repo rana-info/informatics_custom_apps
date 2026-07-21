@@ -1,21 +1,18 @@
 {
  "content": null,
- "creation": "2026-07-06 12:50:11.036490",
+ "creation": "2026-07-21 11:20:47.372429",
  "docstatus": 0,
  "doctype": "Page",
  "idx": 0,
- "modified": "2026-07-20 16:00:31.668147",
+ "modified": "2026-07-21 11:21:01.665586",
  "modified_by": "Administrator",
  "module": "ETH",
- "name": "dmr",
+ "name": "dm-plant-dashboard",
  "owner": "Administrator",
- "page_name": "dmr",
+ "page_name": "dm-plant-dashboard",
  "roles": [
   {
-   "role": "System Manager"
-  },
-  {
-   "role": "ETH User"
+   "role": "Management"
   },
   {
    "role": "Master Admin"
@@ -25,5 +22,5 @@
  "standard": "Yes",
  "style": null,
  "system_page": 0,
- "title": "Daily Manufacturing Report"
+ "title": "DM-Plant-Dashboard"
 }
