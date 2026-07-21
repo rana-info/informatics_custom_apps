@@ -28,7 +28,7 @@
     "in_list_view": 1,
     "label": "Field Name",
     "reqd": 1,
-    "options": "raw__water_pump_outlet\nmgf_inlet\nmgf_outlet\nmcf_inlet\nmcf_outlet\nhigh_pressure_pump_outlet\nro_1st_stage\nro_2nd_stage\nro_reject\npressure_difference\ndg_pump_outlet\nsac_inlet\nsac_outlet\nsba_inlet\nsba_outlet\nmb_inlet\nmb_outlet\nmgf_inlet1\nro_inlet\nro_outlet\nreject\nmb_outlet1\nrecovery\nturbidity\nph\nconductivity\ntotal_alkalinity\nsilica_as_sio2\nph1\ntotal_hardness1\ntotal_alkalinity1\nsilica_as_sio21\norp\nph2\nconductivity2\ntotal_hardness2\nsilica_as_sio22\ndm_water_tank\nmake_up_water_tank"
+    "options": "raw__water_pump_outlet\nmgf_inlet\nmgf_outlet\nacf_inlet\nacf_outlet\nhigh_pressure_pump_outlet\nro_1st_stage\nro_2nd_stage\nro_reject\npressure_difference\ndg_pump_outlet\nsac_inlet\nsac_outlet\nsba_inlet\nsba_outlet\nmb_inlet\nmb_outlet\nmgf_inlet1\nro_inlet\nro_outlet\nreject\nmb_outlet1\nrecovery\nturbidity\nph\nconductivity\ntotal_alkalinity\nsilica_as_sio2\nph1\ntotal_hardness1\ntotal_alkalinity1\nsilica_as_sio21\norp\nph2\nconductivity2\ntotal_hardness2\nsilica_as_sio22\ndm_water_tank\nmake_up_water_tank"
     },
   {
    "fieldname": "unit",

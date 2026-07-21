@@ -146,6 +146,7 @@ function populatePlants() {
 
     $("#trend-plant").html(options);
 }
+
 function loadParameters() {
 
     frappe.call({
@@ -156,12 +157,14 @@ function loadParameters() {
 
             let options = '<option value="">Select Parameter</option>';
 
-            r.message.forEach(p => {
+            (r.message || []).forEach(p => {
 
                 options += `
-                <option value="${p.fieldname}">
-                    ${p.label}
-                </option>`;
+                    <option value="${p.fieldname}">
+                        ${p.label}
+                    </option>
+                `;
+
             });
 
             $("#trend-parameter").html(options);
@@ -169,6 +172,7 @@ function loadParameters() {
     });
 
 }
+
 function loadDashboard() {
 
     frappe.call({
