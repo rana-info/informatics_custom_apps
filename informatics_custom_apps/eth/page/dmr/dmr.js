@@ -332,6 +332,25 @@ class DistilleryProductionReport {
             filter: brightness(0.99);
         }
 
+        /* Total rows — inserted after each section's data rows */
+        tr.total-row td {
+            font-weight: 800;
+            background: #eef3f7 !important;
+            border-top: 2px solid #b0bec5;
+        }
+
+        tr.total-row td.row-label-col {
+            background: #e4ecf3 !important;
+        }
+
+        tr.total-row:hover td:not(.row-label-col) {
+            filter: brightness(0.97);
+        }
+
+        tr.total-row td.to-date-col {
+            background: #d7e2ec !important;
+        }
+
         /* Ideal vs Actual split cell (Section I.11-I.18) */
         .ideal-actual-cell {
             display: flex;
@@ -449,10 +468,16 @@ class DistilleryProductionReport {
                 </tr>`;
                 return;
             }
+
+            // Total rows (inserted server-side by _add_section_totals) get
+            // their own row class so they can be styled distinctly from
+            // regular data rows.
+            const row_cls = row.total ? 'data-row total-row' : 'data-row';
+
             const item_code_html = row.item_code
                 ? ` <span class="item-code-badge">(${frappe.utils.escape_html(row.item_code)})</span>`
                 : '';
-            body += `<tr class="data-row">
+            body += `<tr class="${row_cls}">
                 <td class="row-label-col">
                     <span class="sr-badge">${row.sr}</span>${frappe.utils.escape_html(row.label)}${item_code_html}
                 </td>
@@ -460,7 +485,8 @@ class DistilleryProductionReport {
                 <td class="num-cell"></td>`;
             columns.forEach((col, i) => {
                 const val = col.values[row.sr];
-                const cls = i === last_col_index ? 'num-cell to-date-col' : 'num-cell';
+                let cls = i === last_col_index ? 'num-cell to-date-col' : 'num-cell';
+                if (row.total) cls += ' total-cell';
                 body += `<td class="${cls}">${this.render_cell(val)}</td>`;
             });
             body += `</tr>`;

@@ -1,6 +1,7 @@
 import frappe
 from frappe.utils import getdate, add_days, formatdate
 from collections import defaultdict
+from erpnext.stock.get_item_details import get_conversion_factor
 
 # =============================================================================
 # REPORT DAY WINDOW
@@ -71,44 +72,53 @@ def get_report_datetime_range(from_date, to_date, day_start_time=DAY_START_TIME)
 PLANT_FIELD = "branch"
 SEGMENT_FIELD = "segment"
 
+# Item tuples: (item_code, label, sr_no, display_uom). display_uom is the
+# UOM each row is shown in on the report — NOT necessarily the item's stock
+# UOM. Raw quantities come back from Stock Entry/Stock Ledger Entry in stock
+# UOM (see get_stock_to_target_factor / convert_qty_dict below), so this
+# value drives the conversion applied right after each DB fetch.
 PRODUCTION_ITEMS = [
-    ("100114", "Production of Ethanol from Maize", "A.1"),
-    ("100112", "Production of Ethanol from DFG", "A.2"),
-    ("100113", "Production of Ethanol from FCI Rice", "A.3"),
-    ("100122", "Production of ENA from Maize", "A.4"),
-    ("100120", "Production of ENA from DFG", "A.5"),
-    ("100130", "Production of RS from Maize", "A.6"),
-    ("100128", "Production of RS from DFG", "A.7"),
+    ("100114", "Production of Ethanol from Maize", "A.1", "BL"),
+    ("100112", "Production of Ethanol from DFG", "A.2", "BL"),
+    ("100113", "Production of Ethanol from FCI Rice", "A.3", "BL"),
+    ("100122", "Production of ENA from Maize", "A.4", "BL"),
+    ("100120", "Production of ENA from DFG", "A.5", "BL"),
+    ("100130", "Production of RS from Maize", "A.6", "BL"),
+    ("100128", "Production of RS from DFG", "A.7", "BL"),
 ]
 
 RM_ITEMS = [
-    ("106444", "Maize Consumed ( Net of WIP)", "B.1"),
-    ("100474", "DFG Consumed ( Net of WIP)", "B.2"),
-    ("106448", "FCI Surplus Rice Consumed ( Net of WIP)", "B.3"),
+    ("106444", "Maize Consumed ( Net of WIP)", "B.1", "Qtl"),
+    ("100474", "DFG Consumed ( Net of WIP)", "B.2", "Qtl"),
+    ("106448", "FCI Surplus Rice Consumed ( Net of WIP)", "B.3", "Qtl"),
 ]
 
 BYPRODUCT_ITEMS = [
-    ("100151", "DWGS from Maize", "E.1"),
-    ("100149", "DWGS from DFG", "E.2"),
-    ("100150", "DWGS from FCI", "E.3"),
-    ("100147", "DDGS from Maize", "E.4"),
-    ("100145", "DDGS from DFG", "E.5"),
-    ("100146", "DDGS from FCI", "E.6"),
-    ("129946", "Crude Corn Oil", "E.7"),
+    ("100151", "DWGS from Maize", "E.1", "Qtl"),
+    ("100149", "DWGS from DFG", "E.2", "Qtl"),
+    ("100150", "DWGS from FCI", "E.3", "Qtl"),
+    ("100147", "DDGS from Maize", "E.4", "Qtl"),
+    ("100145", "DDGS from DFG", "E.5", "Qtl"),
+    ("100146", "DDGS from FCI", "E.6", "Qtl"),
+    ("129946", "Crude Corn Oil", "E.7", "Ltr"),
 ]
 
 FUEL_ITEMS = [
-    ("106441", "Paddy", "H.1"),
-    ("106436", "Rice Husk", "H.2"),
-    ("100093", "Bagasse", "H.3"),
-    ("101077", "Cane Trash", "H.4"),
-    ("106440", "Mustard Husk", "H.5"),
-    ("106442", "Mandi Husk", "H.6"),
-    ("106983", "Khudi", "H.7"),
-    ("106443", "Wooden Chips", "H.8"),
+    ("106441", "Paddy", "H.1", "MT"),
+    ("106436", "Rice Husk", "H.2", "MT"),
+    ("100093", "Bagasse", "H.3", "MT"),
+    ("101077", "Cane Trash", "H.4", "MT"),
+    ("106440", "Mustard Husk", "H.5", "MT"),
+    ("106442", "Mandi Husk", "H.6", "MT"),
+    ("106983", "Khudi", "H.7", "MT"),
+    ("106443", "Wooden Chips", "H.8", "MT"),
 ]
 
 STOCK_ITEMS = [r[0] for r in PRODUCTION_ITEMS] + [r[0] for r in BYPRODUCT_ITEMS]
+# Section N displays all stock items in Ltrs regardless of what UOM they're
+# produced/consumed in above (e.g. Crude Corn Oil is Ltr in E but its stock
+# balance in N is also Ltrs, DWGS/DDGS are Qtl in E but shown as Ltrs in N).
+STOCK_UOM = "Ltrs"
 
 # Fieldnames for "DMR Technical Lab Parameters" — confirmed from DocType JSON.
 # Maps our semantic key -> real fieldname (note the real fieldname has a
@@ -121,6 +131,13 @@ LAB_PARAM_FIELDS = {
     "average_starch_dfg": "average_starch_dfg",
     "average_starch_fci": "average_starch_fci",
 }
+
+# ASSUMPTION FLAGGED: "wash_available" is a guessed fieldname (following the
+# same naming convention as the fields above) for Section N.1 "Wash
+# Available" on this doctype -- I don't have the DocType JSON to confirm it.
+# If wrong, _existing_field_map / get_wash_available's own has_field check
+# will just skip it and log a frappe.log_error rather than break the report.
+WASH_AVAILABLE_FIELD = "wash_available"
 
 # Fieldnames for "DMR Boiler And Turbine Parameters" — confirmed from DocType
 # JSON. This doctype uses auto-generated names (float_xxxx / percent_xxxx),
@@ -200,11 +217,46 @@ def build_plant_segment_conditions(plants, segments):
 
 
 # =============================================================================
+# UOM CONVERSION
+# =============================================================================
+# get_production_qty / get_issue_qty / get_stock_balance all return raw
+# quantities in each item's STOCK UOM (that's what qty * conversion_factor
+# on Stock Entry Detail / qty_after_transaction on Stock Ledger Entry give
+# you). The report displays each row in a specific UOM (BL, Qtl, Ltr, MT...)
+# which may differ from stock UOM, so every {item_code: qty} dict fetched
+# from the DB needs converting before it's used.
+# =============================================================================
+def get_stock_to_target_factor(item_code, target_uom):
+    """
+    Factor to multiply a stock-UOM qty by to express it in target_uom.
+    get_conversion_factor(item_code, uom) returns how many stock_uom units
+    make up 1 target_uom, so converting stock_qty -> target_uom means
+    dividing by that factor.
+    """
+    stock_uom = frappe.get_cached_value("Item", item_code, "stock_uom")
+    if not stock_uom or stock_uom == target_uom:
+        return 1
+    factor = (get_conversion_factor(item_code, target_uom) or {}).get("conversion_factor") or 1
+    return 1 / factor if factor else 1
+
+
+def convert_qty_dict(qty_by_item, uom_map):
+    """Apply get_stock_to_target_factor to every value in a {item_code: qty} dict."""
+    return {
+        code: qty * get_stock_to_target_factor(code, uom_map[code])
+        for code, qty in qty_by_item.items()
+        if code in uom_map
+    }
+
+
+# =============================================================================
 # SECTIONS A / E — Production of Finished Goods & By Products
 # Source: Stock Entry (stock_entry_type = "Material Receipt") joined to
 # Stock Entry Detail, summed over the report period for the given item
 # codes. Filtered on the actual posting TIMESTAMP (date + time) against the
 # shifted report-day window (DAY_START_TIME), not the bare posting_date.
+# Returns raw quantities in each item's STOCK UOM — convert with
+# convert_qty_dict before display.
 # =============================================================================
 def get_production_qty(companies, from_date, to_date, item_codes, plants=None, segments=None):
     if not item_codes:
@@ -234,6 +286,8 @@ def get_production_qty(companies, from_date, to_date, item_codes, plants=None, s
 # Source: Stock Entry (stock_entry_type = "Material Issue") joined to
 # Stock Entry Detail, summed over the report period for the given item
 # codes. Same shifted report-day timestamp window as get_production_qty.
+# Returns raw quantities in each item's STOCK UOM — convert with
+# convert_qty_dict before display.
 # =============================================================================
 def get_issue_qty(companies, from_date, to_date, item_codes, plants=None, segments=None):
     if not item_codes:
@@ -263,6 +317,8 @@ def get_issue_qty(companies, from_date, to_date, item_codes, plants=None, segmen
 # Source: Stock Ledger Entry — latest qty_after_transaction as of the END of
 # the report day for to_date (i.e. up to but not including the next
 # DAY_START_TIME), per item across all warehouses of the selected companies.
+# Returns raw quantities in each item's STOCK UOM — convert with
+# convert_qty_dict before display.
 # =============================================================================
 def get_stock_balance(companies, to_date, item_codes):
     if not item_codes:
@@ -315,6 +371,37 @@ def get_lab_parameters(companies, from_date, to_date, plants=None):
         return {}
     rows = frappe.get_all("DMR Technical Lab Parameters", filters=filters, fields=select_fields)
     return rows[0] if rows else {}
+
+
+# =============================================================================
+# SECTION N.1 — Wash Available
+# Source: "DMR Technical Lab Parameters" doctype (Company + Plant + Date),
+# same doctype as Section D. Unlike Section D's %-based lab readings (which
+# are averaged over a multi-day range), Wash Available is a WIP
+# fermentation-broth quantity, not a percentage -- averaging or summing it
+# across days wouldn't mean anything sensible. Instead this takes the
+# LATEST report-day value on or before to_date (i.e. the fermentation WIP
+# as it stood at the end of the selected period), same logic as reading a
+# stock balance. Kept as its own query/function rather than folded into
+# get_lab_parameters since it needs different aggregation semantics.
+# =============================================================================
+def get_wash_available(companies, to_date, plants=None):
+    if not frappe.db.exists("DocType", "DMR Technical Lab Parameters"):
+        return None
+    if not frappe.get_meta("DMR Technical Lab Parameters").has_field(WASH_AVAILABLE_FIELD):
+        frappe.log_error(
+            title="DMR Report: missing fields on DMR Technical Lab Parameters",
+            message=f"Fieldnames not found, check DocType JSON: ['{WASH_AVAILABLE_FIELD}']",
+        )
+        return None
+    filters = {"company": ["in", companies], "date": ["<=", to_date]}
+    if plants:
+        filters["plant"] = ["in", plants]
+    rows = frappe.get_all(
+        "DMR Technical Lab Parameters", filters=filters,
+        fields=[WASH_AVAILABLE_FIELD], order_by="date desc", limit=1,
+    )
+    return rows[0].get(WASH_AVAILABLE_FIELD) if rows else None
 
 
 # =============================================================================
@@ -439,16 +526,93 @@ def _existing_field_map(doctype, field_map):
     return valid
 
 
+# =============================================================================
+# SECTION TOTALS
+# =============================================================================
+def _add_section_totals(rows):
+    """
+    Post-process pass: after each section's data rows, insert one "Total"
+    row per uom group, but only for groups with 2+ rows (a lone item's
+    "total" is just itself). Excluded from totals: uom "%" or "Ratio", any
+    uom containing "/" (BL/Qtl, MT/Hr, KG/BL, ...) -- these are computed
+    ratios/percentages, not additive quantities -- and any row explicitly
+    flagged exclude_from_total (e.g. M.6 Power Per BL, itself a rate
+    derived from M.5, not an independent MW figure to add to the rest of
+    Section M).
+
+    Group membership is structural (based on each row's uom/section, not
+    whether its value happens to be None on a given day) so the set of
+    Total rows stays identical across the meta call and every date column
+    -- if it were data-dependent, a day with missing boiler data could
+    silently drop a Total row that meta already declared, and the frontend
+    (which renders columns strictly by meta's row list) would just show a
+    blank instead of a real zero.
+    """
+    result = []
+    i, n = 0, len(rows)
+    while i < n:
+        header_row = rows[i]
+        result.append(header_row)
+        if not header_row.get("header"):
+            i += 1
+            continue
+
+        j = i + 1
+        while j < n and not rows[j].get("header"):
+            j += 1
+        section_rows = rows[i + 1:j]
+        result.extend(section_rows)
+
+        numeric_groups = defaultdict(list)
+        dict_groups = defaultdict(list)
+        for r in section_rows:
+            uom = r.get("uom")
+            if r.get("exclude_from_total") or not uom or uom == "%" or uom == "Ratio" or "/" in uom:
+                continue
+            val = r.get("value")
+            if isinstance(val, dict):
+                dict_groups[uom].append(val)
+            else:
+                numeric_groups[uom].append(val or 0)
+
+        for uom, vals in numeric_groups.items():
+            if len(vals) < 2:
+                continue
+            result.append({"sr": f"{header_row['sr']}.Total", "label": "Total", "uom": uom,
+                            "value": sum(vals), "total": True})
+
+        for uom, vals in dict_groups.items():
+            if len(vals) < 2:
+                continue
+            result.append({
+                "sr": f"{header_row['sr']}.Total", "label": "Total", "uom": uom,
+                "value": {
+                    "ideal": sum(v.get("ideal") or 0 for v in vals),
+                    "actual": sum(v.get("actual") or 0 for v in vals),
+                },
+                "total": True,
+            })
+
+        i = j
+    return result
+
+
 def build_section_rows(companies, from_date, to_date, plants=None, segments=None):
     prod_codes = [r[0] for r in PRODUCTION_ITEMS]
     rm_codes = [r[0] for r in RM_ITEMS]
     by_codes = [r[0] for r in BYPRODUCT_ITEMS]
     fuel_codes = [r[0] for r in FUEL_ITEMS]
 
-    prod = get_production_qty(companies, from_date, to_date, prod_codes, plants, segments)
-    rm = get_issue_qty(companies, from_date, to_date, rm_codes, plants, segments)
-    by = get_production_qty(companies, from_date, to_date, by_codes, plants, segments)
-    fuel = get_issue_qty(companies, from_date, to_date, fuel_codes, plants, segments)
+    prod_uom = {code: uom for code, _, _, uom in PRODUCTION_ITEMS}
+    rm_uom = {code: uom for code, _, _, uom in RM_ITEMS}
+    by_uom = {code: uom for code, _, _, uom in BYPRODUCT_ITEMS}
+    fuel_uom = {code: uom for code, _, _, uom in FUEL_ITEMS}
+
+    # Raw fetch (stock UOM) then convert to each row's display UOM.
+    prod = convert_qty_dict(get_production_qty(companies, from_date, to_date, prod_codes, plants, segments), prod_uom)
+    rm = convert_qty_dict(get_issue_qty(companies, from_date, to_date, rm_codes, plants, segments), rm_uom)
+    by = convert_qty_dict(get_production_qty(companies, from_date, to_date, by_codes, plants, segments), by_uom)
+    fuel = convert_qty_dict(get_issue_qty(companies, from_date, to_date, fuel_codes, plants, segments), fuel_uom)
 
     maize_prod = prod.get("100114", 0) + prod.get("100122", 0) + prod.get("100130", 0)
     dfg_prod = prod.get("100112", 0) + prod.get("100120", 0) + prod.get("100128", 0)
@@ -468,13 +632,13 @@ def build_section_rows(companies, from_date, to_date, plants=None, segments=None
 
     # --- SECTION A: Production of Finished Goods -- Stock Entry (Material Receipt) ---
     rows.append({"sr": "A", "label": "Production of Finished Goods", "header": True})
-    for code, label, sr in PRODUCTION_ITEMS:
-        rows.append({"sr": sr, "label": label, "uom": "BL", "value": prod.get(code, 0), "item_code": code})
+    for code, label, sr, uom in PRODUCTION_ITEMS:
+        rows.append({"sr": sr, "label": label, "uom": uom, "value": prod.get(code, 0), "item_code": code})
 
     # --- SECTION B: Consumption of Raw Material -- Stock Entry (Material Issue) ---
     rows.append({"sr": "B", "label": "Consumption of Raw Material", "header": True})
-    for code, label, sr in RM_ITEMS:
-        rows.append({"sr": sr, "label": label, "uom": "Qtl", "value": rm.get(code, 0), "item_code": code})
+    for code, label, sr, uom in RM_ITEMS:
+        rows.append({"sr": sr, "label": label, "uom": uom, "value": rm.get(code, 0), "item_code": code})
 
     # --- SECTION C: Recovery of Finished Goods -- calculated, A / B ---
     rows.append({"sr": "C", "label": "Recovery of Finished Goods", "header": True})
@@ -497,8 +661,7 @@ def build_section_rows(companies, from_date, to_date, plants=None, segments=None
 
     # --- SECTION E: Production of By Products -- Stock Entry (Material Receipt) ---
     rows.append({"sr": "E", "label": "Production of by Products", "header": True})
-    for code, label, sr in BYPRODUCT_ITEMS:
-        uom = "Ltr" if code == "129946" else "Qtl"
+    for code, label, sr, uom in BYPRODUCT_ITEMS:
         rows.append({"sr": sr, "label": label, "uom": uom, "value": by.get(code, 0), "item_code": code})
 
     # --- SECTION F: Recovery of By Products -- calculated, mixed formulas per item ---
@@ -538,15 +701,15 @@ def build_section_rows(companies, from_date, to_date, plants=None, segments=None
 
     # --- SECTION H: Fuel used for Boiler -- Stock Entry (Material Issue) ---
     rows.append({"sr": "H", "label": "Fuel used for Boiler", "header": True})
-    for code, label, sr in FUEL_ITEMS:
-        rows.append({"sr": sr, "label": label, "uom": "MT", "value": fuel.get(code, 0), "item_code": code})
+    for code, label, sr, uom in FUEL_ITEMS:
+        rows.append({"sr": sr, "label": label, "uom": uom, "value": fuel.get(code, 0), "item_code": code})
 
     # --- SECTION I: Steam Raising Ratio -- Steam Raising Ratio master (fixed, not date-dependent) ---
     # I.9 Weighted Average = sum(ratio_i * fuel_qty_i) / sum(fuel_qty_i), weighted by Section H quantities.
     rows.append({"sr": "I", "label": "Steam Raising Ratio", "header": True})
     ratios = get_steam_raising_ratios(companies, plants)
     weighted_num, weighted_den = 0, 0
-    for i, (code, label, sr) in enumerate(FUEL_ITEMS):
+    for i, (code, label, sr, uom) in enumerate(FUEL_ITEMS):
         ratio = ratios.get(code)
         rows.append({"sr": f"I.{i+1}", "label": label, "uom": "Ratio", "value": ratio, "item_code": code})
         qty = fuel.get(code, 0)
@@ -568,17 +731,17 @@ def build_section_rows(companies, from_date, to_date, plants=None, segments=None
     # consumed, by weight:
     #   allocated_steam_i = total_steam_produced * (actual_qty_i / total_fuel_qty)
     #   ideal_stock_i      = allocated_steam_i / standard_ratio_i
-    total_fuel_qty = sum(fuel.get(code, 0) for code, _, _ in FUEL_ITEMS)
+    total_fuel_qty = sum(fuel.get(code, 0) for code, _, _, _ in FUEL_ITEMS)
     total_steam_produced = boiler.get("steam_produced") or 0
 
     rows.append({"sr": "I.10", "label": "Ideal vs Actual Stock Consumed (at standard ratio)", "header": True})
-    for i, (code, label, sr) in enumerate(FUEL_ITEMS):
+    for i, (code, label, sr, uom) in enumerate(FUEL_ITEMS):
         ratio = ratios.get(code)
         actual_qty = fuel.get(code, 0)
         allocated_steam = safe_div(total_steam_produced * actual_qty, total_fuel_qty)
         ideal_qty = safe_div(allocated_steam, ratio) if ratio else None
         rows.append({
-            "sr": f"I.{11 + i}", "label": label, "uom": "MT",
+            "sr": f"I.{11 + i}", "label": label, "uom": uom,
             "value": {"ideal": ideal_qty, "actual": actual_qty},
             "item_code": code,
         })
@@ -614,6 +777,8 @@ def build_section_rows(companies, from_date, to_date, plants=None, segments=None
     # sum(power_consumed) over the period / total finished-goods production (BL),
     # so it stays consistent with whatever plant/date filters are applied,
     # rather than trusting a possibly-stale stored value on each record.
+    # It's excluded from the section Total since it's a rate derived from
+    # M.5 (Power Consumed), not an independent MW figure to add.
     rows.append({"sr": "M", "label": "Power Performance", "header": True})
     for sr, label, field in [
         ("M.1", "Power Generation", "power_generation"),
@@ -626,12 +791,23 @@ def build_section_rows(companies, from_date, to_date, plants=None, segments=None
     rows.append({
         "sr": "M.6", "label": "Power Per BL", "uom": "MW",
         "value": safe_div(boiler.get("power_consumed", 0), total_production_bl),
+        "exclude_from_total": True,
     })
 
     # --- SECTION N: Stock -- Stock Ledger Entry (latest balance as of to_date) ---
     rows.append({"sr": "N", "label": "Stock", "header": True})
-    stock = get_stock_balance(companies, to_date, STOCK_ITEMS)
-    rows.append({"sr": "N.1", "label": "Wash Available", "uom": "Ltrs", "value": None})
+    stock = convert_qty_dict(
+        get_stock_balance(companies, to_date, STOCK_ITEMS),
+        {code: STOCK_UOM for code in STOCK_ITEMS},
+    )
+    wash_available = get_wash_available(companies, to_date, plants)
+    rows.append({
+        "sr": "N.1", "label": "Wash Available", "uom": "Ltrs", "value": wash_available,
+        # WIP fermentation broth, not a finished-goods stock balance like
+        # N.2-N.11 -- excluded so it doesn't get summed into the Section N
+        # Total alongside Ethanol/ENA/RS/DDGS/DWGS/Crude Oil stock.
+        "exclude_from_total": True,
+    })
     rows.append({"sr": "N.2", "label": "Stock of Ethanol from Maize", "uom": "Ltrs", "value": stock.get("100114", 0), "item_code": "100114"})
     rows.append({"sr": "N.3", "label": "Stock of Ethanol from DFG", "uom": "Ltrs", "value": stock.get("100112", 0), "item_code": "100112"})
     rows.append({"sr": "N.4", "label": "Stock of Ethanol from FCI Rice", "uom": "Ltrs", "value": stock.get("100113", 0), "item_code": "100113"})
@@ -645,7 +821,7 @@ def build_section_rows(companies, from_date, to_date, plants=None, segments=None
                  "value": stock.get("100151", 0) + stock.get("100149", 0) + stock.get("100150", 0)})
     rows.append({"sr": "N.11", "label": "Stock of Crude Oil", "uom": "Ltrs", "value": stock.get("129946", 0), "item_code": "129946"})
 
-    return rows
+    return _add_section_totals(rows)
 
 
 def _parse_list_arg(val):
@@ -681,6 +857,7 @@ def get_report_data(companies, from_date, to_date, plants=None, segments=None):
             "uom": r.get("uom"),
             "header": r.get("header", False),
             "item_code": r.get("item_code"),
+            "total": r.get("total", False),
         }
         for r in meta_rows
     ]
