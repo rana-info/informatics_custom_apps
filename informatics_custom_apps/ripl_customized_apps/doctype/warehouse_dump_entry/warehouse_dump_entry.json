@@ -1,0 +1,372 @@
+{
+ "actions": [],
+ "allow_copy": 0,
+ "autoname": "naming_series:",
+ "creation": "2025-07-22 00:00:00.000000",
+ "default_view": "List",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "warehouse_dump_entry_tab",
+  "naming_series",
+  "branch",
+  "abbr",
+  "location",
+  "transporter",
+  "entry_type",
+  "supplier",
+  "column_break_peid",
+  "company",
+  "vehicle_owner",
+  "vehicle_type",
+  "driver",
+  "driver_name",
+  "column_break_vdzk",
+  "date",
+  "time",
+  "vehicle_number",
+  "section_break_azvi",
+  "column_break_dsqr",
+  "fetch_purchase_orders",
+  "purchase_orders",
+  "get_items",
+  "items",
+  "weighment_section",
+  "weighment_date",
+  "column_break_bxey",
+  "inward_date",
+  "column_break_fniz",
+  "outward_date",
+  "section_break_azvi8",
+  "tare_weight",
+  "column_break_axjc",
+  "gross_weight",
+  "column_break_tvpm",
+  "net_weight",
+  "attachments_tab",
+  "vehicle_image",
+  "column_break_img1",
+  "weighment_slip_image",
+  "reference_tab",
+  "gate_entry",
+  "column_break_ref1",
+  "weighment",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "warehouse_dump_entry_tab",
+   "fieldtype": "Tab Break",
+   "label": "Warehouse Dump Entry"
+  },
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "WDE-.YYYY.-",
+   "no_copy": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "branch",
+   "fieldtype": "Link",
+   "label": "Branch",
+   "options": "Branch",
+   "reqd": 1
+  },
+  {
+   "depends_on": "eval:doc.branch",
+   "fetch_from": "branch.plant_abbr",
+   "fieldname": "abbr",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Abbr",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.branch",
+   "fetch_from": "branch.custom_location",
+   "fieldname": "location",
+   "fieldtype": "Link",
+   "label": "Location",
+   "options": "Location",
+   "read_only": 1
+  },
+  {
+   "fieldname": "transporter",
+   "fieldtype": "Link",
+   "label": "Transporter",
+   "options": "Supplier"
+  },
+  {
+   "default": "Inward",
+   "fieldname": "entry_type",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Entry Type",
+   "options": "Inward",
+   "read_only": 1
+  },
+  {
+   "fieldname": "supplier",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Supplier",
+   "options": "Supplier",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_peid",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fetch_from": "branch.company",
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company",
+   "read_only": 1
+  },
+  {
+   "fieldname": "vehicle_owner",
+   "fieldtype": "Select",
+   "label": "Vehicle Owner",
+   "options": "Company Owned\nThird Party"
+  },
+  {
+   "fieldname": "vehicle_type",
+   "fieldtype": "Link",
+   "label": "Vehicle Type",
+   "options": "Vehicle Type"
+  },
+  {
+   "depends_on": "eval:doc.vehicle_owner=='Company Owned'",
+   "fieldname": "driver",
+   "fieldtype": "Link",
+   "label": "Driver",
+   "mandatory_depends_on": "eval:doc.vehicle_owner=='Company Owned'",
+   "options": "Driver"
+  },
+  {
+   "fetch_from": "driver.full_name",
+   "fieldname": "driver_name",
+   "fieldtype": "Data",
+   "label": "Driver Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_vdzk",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "date",
+   "fieldtype": "Date",
+   "label": "Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "time",
+   "fieldtype": "Time",
+   "label": "Time",
+   "reqd": 1
+  },
+  {
+   "fieldname": "vehicle_number",
+   "fieldtype": "Data",
+   "label": "Vehicle Number",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_azvi",
+   "fieldtype": "Section Break"
+  },
+  {
+   "depends_on": "supplier",
+   "fieldname": "column_break_dsqr",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:doc.supplier && doc.branch",
+   "fieldname": "fetch_purchase_orders",
+   "fieldtype": "Button",
+   "label": "Fetch POs"
+  },
+  {
+   "cannot_add_rows": 1,
+   "depends_on": "eval:doc.supplier",
+   "fieldname": "purchase_orders",
+   "fieldtype": "Table",
+   "label": "Purchase Orders",
+   "options": "Purchase Orders",
+   "read_only": 0,
+   "reqd": 1
+  },
+  {
+   "depends_on": "eval:doc.purchase_orders && doc.purchase_orders.length > 0",
+   "fieldname": "get_items",
+   "fieldtype": "Button",
+   "label": "Get Items"
+  },
+  {
+   "cannot_add_rows": 1,
+   "depends_on": "supplier",
+   "fieldname": "items",
+   "fieldtype": "Table",
+   "label": "Purchase Details",
+   "options": "Purchase Details",
+   "reqd": 1
+  },
+  {
+   "fieldname": "weighment_section",
+   "fieldtype": "Section Break",
+   "label": "Weighment"
+  },
+  {
+   "fieldname": "weighment_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Weighment Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_bxey",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "inward_date",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Inward Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_fniz",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "outward_date",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Outward Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_azvi8",
+   "fieldtype": "Section Break",
+   "label": "Weight Details"
+  },
+  {
+   "fieldname": "tare_weight",
+   "fieldtype": "Float",
+   "label": "Tare Weight (In Kg)",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_axjc",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "gross_weight",
+   "fieldtype": "Float",
+   "label": "Gross Weight (In Kg)",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_tvpm",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "net_weight",
+   "fieldtype": "Float",
+   "label": "Net Weight (In Kg)",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "attachments_tab",
+   "fieldtype": "Tab Break",
+   "label": "Attachments"
+  },
+  {
+   "fieldname": "vehicle_image",
+   "fieldtype": "Attach Image",
+   "label": "Vehicle Image",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_img1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "weighment_slip_image",
+   "fieldtype": "Attach Image",
+   "label": "Weighment Slip Image",
+   "reqd": 1
+  },
+  {
+   "fieldname": "reference_tab",
+   "fieldtype": "Tab Break",
+   "label": "Reference / Log"
+  },
+  {
+   "fieldname": "gate_entry",
+   "fieldtype": "Link",
+   "label": "Gate Entry",
+   "no_copy": 1,
+   "options": "Gate Entry",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_ref1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "weighment",
+   "fieldtype": "Link",
+   "label": "Weighment",
+   "no_copy": 1,
+   "options": "Weighment",
+   "read_only": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Warehouse Dump Entry",
+   "print_hide": 1,
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "issingle": 0,
+ "links": [],
+ "modified": "2025-07-22 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "RIPL Customized Apps",
+ "name": "Warehouse Dump Entry",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
