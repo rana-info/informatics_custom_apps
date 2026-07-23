@@ -14,6 +14,7 @@
   "alcohol_percentage",
   "fermenter_rs",
   "fermenter_rst",
+  "wash_available",
   "column_break_serq",
   "average_starch__maize",
   "average_starch_dfg",
@@ -88,12 +89,17 @@
    "fieldname": "plant_details_section",
    "fieldtype": "Section Break",
    "label": "Plant Details"
+  },
+  {
+   "fieldname": "wash_available",
+   "fieldtype": "Float",
+   "label": "Wash Available(in Ltrs)"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-07 10:24:13.124817",
+ "modified": "2026-07-22 12:08:32.197573",
  "modified_by": "Administrator",
  "module": "ETH",
  "name": "DMR Technical Lab Parameters",
