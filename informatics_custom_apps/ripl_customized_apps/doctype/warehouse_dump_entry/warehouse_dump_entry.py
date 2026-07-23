@@ -1,7 +1,6 @@
 # Copyright (c) 2026, Monil Kamboj and contributors
 # For license information, please see license.txt
 
-
 import frappe
 from frappe.model.document import Document
 from frappe.utils import get_link_to_form
@@ -19,6 +18,22 @@ class WarehouseDumpEntry(Document):
 			self.net_weight = self.gross_weight - self.tare_weight
 			if self.net_weight <= 0:
 				frappe.throw("Net weight can't be zero")
+
+		# Final authority: Accepted/Received Qty must match Net Weight when there's
+		# exactly one item row. This runs regardless of client-side JS timing (e.g.
+		# items fetched after weight was already entered), so Gate Entry, Weighment,
+		# and Purchase Receipt always get the correct quantity.
+		if self.items and len(self.items) == 1 and self.net_weight:
+			row = self.items[0]
+			if row.accepted_quantity != self.net_weight:
+				row.accepted_quantity = self.net_weight
+				row.received_quantity = self.net_weight + (row.rejected_quantity or 0)
+				frappe.msgprint(
+					title="Quantity Synced",
+					indicator="blue",
+					alert=True,
+					msg=f"Accepted Qty in row {row.idx} was updated to match Net Weight ({self.net_weight})"
+				)
 
 		if self.items:
 			for row in self.items:
@@ -39,6 +54,74 @@ class WarehouseDumpEntry(Document):
 
 	def on_submit(self):
 		self.create_gate_entry_and_weighment()
+
+	def on_cancel(self):
+		self.cancel_linked_documents()
+
+	def cancel_linked_documents(self):
+		"""
+		Frappe blocks cancelling Gate Entry/Weighment directly while a submitted
+		Warehouse Dump Entry still links to them - so this document must be the
+		one that's cancelled, and it cascades down to its dependents.
+
+		Order: Weighment first (its own cancel hooks, from weighment_server, may
+		already cancel/delete a linked Purchase Receipt on their own - we don't
+		control that app's code). Then we re-check whatever state the PR is
+		actually left in and handle it ourselves if it wasn't already cleaned up,
+		before finally cancelling the Gate Entry.
+		"""
+		if self.weighment and frappe.db.exists("Weighment", self.weighment):
+			weighment_doc = frappe.get_doc("Weighment", self.weighment)
+			if weighment_doc.docstatus == 1:
+				weighment_doc.cancel()
+				frappe.msgprint(
+					title="Weighment Cancelled",
+					indicator="orange",
+					alert=True,
+					realtime=True,
+					msg=f"Weighment {weighment_doc.name} cancelled"
+				)
+
+		# Re-check the PR's actual state after Weighment's own cancel logic has run,
+		# rather than assuming it was (or wasn't) already handled for us.
+		if self.gate_entry:
+			pr_name = frappe.db.get_value(
+				"Purchase Receipt Item",
+				{"custom_gate_entry": self.gate_entry, "docstatus": ["!=", 2]},
+				"parent"
+			)
+			if pr_name:
+				pr_doc = frappe.get_doc("Purchase Receipt", pr_name)
+				if pr_doc.docstatus == 1:
+					pr_doc.cancel()
+					frappe.msgprint(
+						title="Purchase Receipt Cancelled",
+						indicator="orange",
+						alert=True,
+						realtime=True,
+						msg=f"Purchase Receipt {pr_doc.name} cancelled"
+					)
+				elif pr_doc.docstatus == 0:
+					frappe.delete_doc("Purchase Receipt", pr_name, ignore_permissions=True)
+					frappe.msgprint(
+						title="Draft Purchase Receipt Deleted",
+						indicator="orange",
+						alert=True,
+						realtime=True,
+						msg=f"Draft Purchase Receipt {pr_name} was deleted since it was never submitted"
+					)
+
+		if self.gate_entry and frappe.db.exists("Gate Entry", self.gate_entry):
+			gate_entry_doc = frappe.get_doc("Gate Entry", self.gate_entry)
+			if gate_entry_doc.docstatus == 1:
+				gate_entry_doc.cancel()
+				frappe.msgprint(
+					title="Gate Entry Cancelled",
+					indicator="orange",
+					alert=True,
+					realtime=True,
+					msg=f"Gate Entry {gate_entry_doc.name} cancelled"
+				)
 
 	def create_gate_entry_and_weighment(self):
 		gate_entry = frappe.new_doc("Gate Entry")
@@ -135,25 +218,43 @@ class WarehouseDumpEntry(Document):
 			# created and submitted above.
 			frappe.db.commit()
 
-			try:
-				weighment.create_purchase_receipt_manually()
-			except Exception:
-				frappe.log_error(
-					frappe.get_traceback(),
-					"Warehouse Dump Entry: Purchase Receipt auto-creation failed"
-				)
+			# Weighment's own submit hooks may already auto-create a Purchase Receipt
+			# for this Gate Entry. Check before calling create_purchase_receipt_manually()
+			# ourselves, so we don't end up creating a second (duplicate) PR.
+			existing_pr = frappe.db.get_value(
+				"Purchase Receipt Item",
+				{"custom_gate_entry": gate_entry.name, "docstatus": ["!=", 2]},
+				"parent"
+			)
+
+			if existing_pr:
 				frappe.msgprint(
-					title="Purchase Receipt Not Created",
-					indicator="red",
+					title="Purchase Receipt Already Exists",
+					indicator="blue",
 					alert=True,
 					realtime=True,
-					msg=(
-						f"Gate Entry {gate_entry.name} and Weighment {weighment.name} were created "
-						f"successfully, but the Purchase Receipt could not be created automatically. "
-						f"Please create it manually from the Weighment record. "
-						f"(Error has been logged for admin review.)"
-					)
+					msg=f"Purchase Receipt {existing_pr} already exists for this Gate Entry. Skipped duplicate creation."
 				)
+			else:
+				try:
+					weighment.create_purchase_receipt_manually()
+				except Exception:
+					frappe.log_error(
+						frappe.get_traceback(),
+						"Warehouse Dump Entry: Purchase Receipt auto-creation failed"
+					)
+					frappe.msgprint(
+						title="Purchase Receipt Not Created",
+						indicator="red",
+						alert=True,
+						realtime=True,
+						msg=(
+							f"Gate Entry {gate_entry.name} and Weighment {weighment.name} were created "
+							f"successfully, but the Purchase Receipt could not be created automatically. "
+							f"Please create it manually from the Weighment record. "
+							f"(Error has been logged for admin review.)"
+						)
+					)
 
 			weighment_name = weighment.name
 
@@ -166,6 +267,16 @@ class WarehouseDumpEntry(Document):
 		# steps can trigger Gate Entry's own hooks and flip is_in_progress back to 1.
 		frappe.db.set_value("Gate Entry", gate_entry.name, "is_in_progress", 0, update_modified=False)
 		frappe.db.set_value("Gate Entry", gate_entry.name, "is_completed", 1, update_modified=False)
+
+	@frappe.whitelist()
+	def get_linked_purchase_receipt(self):
+		if not self.gate_entry:
+			return None
+		return frappe.db.get_value(
+			"Purchase Receipt Item",
+			{"custom_gate_entry": self.gate_entry, "docstatus": ["!=", 2]},
+			"parent"
+		)
 
 	@frappe.whitelist()
 	def fetch_purchase_orders(self):

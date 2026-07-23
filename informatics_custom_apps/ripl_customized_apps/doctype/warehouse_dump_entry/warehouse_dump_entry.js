@@ -140,6 +140,7 @@ frappe.ui.form.on("Warehouse Dump Entry", {
 				frm.refresh_field("net_weight");
 				frappe.throw("Net weight can't be zero");
 			}
+			frm.events.sync_accepted_qty_with_net_weight(frm);
 		}
 	},
 
@@ -153,7 +154,80 @@ frappe.ui.form.on("Warehouse Dump Entry", {
 				frm.refresh_field("net_weight");
 				frappe.throw("Net weight can't be zero");
 			}
+			frm.events.sync_accepted_qty_with_net_weight(frm);
 		}
+	},
+
+	// Keep Accepted Qty (and Received Qty) in sync with Net Weight, only when
+	// there's exactly one item row - with multiple rows it's ambiguous which
+	// row the weight belongs to, so we leave those untouched.
+	sync_accepted_qty_with_net_weight: function (frm) {
+		if (frm.doc.net_weight && frm.doc.items && frm.doc.items.length === 1) {
+			let row = frm.doc.items[0];
+			if (row.accepted_quantity !== frm.doc.net_weight) {
+				frappe.model.set_value(row.doctype, row.name, "accepted_quantity", frm.doc.net_weight);
+				frappe.model.set_value(
+					row.doctype,
+					row.name,
+					"received_quantity",
+					frm.doc.net_weight + (row.rejected_quantity || 0)
+				);
+				frm.refresh_field("items");
+				frappe.show_alert({
+					message: __("Accepted Quantity updated to match Net Weight ({0})", [frm.doc.net_weight]),
+					indicator: "blue"
+				});
+			}
+		}
+	},
+
+	before_cancel: function (frm) {
+		// If we've already shown our custom warning and the user confirmed,
+		// let this cancel go through normally.
+		if (frm.__wde_cancel_confirmed) {
+			frm.__wde_cancel_confirmed = false;
+			return;
+		}
+
+		// Otherwise, stop the default cancel flow here and show our own
+		// warning first, listing exactly what will also get cancelled.
+		frappe.validated = false;
+
+		frm.call({
+			method: "get_linked_purchase_receipt",
+			doc: frm.doc,
+			callback: function (r) {
+				let linked = [];
+				if (frm.doc.gate_entry) {
+					linked.push(`Gate Entry <b>${frm.doc.gate_entry}</b>`);
+				}
+				if (frm.doc.weighment) {
+					linked.push(`Weighment <b>${frm.doc.weighment}</b>`);
+				}
+				if (r.message) {
+					linked.push(`Purchase Receipt <b>${r.message}</b>`);
+				}
+
+				let message = linked.length
+					? `Cancelling this document will also cancel:<br><br>${linked.join("<br>")}`
+					: "Are you sure you want to cancel this document?";
+
+				frappe.warn(
+					__("Cancel Warehouse Dump Entry?"),
+					message,
+					() => {
+						frm.__wde_cancel_confirmed = true;
+						frm.savecancel();
+					},
+					__("Cancel All"),
+					true
+				);
+			}
+		});
+	},
+
+	net_weight: function (frm) {
+		frm.events.sync_accepted_qty_with_net_weight(frm);
 	},
 
 	get_items: function (frm) {
@@ -172,6 +246,7 @@ frappe.ui.form.on("Warehouse Dump Entry", {
 				if (r.message) {
 					frm.refresh_field("items");
 					frm.events.set_items_grid_properties(frm);
+					frm.events.sync_accepted_qty_with_net_weight(frm);
 				}
 			}
 		});
