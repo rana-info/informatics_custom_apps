@@ -90,8 +90,18 @@ frappe.ui.form.on("Warehouse Dump Entry", {
 	vehicle_owner: function (frm) {
 		if (frm.doc.vehicle_owner !== "Company Owned") {
 			frm.set_value("driver", "");
+			frm.set_value("driver_name", "");	
+			frm.set_df_property("transporter", "reqd", 1);
+		}
+		else {
+			frm.set_df_property("transporter", "reqd", 0);
+				}
+		if(frm.doc.vehicle_owner === "Company Owned") {
+			frm.set_value("transporter", "");
 		}
 		frm.refresh_field("driver");
+		frm.refresh_field("driver_name");
+		frm.refresh_field("transporter");
 	},
 
 	driver: function (frm) {
