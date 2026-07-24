@@ -42,6 +42,36 @@ frappe.ui.form.on("Warehouse Dump Entry", {
 		frm.events.set_po_grid_properties(frm);
 		frm.events.set_items_grid_properties(frm);
 	},
+	weighment_date: function (frm) {
+    if (!frm.doc.date) {
+        frm.set_value("weighment_date", "");
+        frappe.show_alert({
+            message: __("Please select Date first"),
+            indicator: "orange"
+        });
+        return;
+    }
+
+    if (frm.doc.weighment_date && frm.doc.weighment_date < frm.doc.date) {
+        frm.set_value("weighment_date", "");
+        frappe.show_alert({
+            message: __("Weighment Date cannot be before Gate Entry Date"),
+            indicator: "orange"
+        });
+    }
+},
+
+    outward_date(frm) {
+	if (!frm.doc.inward_date) {
+		frm.set_value("outward_date", "");
+	}
+	if(frm.doc.outward_date && frm.doc.inward_date && frm.doc.outward_date < frm.doc.inward_date) {
+		frm.set_value("outward_date", "");
+		frappe.show_alert({
+			message: __("Outward Date cannot be before Inward Date"),
+			indicator: "orange"
+		});	
+	}},
 
 	branch: function (frm) {
 		frm.clear_table("purchase_orders");
