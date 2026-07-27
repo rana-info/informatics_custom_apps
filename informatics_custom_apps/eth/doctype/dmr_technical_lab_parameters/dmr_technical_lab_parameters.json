@@ -18,7 +18,15 @@
   "column_break_serq",
   "average_starch__maize",
   "average_starch_dfg",
-  "average_starch_fci"
+  "average_starch_fci",
+  "section_break_zdlz",
+  "maize_opening_balance",
+  "dfg_opening_balance",
+  "fci_opening_balance",
+  "column_break_hkhn",
+  "maize_closing_balance",
+  "dfg_closing_balance",
+  "fci_closing_balance"
  ],
  "fields": [
   {
@@ -94,12 +102,56 @@
    "fieldname": "wash_available",
    "fieldtype": "Float",
    "label": "Wash Available(in Ltrs)"
+  },
+  {
+   "fieldname": "section_break_zdlz",
+   "fieldtype": "Section Break"
+  },
+  {
+   "description": "Item Code : 106444         \nUOM : KG ",
+   "fieldname": "maize_opening_balance",
+   "fieldtype": "Float",
+   "label": "Maize Opening Balance"
+  },
+  {
+   "description": "Item Code : 100474\nUOM : LTR",
+   "fieldname": "dfg_opening_balance",
+   "fieldtype": "Float",
+   "label": "DFG Opening Balance"
+  },
+  {
+   "description": "Item Code : 106448    \nUOM : KG ",
+   "fieldname": "fci_opening_balance",
+   "fieldtype": "Float",
+   "label": "FCI Opening Balance"
+  },
+  {
+   "fieldname": "column_break_hkhn",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Item Code : 106444\nUOM : KG ",
+   "fieldname": "maize_closing_balance",
+   "fieldtype": "Float",
+   "label": "Maize Closing Balance"
+  },
+  {
+   "description": "Item Code : 106444\nUOM : LTR",
+   "fieldname": "dfg_closing_balance",
+   "fieldtype": "Float",
+   "label": "DFG Closing Balance"
+  },
+  {
+   "description": "Item Code : 106448    \nUOM : KG ",
+   "fieldname": "fci_closing_balance",
+   "fieldtype": "Float",
+   "label": "FCI Closing Balance"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-22 12:08:32.197573",
+ "modified": "2026-07-27 12:18:11.061323",
  "modified_by": "Administrator",
  "module": "ETH",
  "name": "DMR Technical Lab Parameters",

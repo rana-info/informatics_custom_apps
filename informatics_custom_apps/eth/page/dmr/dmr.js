@@ -11,24 +11,30 @@ class DistilleryProductionReport {
             I: '#e8eaf6', J: '#f1f8e9', K: '#e0f2f1', L: '#fbe9e7',
             M: '#ede7f6', N: '#e1f5fe'
         };
+        this.plant_options = [];
+        this.loading = false;
+        this.filters_dirty = true; // true until a successful load happens for current filters
+
         this.page = frappe.ui.make_app_page({
             parent: wrapper,
             title: 'Daily Manufacturing Report',
             single_column: true
         });
+
         this.make_filters();
         this.make_table_container();
     }
+
+    // ── Filters ─────────────────────────────────────────────────────────
 
     make_filters() {
         this.company_field = this.page.add_field({
             fieldname: 'company',
             label: 'Company',
             fieldtype: 'MultiSelectList',
-            get_data: function(txt) {
-                return frappe.db.get_link_options('Company', txt);
-            },
+            get_data: (txt) => frappe.db.get_link_options('Company', txt),
             change: () => {
+                this.mark_dirty();
                 this.load_plant_options(() => this.reconcile_plant_selection());
             }
         });
@@ -38,22 +44,22 @@ class DistilleryProductionReport {
             label: 'Plant',
             fieldtype: 'MultiSelectList',
             get_data: (txt) => {
-                return (this.plant_options || [])
-                    .filter(p => p.toLowerCase().includes((txt || '').toLowerCase()))
+                const q = (txt || '').toLowerCase();
+                return this.plant_options
+                    .filter(p => p.toLowerCase().includes(q))
                     .map(p => ({ value: p, description: '' }));
             },
-            change: () => this.refresh()
+            change: () => this.mark_dirty()
         });
 
         this.segment_field = this.page.add_field({
             fieldname: 'segment',
             label: 'Segment',
             fieldtype: 'MultiSelectList',
-            get_data: function(txt) {
-                // Segment is its own doctype, not Cost Center.
-                return frappe.db.get_link_options('Segment', txt);
-            },
-            change: () => this.refresh()
+            hidden:1,
+            // Segment is its own doctype, not Cost Center.
+            get_data: (txt) => frappe.db.get_link_options('Segment', txt),
+            change: () => this.mark_dirty()
         });
 
         this.from_date_field = this.page.add_field({
@@ -61,7 +67,7 @@ class DistilleryProductionReport {
             label: 'From Date',
             fieldtype: 'Date',
             default: frappe.datetime.get_today(),
-            change: () => this.refresh()
+            change: () => this.mark_dirty()
         });
 
         this.to_date_field = this.page.add_field({
@@ -69,11 +75,40 @@ class DistilleryProductionReport {
             label: 'To Date',
             fieldtype: 'Date',
             default: frappe.datetime.get_today(),
-            change: () => this.refresh()
+            change: () => this.mark_dirty()
         });
 
-        this.page.add_inner_button('Refresh', () => this.refresh());
+        // Explicit trigger — filters no longer auto-refresh the report.
+        // Note: these page filters render their label as placeholder text
+        // inside the input itself (no separate label row above), so the
+        // button just needs to sit in its own input-wrapper, bottom-aligned
+        // with the row — no extra label spacer needed.
+        this.$show_data_btn_wrapper = $(`
+            <div class="frappe-control show-data-btn-wrapper">
+                <div class="control-input-wrapper">
+                    <button class="btn btn-sm show-data-btn">Show Data</button>
+                </div>
+            </div>
+        `).appendTo(this.page.page_form || this.page.wrapper.find('.page-form'));
+
+        this.$show_data_btn = this.$show_data_btn_wrapper.find('.show-data-btn');
+        this.$show_data_btn.on('click', () => this.refresh());
+
         this.load_plant_options();
+    }
+
+    // Any filter change invalidates the currently-shown data so the user
+    // isn't left looking at results that no longer match their filters.
+    mark_dirty() {
+        this.filters_dirty = true;
+        if (this.$card && this.$card.is(':visible')) {
+            this.show_stale_notice();
+        }
+    }
+
+    show_stale_notice() {
+        if (!this.$stale_notice) return;
+        this.$stale_notice.show();
     }
 
     load_plant_options(done) {
@@ -89,34 +124,35 @@ class DistilleryProductionReport {
     }
 
     // Drops any currently-selected plants that are no longer valid for the
-    // newly-selected company(ies), then refreshes the report. Prevents a
-    // stale plant filter from one company silently zeroing out the report
-    // after the company selection changes.
+    // newly-selected company(ies). Does NOT trigger a refresh — the user
+    // must press "Show Data" explicitly.
     reconcile_plant_selection() {
         const selected = this.plant_field.get_value() || [];
-        const valid_set = new Set(this.plant_options || []);
+        const valid_set = new Set(this.plant_options);
         const still_valid = selected.filter(p => valid_set.has(p));
 
         if (still_valid.length !== selected.length) {
             this.plant_field.set_value(still_valid);
-            // set_value triggers the plant field's own change handler,
-            // which calls refresh() — avoid double-refreshing.
-            return;
         }
-        this.refresh();
     }
+
+    // ── Table shell ─────────────────────────────────────────────────────
 
     make_table_container() {
         this.$wrapper = $(`<div class="distillery-report-wrapper"></div>`).appendTo(this.page.body);
 
-        this.$message = $(`<div class="text-muted" style="padding:20px;">Select Company and Date Range</div>`)
-            .appendTo(this.$wrapper);
+        this.$message = $(`
+            <div class="text-muted" style="padding:20px;">
+                Select Company and Date Range, then click <b>Show Data</b>.
+            </div>
+        `).appendTo(this.$wrapper);
 
         this.$card = $(`
-            <div class="distillery-report-card">
+            <div class="distillery-report-card" style="display:none;">
                 <div class="distillery-report-card-title">
                     Daily Manufacturing Report
                     <span class="unit-badge">Values per section UOM</span>
+                    <span class="stale-badge" style="display:none;">Filters changed — click Show Data to refresh</span>
                 </div>
                 <div class="table-responsive">
                     <table class="distillery-report-table">
@@ -129,9 +165,10 @@ class DistilleryProductionReport {
 
         this.$container = this.$card.find('tbody.distillery-body');
         this.$head_row = this.$card.find('tr.distillery-head-row');
+        this.$stale_notice = this.$card.find('.stale-badge');
 
         this.inject_styles();
-        this.refresh();
+        // No auto-load on page open — wait for the user to press "Show Data".
     }
 
     inject_styles() {
@@ -141,6 +178,49 @@ class DistilleryProductionReport {
 
         .distillery-report-wrapper {
             padding: 10px 0 30px;
+        }
+
+        .show-data-btn-wrapper {
+            /* Matches the width Frappe gives other filter controls so the
+               button doesn't stretch full-width or collapse to text width. */
+            min-width: 110px;
+            /* Bottom-align with the input row regardless of whatever
+               align-items the parent filter row uses, since this wrapper
+               has no label row above it while some other fields might. */
+            align-self: flex-end;
+            display: flex;
+        }
+
+        .show-data-btn-wrapper .control-input-wrapper {
+            display: flex;
+            align-items: flex-end;
+            width: 100%;
+        }
+
+        .show-data-btn {
+            background: #2e7d5b !important;
+            color: #fff !important;
+            border: 1px solid #256b4d !important;
+            font-weight: 600;
+            border-radius: 6px;
+            /* Match the ~30px height of Frappe's standard input controls
+               so the button's box lines up exactly with the input boxes
+               beside it, rather than sitting taller/shorter. */
+            height: 30px;
+            line-height: 1;
+            padding: 0 16px;
+            width: 100%;
+            box-shadow: 0 1px 3px rgba(46,125,91,.3);
+            transition: background .15s ease;
+        }
+
+        .show-data-btn:hover {
+            background: #256b4d !important;
+            color: #fff !important;
+        }
+
+        .show-data-btn:active {
+            background: #1e5940 !important;
         }
 
         .distillery-report-card {
@@ -171,6 +251,16 @@ class DistilleryProductionReport {
             background: #e8f1fb;
             color: #2962a8;
             border: 1px solid #cfe1f6;
+        }
+
+        .stale-badge {
+            font-size: 12px;
+            padding: 3px 10px;
+            border-radius: 30px;
+            font-weight: 600;
+            background: #fff3e0;
+            color: #a15c00;
+            border: 1px solid #f3d9a8;
         }
 
         .table-responsive {
@@ -351,7 +441,7 @@ class DistilleryProductionReport {
             background: #d7e2ec !important;
         }
 
-        /* Ideal vs Actual split cell (Section I.11-I.18) */
+        /* Standard vs Actual split cell (Section I.11-I.18) */
         .ideal-actual-cell {
             display: flex;
             align-items: stretch;
@@ -363,8 +453,14 @@ class DistilleryProductionReport {
         .ideal-actual-cell .ia-half {
             display: flex;
             flex-direction: column;
-            align-items: flex-end;
-            padding: 0 10px;
+            align-items: center;
+            /* min-width (not a fixed width) keeps Standard/Actual columns
+               visually aligned for typical values, but still lets the box
+               grow when a value is wider than that — e.g. large Indian-
+               format numbers like "1,18,49,220" — instead of clipping or
+               spilling past the cell edge. */
+            min-width: 86px;
+            padding: 0 6px;
         }
 
         .ideal-actual-cell .ia-half:first-child {
@@ -378,14 +474,19 @@ class DistilleryProductionReport {
         .ideal-actual-cell .ia-divider {
             width: 0;
             border-left: 2px solid #b6c3cd;
-            margin: 0 2px;
+            margin: 0 4px;
+            align-self: stretch;
         }
 
         .ideal-actual-cell .ia-num {
+            display: block;
+            width: 100%;
+            text-align: right;
             font-size: 13px;
             font-weight: 700;
             color: #2d3942;
-            margin-top: 2px;
+            margin-top: 3px;
+            white-space: nowrap;
         }
 
         .ideal-actual-cell .ia-actual .ia-num {
@@ -393,11 +494,15 @@ class DistilleryProductionReport {
         }
 
         .ideal-actual-cell .ia-tag {
+            /* inline-block sized to its own text (not stretched to the
+               half's full width) so the pill background always wraps the
+               text exactly, regardless of "STANDARD" vs "ACTUAL" length. */
             display: inline-block;
-            font-size: 10px;
+            white-space: nowrap;
+            font-size: 9px;
             font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: .3px;
+            letter-spacing: .2px;
             color: #6b7f8c;
             background: #eef2f5;
             border-radius: 20px;
@@ -407,6 +512,8 @@ class DistilleryProductionReport {
         </style>`).appendTo('head');
     }
 
+    // ── Data loading ────────────────────────────────────────────────────
+
     refresh() {
         const companies = this.company_field.get_value();
         const plants = this.plant_field.get_value();
@@ -415,12 +522,18 @@ class DistilleryProductionReport {
         const to_date = this.to_date_field.get_value();
 
         if (!companies || !companies.length || !from_date || !to_date) {
+            frappe.show_alert({
+                message: __('Select at least one Company along with From Date and To Date.'),
+                indicator: 'orange'
+            });
             this.$message.show();
             this.$card.hide();
             return;
         }
-        this.$message.hide();
-        this.$card.show();
+
+        // Guard against duplicate concurrent requests (e.g. rapid double-click).
+        if (this.loading) return;
+        this.loading = true;
 
         frappe.call({
             method: 'informatics_custom_apps.eth.page.dmr.dmr.get_report_data',
@@ -432,40 +545,56 @@ class DistilleryProductionReport {
                 segments: segments && segments.length ? segments : null
             },
             freeze: true,
+            freeze_message: __('Loading report...'),
             callback: (r) => {
                 if (r.message) {
+                    this.$message.hide();
+                    this.$card.show();
+                    this.$stale_notice.hide();
+                    this.filters_dirty = false;
                     this.render_table(r.message);
                 }
+            },
+            always: () => {
+                this.loading = false;
             }
         });
     }
 
+    // ── Rendering ───────────────────────────────────────────────────────
+
     render_table(data) {
         const { meta, columns } = data;
         const last_col_index = columns.length - 1;
+        const escape = frappe.utils.escape_html;
 
         // ── Header row ──────────────────────────────────────────────────
-        let head = `<th class="row-label-col label-head">Parameters</th>`;
-        head += `<th class="uom-col uom-head">UOM</th>`;
-        head += `<th>Standard</th>`;
+        const head_parts = [
+            `<th class="row-label-col label-head">Parameters</th>`,
+            `<th class="uom-col uom-head">UOM</th>`,
+            `<th>Standard</th>`
+        ];
         columns.forEach((col, i) => {
             const cls = i === last_col_index ? 'to-date-col' : '';
-            head += `<th class="${cls}">${frappe.utils.escape_html(col.label)}</th>`;
+            head_parts.push(`<th class="${cls}">${escape(col.label)}</th>`);
         });
-        this.$head_row.html(head);
+        this.$head_row.html(head_parts.join(''));
 
         // ── Body rows ───────────────────────────────────────────────────
-        let body = '';
+        // Building an array and joining once is significantly faster than
+        // repeated string concatenation for large tables (many sections x
+        // many date columns), and avoids intermediate string reallocation.
+        const body_parts = [];
 
         meta.forEach(row => {
             if (row.header) {
                 const color = this.section_colors[row.sr] || '#f5f5f5';
-                body += `<tr class="section-header-row" style="background:${color};">
-                    <td class="row-label-col" style="background:${color};">
-                        <span class="section-dot"></span>${frappe.utils.escape_html(row.label)}
-                    </td>
-                    <td colspan="${2 + columns.length}"></td>
-                </tr>`;
+                body_parts.push(
+                    `<tr class="section-header-row" style="background:${color};">`,
+                    `<td class="row-label-col" style="background:${color};">`,
+                    `<span class="section-dot"></span>${escape(row.label)}</td>`,
+                    `<td colspan="${2 + columns.length}"></td></tr>`
+                );
                 return;
             }
 
@@ -473,34 +602,35 @@ class DistilleryProductionReport {
             // their own row class so they can be styled distinctly from
             // regular data rows.
             const row_cls = row.total ? 'data-row total-row' : 'data-row';
-
             const item_code_html = row.item_code
-                ? ` <span class="item-code-badge">(${frappe.utils.escape_html(row.item_code)})</span>`
+                ? ` <span class="item-code-badge">(${escape(row.item_code)})</span>`
                 : '';
-            body += `<tr class="${row_cls}">
-                <td class="row-label-col">
-                    <span class="sr-badge">${row.sr}</span>${frappe.utils.escape_html(row.label)}${item_code_html}
-                </td>
-                <td class="uom-col"><span class="uom-badge">${row.uom || ''}</span></td>
-                <td class="num-cell"></td>`;
+
+            body_parts.push(
+                `<tr class="${row_cls}">`,
+                `<td class="row-label-col"><span class="sr-badge">${row.sr}</span>${escape(row.label)}${item_code_html}</td>`,
+                `<td class="uom-col"><span class="uom-badge">${row.uom || ''}</span></td>`,
+                `<td class="num-cell"></td>`
+            );
+
             columns.forEach((col, i) => {
                 const val = col.values[row.sr];
                 let cls = i === last_col_index ? 'num-cell to-date-col' : 'num-cell';
                 if (row.total) cls += ' total-cell';
-                body += `<td class="${cls}">${this.render_cell(val)}</td>`;
+                body_parts.push(`<td class="${cls}">${this.render_cell(val)}</td>`);
             });
-            body += `</tr>`;
+
+            body_parts.push(`</tr>`);
         });
 
-        this.$container.html(body);
+        this.$container.html(body_parts.join(''));
     }
-
 
     render_cell(val) {
         if (val && typeof val === 'object' && ('ideal' in val || 'actual' in val)) {
             return `<div class="ideal-actual-cell">
                 <div class="ia-half ia-ideal">
-                    <span class="ia-tag">Ideal</span>
+                    <span class="ia-tag">Standard</span>
                     <span class="ia-num">${this.format_value_labeled(val.ideal)}</span>
                 </div>
                 <div class="ia-divider"></div>
