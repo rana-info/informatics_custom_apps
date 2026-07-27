@@ -40,7 +40,10 @@ def get_report_datetime_range(from_date, to_date, day_start_time=DAY_START_TIME)
 # DATA SOURCE MAP (quick reference — see per-section comments below for detail)
 # =============================================================================
 #   A  Production of FG              -> Stock Entry (Material Receipt)
-#   B  Consumption of Raw Material   -> Stock Entry (Material Issue)
+#   B  Consumption of Raw Material   -> Stock Entry (Material Issue), netted
+#                                        against WIP opening/closing balances
+#                                        from DMR Technical Lab Parameters
+#                                        (see get_wip_opening_closing below)
 #   C  Recovery of FG                -> calculated from A / B
 #   D  Fermentation Parameters       -> DMR Technical Lab Parameters
 #   E  Production of By Products     -> Stock Entry (Material Receipt)
@@ -93,6 +96,41 @@ RM_ITEMS = [
     ("106448", "FCI Surplus Rice Consumed ( Net of WIP)", "B.3", "Qtl"),
 ]
 
+# =============================================================================
+# SECTION B — Work-in-Progress opening/closing balances
+# =============================================================================
+# Section B's rows are explicitly labeled "(Net of WIP)" — the plain Stock
+# Entry (Material Issue) quantity is GROSS material fed into the process,
+# not what was actually consumed during the report period. Confirmed
+# formula:
+#
+#     net_consumed = gross_issued (Stock Entry) + opening_wip - closing_wip
+#
+# i.e. material that was already mid-process at the start of the period
+# counts toward this period's consumption, and material still mid-process
+# at the end of the period does NOT.
+#
+# Opening/closing balances are recorded per plant per day as point-in-time
+# snapshots on "DMR Technical Lab Parameters" (maize/dfg/fci
+# *_opening_balance / *_closing_balance fields) — confirmed from that
+# DocType's JSON. Maps item_code -> (opening_field, closing_field, raw_uom).
+#
+# ASSUMPTION FLAGGED: raw_uom values ("KG" for maize/fci, "LTR" for dfg) are
+# taken verbatim from that DocType JSON's field `description` text (e.g.
+# "Item Code : 106444 \nUOM : KG"), not from an authoritative UOM field —
+# please confirm these are the exact UOM doctype names in your system
+# (case/spelling matters for get_conversion_factor to resolve a factor).
+# Note the JSON's own "dfg_closing_balance" field description says
+# "Item Code : 106444" (Maize's code) instead of 100474 (DFG) — almost
+# certainly a copy-paste typo in that field's description, so this map
+# uses 100474 (matching RM_ITEMS / dfg_opening_balance) instead of what the
+# closing field's description literally says. Flag/confirm if that's wrong.
+WIP_ITEM_FIELDS = {
+    "106444": {"opening_field": "maize_opening_balance", "closing_field": "maize_closing_balance", "raw_uom": "KG"},
+    "100474": {"opening_field": "dfg_opening_balance", "closing_field": "dfg_closing_balance", "raw_uom": "LTR"},
+    "106448": {"opening_field": "fci_opening_balance", "closing_field": "fci_closing_balance", "raw_uom": "KG"},
+}
+
 BYPRODUCT_ITEMS = [
     ("100151", "DWGS from Maize", "E.1", "Qtl"),
     ("100149", "DWGS from DFG", "E.2", "Qtl"),
@@ -132,11 +170,8 @@ LAB_PARAM_FIELDS = {
     "average_starch_fci": "average_starch_fci",
 }
 
-# ASSUMPTION FLAGGED: "wash_available" is a guessed fieldname (following the
-# same naming convention as the fields above) for Section N.1 "Wash
-# Available" on this doctype -- I don't have the DocType JSON to confirm it.
-# If wrong, _existing_field_map / get_wash_available's own has_field check
-# will just skip it and log a frappe.log_error rather than break the report.
+# Confirmed from DocType JSON: "Wash Available(in Ltrs)", fieldname
+# "wash_available", fieldtype Float, on "DMR Technical Lab Parameters".
 WASH_AVAILABLE_FIELD = "wash_available"
 
 # Fieldnames for "DMR Boiler And Turbine Parameters" — confirmed from DocType
@@ -249,6 +284,31 @@ def convert_qty_dict(qty_by_item, uom_map):
     }
 
 
+def convert_between_uoms(item_code, qty, from_uom, target_uom):
+    """
+    Convert a raw quantity given in an arbitrary `from_uom` (NOT necessarily
+    the item's stock UOM — e.g. a WIP balance field recorded directly in
+    "KG" or "LTR") into `target_uom`, using the item's configured UOM
+    Conversion Detail factors for both UOMs relative to its own stock UOM:
+
+        qty_in_stock_uom = qty * conversion_factor(from_uom)
+        qty_in_target    = qty_in_stock_uom / conversion_factor(target_uom)
+
+    If either UOM has no conversion factor configured on the Item,
+    get_conversion_factor falls back to a factor of 1 (silently a no-op for
+    that side) rather than raising — so a misconfigured/missing UOM entry
+    degrades to a wrong-but-not-crashing number. Verify results look sane,
+    particularly for DFG (Ltr -> Qtl) where a real factor must exist.
+    """
+    if qty is None:
+        return 0
+    if from_uom == target_uom:
+        return qty
+    from_factor = (get_conversion_factor(item_code, from_uom) or {}).get("conversion_factor") or 1
+    to_factor = (get_conversion_factor(item_code, target_uom) or {}).get("conversion_factor") or 1
+    return qty * from_factor / to_factor
+
+
 # =============================================================================
 # SECTIONS A / E — Production of Finished Goods & By Products
 # Source: Stock Entry (stock_entry_type = "Material Receipt") joined to
@@ -287,7 +347,10 @@ def get_production_qty(companies, from_date, to_date, item_codes, plants=None, s
 # Stock Entry Detail, summed over the report period for the given item
 # codes. Same shifted report-day timestamp window as get_production_qty.
 # Returns raw quantities in each item's STOCK UOM — convert with
-# convert_qty_dict before display.
+# convert_qty_dict before display. For Section B specifically, this is the
+# GROSS issued quantity — see get_wip_opening_closing for the WIP
+# opening/closing adjustment that turns it into the "Net of WIP" figure
+# actually shown on the report.
 # =============================================================================
 def get_issue_qty(companies, from_date, to_date, item_codes, plants=None, segments=None):
     if not item_codes:
@@ -402,6 +465,66 @@ def get_wash_available(companies, to_date, plants=None):
         fields=[WASH_AVAILABLE_FIELD], order_by="date desc", limit=1,
     )
     return rows[0].get(WASH_AVAILABLE_FIELD) if rows else None
+
+
+# =============================================================================
+# SECTION B — WIP opening/closing balances (Maize / DFG / FCI)
+# Source: "DMR Technical Lab Parameters" doctype (Company + Plant + Date),
+# same doctype as Section D / N.1. These are point-in-time WIP snapshots,
+# NOT summed/averaged over the date range like Section D or J/G above.
+#
+# Uses the EXACT from_date record for opening and the EXACT to_date record
+# for closing — no falling back to the nearest earlier/later date. If no
+# record exists for that specific date, the value is treated as 0 rather
+# than pulling in a balance from some other day (which would misrepresent
+# the WIP position on a day nobody actually logged one).
+# If multiple plants match the filter, sums across all of them for that
+# exact date.
+# Returns already-converted-to-target-UOM values:
+#   {item_code: {"opening": qty, "closing": qty}}
+# See convert_between_uoms for the raw-UOM -> target-UOM conversion and its
+# flagged assumptions.
+# =============================================================================
+def get_wip_opening_closing(companies, from_date, to_date, target_uom_map, plants=None):
+    if not frappe.db.exists("DocType", "DMR Technical Lab Parameters"):
+        return {}
+
+    meta = frappe.get_meta("DMR Technical Lab Parameters")
+    base_filters = {"company": ["in", companies]}
+    if plants:
+        base_filters["plant"] = ["in", plants]
+
+    def sum_field_on_exact_date(fieldname, on_date):
+        if not meta.has_field(fieldname):
+            return 0
+        f = dict(base_filters)
+        f["date"] = on_date
+        rows = frappe.get_all("DMR Technical Lab Parameters", filters=f,
+                               fields=[f"sum(`{fieldname}`) as val"])
+        return (rows[0].val if rows else 0) or 0
+
+    missing_fields = [
+        cfg[key] for cfg in WIP_ITEM_FIELDS.values() for key in ("opening_field", "closing_field")
+        if not meta.has_field(cfg[key])
+    ]
+    if missing_fields:
+        frappe.log_error(
+            title="DMR Report: missing fields on DMR Technical Lab Parameters",
+            message=f"Fieldnames not found, check DocType JSON: {missing_fields}",
+        )
+
+    result = {}
+    for item_code, cfg in WIP_ITEM_FIELDS.items():
+        target_uom = target_uom_map.get(item_code)
+        if not target_uom:
+            continue
+        opening_raw = sum_field_on_exact_date(cfg["opening_field"], from_date)
+        closing_raw = sum_field_on_exact_date(cfg["closing_field"], to_date)
+        result[item_code] = {
+            "opening": convert_between_uoms(item_code, opening_raw, cfg["raw_uom"], target_uom),
+            "closing": convert_between_uoms(item_code, closing_raw, cfg["raw_uom"], target_uom),
+        }
+    return result
 
 
 # =============================================================================
@@ -610,9 +733,18 @@ def build_section_rows(companies, from_date, to_date, plants=None, segments=None
 
     # Raw fetch (stock UOM) then convert to each row's display UOM.
     prod = convert_qty_dict(get_production_qty(companies, from_date, to_date, prod_codes, plants, segments), prod_uom)
-    rm = convert_qty_dict(get_issue_qty(companies, from_date, to_date, rm_codes, plants, segments), rm_uom)
+    rm_gross = convert_qty_dict(get_issue_qty(companies, from_date, to_date, rm_codes, plants, segments), rm_uom)
     by = convert_qty_dict(get_production_qty(companies, from_date, to_date, by_codes, plants, segments), by_uom)
     fuel = convert_qty_dict(get_issue_qty(companies, from_date, to_date, fuel_codes, plants, segments), fuel_uom)
+
+    # Section B is "Net of WIP": net_consumed = gross_issued + opening - closing.
+    # See get_wip_opening_closing for how opening/closing are resolved and
+    # converted into each item's display UOM (rm_uom).
+    wip = get_wip_opening_closing(companies, from_date, to_date, rm_uom, plants)
+    rm = {
+        code: rm_gross.get(code, 0) + wip.get(code, {}).get("opening", 0) - wip.get(code, {}).get("closing", 0)
+        for code in rm_codes
+    }
 
     maize_prod = prod.get("100114", 0) + prod.get("100122", 0) + prod.get("100130", 0)
     dfg_prod = prod.get("100112", 0) + prod.get("100120", 0) + prod.get("100128", 0)
@@ -635,7 +767,8 @@ def build_section_rows(companies, from_date, to_date, plants=None, segments=None
     for code, label, sr, uom in PRODUCTION_ITEMS:
         rows.append({"sr": sr, "label": label, "uom": uom, "value": prod.get(code, 0), "item_code": code})
 
-    # --- SECTION B: Consumption of Raw Material -- Stock Entry (Material Issue) ---
+    # --- SECTION B: Consumption of Raw Material -- Stock Entry (Material Issue),
+    # netted against WIP opening/closing balances (see rm computation above) ---
     rows.append({"sr": "B", "label": "Consumption of Raw Material", "header": True})
     for code, label, sr, uom in RM_ITEMS:
         rows.append({"sr": sr, "label": label, "uom": uom, "value": rm.get(code, 0), "item_code": code})
@@ -734,7 +867,7 @@ def build_section_rows(companies, from_date, to_date, plants=None, segments=None
     total_fuel_qty = sum(fuel.get(code, 0) for code, _, _, _ in FUEL_ITEMS)
     total_steam_produced = boiler.get("steam_produced") or 0
 
-    rows.append({"sr": "I.10", "label": "Ideal vs Actual Stock Consumed (at standard ratio)", "header": True})
+    rows.append({"sr": "I", "label": "Standard vs Actual Stock Consumed (at standard ratio)", "header": True})
     for i, (code, label, sr, uom) in enumerate(FUEL_ITEMS):
         ratio = ratios.get(code)
         actual_qty = fuel.get(code, 0)
