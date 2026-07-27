@@ -725,50 +725,61 @@ render_trend_analysis() {
         </div>
 
 
-        <div class="recorded-values-header">
+        <div
+    class="recorded-values-header"
+    id="recorded-values-toggle"
+>
 
-            <strong>
+    <strong>
 
-                ▼ Recorded Values (${records.length})
+        <span class="recorded-values-icon">
+            ▶
+        </span>
 
-            </strong>
+        Recorded Values (${records.length})
 
-        </div>
+    </strong>
+
+</div>
 
 
-        <div class="table-responsive">
+<div
+    class="recorded-values-content"
+    style="display: none;"
+>
 
-            <table
-                class="
-                    table
-                    table-bordered
-                    table-sm
-                    trend-values-table
-                "
-            >
+    <div class="table-responsive">
 
-                <thead>
+        <table
+            class="
+                table
+                table-bordered
+                table-sm
+                trend-values-table
+            "
+        >
+
+            <thead>
 
                     <tr>
 
-                        <th>
-                            Date
-                        </th>
+                    <th>
+                        Date
+                    </th>
 
-                        <th>
-                            Value
-                        </th>
+                    <th>
+                        Value
+                    </th>
 
-                        <th>
-                            Status
-                        </th>
+                    <th>
+                        Status
+                    </th>
 
-                    </tr>
+                </tr>
 
-                </thead>
+            </thead>
 
-                <tbody>
-
+            <tbody>
     `;
 
 
@@ -848,13 +859,50 @@ render_trend_analysis() {
 
         </div>
 
-    `;
+    </div>
+
+`;
 
 
     container.html(html);
 
 
-    this.render_trend_chart();
+// =====================================================
+// RECORDED VALUES DROPDOWN
+// =====================================================
+
+this.wrapper
+    .find("#recorded-values-toggle")
+    .on("click", () => {
+
+        const content =
+            this.wrapper
+                .find(".recorded-values-content");
+
+        const icon =
+            this.wrapper
+                .find(".recorded-values-icon");
+
+
+        if (content.is(":visible")) {
+
+            content.slideUp(200);
+
+            icon.text("▶");
+
+        }
+        else {
+
+            content.slideDown(200);
+
+            icon.text("▼");
+
+        }
+
+    });
+
+
+this.render_trend_chart();
 
 }
 render_trend_chart() {
@@ -1955,6 +2003,34 @@ show_no_trend_data() {
 					background: #fff3cd;
 					color: #856404;
 				}
+                .recorded-values-header {
+                    font-size: 16px;
+                    margin-top: 20px;
+                    margin-bottom: 15px;
+                    cursor: pointer;
+                    user-select: none;
+                    padding: 10px 12px;
+                    border: 1px solid #d1d8dd;
+                    border-radius: 6px;
+                    background: #f8f9fa;
+                }
+
+
+                .recorded-values-header:hover {
+                    background: #f1f3f5;
+                }
+
+
+                .recorded-values-icon {
+                    display: inline-block;
+                    width: 18px;
+                    font-size: 12px;
+                }
+
+
+                .recorded-values-content {
+                    margin-bottom: 25px;
+                }
 
             </style>
 
