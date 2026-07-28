@@ -80,13 +80,18 @@ class DistilleryProductionReport {
 
         // Explicit trigger — filters no longer auto-refresh the report.
         // Note: these page filters render their label as placeholder text
-        // inside the input itself (no separate label row above), so the
+        // inside the input itself (no separate label row above), so each
         // button just needs to sit in its own input-wrapper, bottom-aligned
         // with the row — no extra label spacer needed.
         this.$show_data_btn_wrapper = $(`
-            <div class="frappe-control show-data-btn-wrapper">
+            <div class="frappe-control toolbar-btn-wrapper show-data-btn-wrapper">
                 <div class="control-input-wrapper">
-                    <button class="btn btn-sm show-data-btn">Show Data</button>
+                    <button class="btn btn-sm toolbar-btn show-data-btn">
+                        <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="6 3 20 12 6 21 6 3"></polygon>
+                        </svg>
+                        <span>Show Data</span>
+                    </button>
                 </div>
             </div>
         `).appendTo(this.page.page_form || this.page.wrapper.find('.page-form'));
@@ -94,16 +99,68 @@ class DistilleryProductionReport {
         this.$show_data_btn = this.$show_data_btn_wrapper.find('.show-data-btn');
         this.$show_data_btn.on('click', () => this.refresh());
 
+        // Export buttons — disabled until a successful Show Data load, and
+        // re-disabled the moment any filter changes (see mark_dirty), so an
+        // export can never be triggered against a payload that doesn't
+        // match what's currently rendered on screen. Each toolbar button
+        // has its own color identity and icon so the three actions read as
+        // distinct at a glance rather than a uniform row of grey buttons.
+        this.$export_excel_btn_wrapper = $(`
+            <div class="frappe-control toolbar-btn-wrapper export-btn-wrapper excel-btn-wrapper">
+                <div class="control-input-wrapper">
+                    <button class="btn btn-sm toolbar-btn export-excel-btn" disabled>
+                        <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+                            <line x1="3" y1="9" x2="21" y2="9"></line>
+                            <line x1="3" y1="15" x2="21" y2="15"></line>
+                            <line x1="9" y1="3" x2="9" y2="21"></line>
+                            <line x1="15" y1="3" x2="15" y2="21"></line>
+                        </svg>
+                        <span>Excel</span>
+                    </button>
+                </div>
+            </div>
+        `).appendTo(this.page.page_form || this.page.wrapper.find('.page-form'));
+
+        this.$export_pdf_btn_wrapper = $(`
+            <div class="frappe-control toolbar-btn-wrapper export-btn-wrapper pdf-btn-wrapper">
+                <div class="control-input-wrapper">
+                    <button class="btn btn-sm export-pdf-btn toolbar-btn" disabled>
+                        <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="9" y1="15" x2="15" y2="15"></line>
+                            <line x1="9" y1="18" x2="12" y2="18"></line>
+                        </svg>
+                        <span>PDF</span>
+                    </button>
+                </div>
+            </div>
+        `).appendTo(this.page.page_form || this.page.wrapper.find('.page-form'));
+
+        this.$export_excel_btn = this.$export_excel_btn_wrapper.find('.export-excel-btn');
+        this.$export_pdf_btn = this.$export_pdf_btn_wrapper.find('.export-pdf-btn');
+
+        this.$export_excel_btn.on('click', () => this.export_report('excel'));
+        this.$export_pdf_btn.on('click', () => this.export_report('pdf'));
+
         this.load_plant_options();
     }
 
     // Any filter change invalidates the currently-shown data so the user
     // isn't left looking at results that no longer match their filters.
+    // Export buttons are disabled at the same time, for the same reason.
     mark_dirty() {
         this.filters_dirty = true;
+        this.set_export_buttons_enabled(false);
         if (this.$card && this.$card.is(':visible')) {
             this.show_stale_notice();
         }
+    }
+
+    set_export_buttons_enabled(enabled) {
+        this.$export_excel_btn && this.$export_excel_btn.prop('disabled', !enabled);
+        this.$export_pdf_btn && this.$export_pdf_btn.prop('disabled', !enabled);
     }
 
     show_stale_notice() {
@@ -180,10 +237,12 @@ class DistilleryProductionReport {
             padding: 10px 0 30px;
         }
 
-        .show-data-btn-wrapper {
+        /* ── Toolbar buttons (Show Data / Excel / PDF) ─────────────────── */
+
+        .toolbar-btn-wrapper {
             /* Matches the width Frappe gives other filter controls so the
                button doesn't stretch full-width or collapse to text width. */
-            min-width: 110px;
+            min-width: 116px;
             /* Bottom-align with the input row regardless of whatever
                align-items the parent filter row uses, since this wrapper
                has no label row above it while some other fields might. */
@@ -191,36 +250,86 @@ class DistilleryProductionReport {
             display: flex;
         }
 
-        .show-data-btn-wrapper .control-input-wrapper {
+        .toolbar-btn-wrapper .control-input-wrapper {
             display: flex;
             align-items: flex-end;
             width: 100%;
         }
 
-        .show-data-btn {
-            background: #2e7d5b !important;
-            color: #fff !important;
-            border: 1px solid #256b4d !important;
-            font-weight: 600;
-            border-radius: 6px;
-            /* Match the ~30px height of Frappe's standard input controls
-               so the button's box lines up exactly with the input boxes
-               beside it, rather than sitting taller/shorter. */
-            height: 30px;
-            line-height: 1;
-            padding: 0 16px;
+        .export-btn-wrapper {
+            margin-left: 14px;
+        }
+
+        .pdf-btn-wrapper {
+            margin-left: 8px;
+        }
+
+        .toolbar-btn {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
             width: 100%;
-            box-shadow: 0 1px 3px rgba(46,125,91,.3);
-            transition: background .15s ease;
-        }
-
-        .show-data-btn:hover {
-            background: #256b4d !important;
+            height: 32px;
+            padding: 0 16px;
+            line-height: 1;
+            font-weight: 600;
+            font-size: 13px;
+            letter-spacing: .1px;
             color: #fff !important;
+            border: none !important;
+            border-radius: 8px;
+            cursor: pointer;
+            background-size: 100% 200%;
+            background-position: top;
+            box-shadow: 0 1px 2px rgba(16,24,32,.12), 0 2px 6px -2px rgba(16,24,32,.18);
+            transition: background-position .25s ease, transform .12s ease, box-shadow .2s ease, opacity .15s ease;
         }
 
-        .show-data-btn:active {
-            background: #1e5940 !important;
+        .toolbar-btn svg {
+            width: 15px;
+            height: 15px;
+            flex-shrink: 0;
+        }
+
+        .toolbar-btn:hover:not(:disabled) {
+            background-position: bottom;
+            transform: translateY(-1px);
+            box-shadow: 0 3px 8px rgba(16,24,32,.16), 0 4px 12px -3px rgba(16,24,32,.22);
+        }
+
+        .toolbar-btn:active:not(:disabled) {
+            transform: translateY(0);
+            box-shadow: 0 1px 2px rgba(16,24,32,.14) inset;
+        }
+
+        .toolbar-btn:focus-visible {
+            outline: 2px solid rgba(0,0,0,.25);
+            outline-offset: 2px;
+        }
+
+        /* Show Data — indigo/blue, the "primary" action */
+        .show-data-btn {
+            background-image: linear-gradient(180deg, #4f6bf0 0%, #3d55d1 100%);
+        }
+
+        /* Excel — emerald green, evokes the Excel brand without copying it */
+        .export-excel-btn {
+            background-image: linear-gradient(180deg, #22a06b 0%, #168554 100%);
+        }
+
+        /* PDF — warm red/coral, evokes the PDF brand without copying it */
+        .export-pdf-btn {
+            background-image: linear-gradient(180deg, #ef5350 0%, #d8342f 100%);
+        }
+
+        .toolbar-btn:disabled {
+            opacity: .42;
+            cursor: not-allowed;
+            transform: none !important;
+            box-shadow: none !important;
+            background-image: linear-gradient(180deg, #aab4bd 0%, #8f99a3 100%) !important;
         }
 
         .distillery-report-card {
@@ -552,6 +661,7 @@ class DistilleryProductionReport {
                     this.$card.show();
                     this.$stale_notice.hide();
                     this.filters_dirty = false;
+                    this.set_export_buttons_enabled(true);
                     this.render_table(r.message);
                 }
             },
@@ -559,6 +669,51 @@ class DistilleryProductionReport {
                 this.loading = false;
             }
         });
+    }
+
+    // ── Export ──────────────────────────────────────────────────────────
+
+    export_report(kind) {
+        if (this.filters_dirty) {
+            frappe.show_alert({
+                message: __('Filters have changed — click Show Data before exporting.'),
+                indicator: 'orange'
+            });
+            return;
+        }
+
+        const companies = this.company_field.get_value();
+        const plants = this.plant_field.get_value();
+        const segments = this.segment_field.get_value();
+        const from_date = this.from_date_field.get_value();
+        const to_date = this.to_date_field.get_value();
+
+        if (!companies || !companies.length || !from_date || !to_date) {
+            frappe.show_alert({
+                message: __('Select at least one Company along with From Date and To Date.'),
+                indicator: 'orange'
+            });
+            return;
+        }
+
+        const method = kind === 'pdf'
+            ? 'informatics_custom_apps.eth.page.dmr.dmr.export_pdf'
+            : 'informatics_custom_apps.eth.page.dmr.dmr.export_excel';
+
+        const args = {
+            companies: JSON.stringify(companies),
+            from_date: from_date,
+            to_date: to_date,
+            plants: plants && plants.length ? JSON.stringify(plants) : '',
+            segments: segments && segments.length ? JSON.stringify(segments) : ''
+        };
+
+        // open_url_post builds a hidden form and submits it as a real POST,
+        // so the browser's native download handling picks up the
+        // binary/file response that export_excel/export_pdf set on
+        // frappe.response — frappe.call's XHR can't hand that off to a
+        // save-file dialog the way a form submission can.
+        open_url_post(`/api/method/${method}`, args);
     }
 
     // ── Rendering ───────────────────────────────────────────────────────
