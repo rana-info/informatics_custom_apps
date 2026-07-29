@@ -29,7 +29,8 @@ app_include_css = "/assets/informatics_custom_apps/css/custom.css"
 # app_include_js = "/assets/informatics_custom_apps/js/informatics_custom_apps.js"
 
 app_include_js = [
-    "/assets/informatics_custom_apps/js/uom_lock.js"
+    "/assets/informatics_custom_apps/js/uom_lock.js",
+    "/assets/informatics_custom_apps/js/common_warehouse.js"
 ]
 
 # include js, css files in header of web template
@@ -150,27 +151,44 @@ doctype_js = {
 # 	"ToDo": "custom_app.overrides.CustomToDo"
 # }
 
-# Document Events
-# ---------------
-# Hook on document methods and events
+
+WAREHOUSE_VALIDATION_DOCTYPES = [
+    "Purchase Order",
+    "Purchase Receipt",
+    "Purchase Invoice",
+    "Stock Entry",
+    "Delivery Note",
+    "Sales Order",
+    "Sales Invoice",
+    "Stock Reconciliation"
+]
+
+VALIDATE_WAREHOUSE = "informatics_custom_apps.utils.validate_item_warehouse"
+VALIDATE_PROCUREMENT_BUDGET = (
+    "informatics_custom_apps.ripl_customized_apps.doctype.procurement_budget.utils.validate_procurement_budget"
+)
+
 doc_events = {
-
+    **{
+        dt: {"validate": VALIDATE_WAREHOUSE}
+        for dt in WAREHOUSE_VALIDATION_DOCTYPES
+    },
     "Material Request": {
-        "validate": "informatics_custom_apps.ripl_customized_apps.doctype.procurement_budget.utils.validate_procurement_budget"
+        "validate": [
+            VALIDATE_PROCUREMENT_BUDGET
+        ]
     },
-
-    "Purchase Order": {
-        "validate": "informatics_custom_apps.ripl_customized_apps.doctype.procurement_budget.utils.validate_procurement_budget"
-    },
-    
-    "Stock Entry": {
-        "on_submit": "informatics_custom_apps.customizations.segment_reallocation.on_stock_entry_submit"
-    }
-
 }
 
-# Scheduled Tasks
-# ---------------
+doc_events["Purchase Order"]["validate"] = [
+    VALIDATE_WAREHOUSE,
+    VALIDATE_PROCUREMENT_BUDGET,
+]
+
+doc_events["Stock Entry"]["on_submit"] = (
+    "informatics_custom_apps.customizations.segment_reallocation.on_stock_entry_submit"
+)
+
 
 scheduler_events = {
 "daily_long": [
@@ -202,12 +220,12 @@ scheduler_events = {
 
 # Overriding Methods
 # ------------------------------
-#
+# #
 override_whitelisted_methods = {
     "erpnext.buying.doctype.purchase_order.purchase_order.make_purchase_receipt":
         "informatics_custom_apps.api.make_purchase_receipt"
 }
-#
+
 # each overriding function accepts a `data` argument;
 # generated from the base implementation of the doctype dashboard,
 # along with any modifications made in other Frappe apps
