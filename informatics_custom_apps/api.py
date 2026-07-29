@@ -328,4 +328,59 @@ def save_power_plant_log(company, plant, log_date, rows):
  
     frappe.db.commit()
     return doc.name
- 
+
+
+@frappe.whitelist()
+@frappe.validate_and_sanitize_search_inputs
+def warehouse_query(doctype, txt, searchfield, start, page_len, filters):
+    company = filters.get("company")
+    branch = filters.get("branch")
+    segment = filters.get("custom_segment") or filters.get("segment")
+    item_code = filters.get("item_code")
+
+    warehouse_filters = {"disabled": 0}
+    if company:
+        warehouse_filters["company"] = company
+    if branch:
+        warehouse_filters["custom_branch"] = branch
+    if segment:
+        warehouse_filters["custom_segment"] = segment
+
+    if item_code:
+        item_group = frappe.db.get_value("Item", item_code, "item_group")
+
+        mapping_names = frappe.get_all(
+            "Item Group Warehouse Mapping",
+            filters={"company": company, "branch": branch},
+            pluck="name",
+        )
+
+        allowed = set()
+        if mapping_names:
+            matching_maps = frappe.get_all(
+                "Item Groups",
+                filters={"parent": ["in", mapping_names], "item_group": item_group},
+                pluck="parent",
+            )
+            if matching_maps:
+                allowed = set(frappe.get_all(
+                    "Warehouses",
+                    filters={"parent": ["in", matching_maps]},
+                    pluck="warehouse",
+                ))
+
+        if allowed:
+            warehouse_filters["name"] = ["in", list(allowed)]
+
+    return frappe.get_all(
+        "Warehouse",
+        filters=warehouse_filters,
+        or_filters={
+            "name": ["like", f"%{txt}%"],
+            "warehouse_name": ["like", f"%{txt}%"],
+        },
+        fields=["name", "warehouse_name"],
+        start=start,
+        page_length=page_len,
+        as_list=True,
+    )
