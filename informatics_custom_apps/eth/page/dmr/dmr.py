@@ -1,3 +1,4 @@
+import io
 import frappe
 from frappe.utils import getdate, add_days, formatdate
 from collections import defaultdict
@@ -227,6 +228,18 @@ PROCESS_DATA_FIELDS = [
 # — check the actual DocType JSON and rename this entry (e.g.
 # "deaerator_steam_consumed") to whatever the real merged fieldname is.
 PROCESS_DATA_SUM_FIELDS = [f for f, _ in PROCESS_DATA_FIELDS]
+
+
+# =============================================================================
+# EXPORT STYLING — kept in one place so the Excel/PDF exports mirror the
+# on-screen section colors (see `section_colors` in dmr.js) exactly.
+# =============================================================================
+SECTION_COLORS_HEX = {
+    "A": "E3F2FD", "B": "FFF3E0", "C": "E8F5E9", "D": "F3E5F5",
+    "E": "E0F7FA", "F": "FCE4EC", "G": "FFF8E1", "H": "EFEBE9",
+    "I": "E8EAF6", "J": "F1F8E9", "K": "E0F2F1", "L": "FBE9E7",
+    "M": "EDE7F6", "N": "E1F5FE",
+}
 
 
 def get_fiscal_year_start(date):
@@ -965,12 +978,14 @@ def _parse_list_arg(val):
     return val
 
 
-@frappe.whitelist()
-def get_report_data(companies, from_date, to_date, plants=None, segments=None):
-    companies = _parse_list_arg(companies)
-    plants = _parse_list_arg(plants) or None
-    segments = _parse_list_arg(segments) or None
-
+# =============================================================================
+# SHARED PAYLOAD BUILDER
+# =============================================================================
+# get_report_data (JSON, for the on-screen table), export_excel and
+# export_pdf all need the exact same {meta, columns} structure, so it's
+# built once here and each caller just formats/serializes it differently.
+# =============================================================================
+def _build_report_payload(companies, from_date, to_date, plants=None, segments=None):
     from_date = getdate(from_date)
     to_date = getdate(to_date)
 
@@ -1007,6 +1022,281 @@ def get_report_data(companies, from_date, to_date, plants=None, segments=None):
     columns.append({"label": todate_label, "values": {r["sr"]: r.get("value") for r in todate_rows}})
 
     return {"meta": meta, "columns": columns}
+
+
+def _fmt_num(val, precision=2):
+    """Same rounding rule as the frontend's format_value/format_value_labeled:
+    3 decimal places for small non-zero magnitudes, else 2. Returns None for
+    blank/unparseable values so callers can render their own placeholder."""
+    if val is None or val == "":
+        return None
+    try:
+        n = float(val)
+    except (TypeError, ValueError):
+        return None
+    if n == 0:
+        return 0
+    p = 3 if abs(n) < 0.1 else precision
+    return round(n, p)
+
+
+@frappe.whitelist()
+def get_report_data(companies, from_date, to_date, plants=None, segments=None):
+    companies = _parse_list_arg(companies)
+    plants = _parse_list_arg(plants) or None
+    segments = _parse_list_arg(segments) or None
+    return _build_report_payload(companies, from_date, to_date, plants, segments)
+
+
+# =============================================================================
+# EXPORT — EXCEL
+# =============================================================================
+# Mirrors the on-screen table 1:1: same section colors, same Total-row
+# styling, same To Date column highlighting, and the same Standard/Actual
+# split for Section I.11-I.18 (shown as two stacked values in one cell,
+# since a merged sub-header per date column isn't practical in a flat
+# spreadsheet grid). Numeric cells are written as real numbers (not
+# strings) so totals/formulas still work if the user builds on the sheet.
+# =============================================================================
+@frappe.whitelist()
+def export_excel(companies, from_date, to_date, plants=None, segments=None):
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    companies = _parse_list_arg(companies)
+    plants = _parse_list_arg(plants) or None
+    segments = _parse_list_arg(segments) or None
+    from_date, to_date = getdate(from_date), getdate(to_date)
+
+    payload = _build_report_payload(companies, from_date, to_date, plants, segments)
+    meta, columns = payload["meta"], payload["columns"]
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "DMR"
+
+    thin = Side(style="thin", color="AAB8C3")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    n_fixed_cols = 3  # Parameters, UOM, Standard (Standard column mirrors the
+    # on-screen table, which reserves this column but leaves it blank per row)
+    n_date_cols = len(columns)  # includes the trailing "To Date" column
+    total_cols = n_fixed_cols + n_date_cols
+
+    # Title row
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=total_cols)
+    title_cell = ws.cell(row=1, column=1, value="Daily Manufacturing Report")
+    title_cell.font = Font(size=14, bold=True, color="24313B")
+    title_cell.alignment = Alignment(horizontal="center")
+
+    ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=total_cols)
+    subtitle = ws.cell(
+        row=2, column=1,
+        value=f"{formatdate(from_date, 'dd/mm/yy')} - {formatdate(to_date, 'dd/mm/yy')}  |  Values per section UOM",
+    )
+    subtitle.font = Font(size=10, italic=True, color="666666")
+    subtitle.alignment = Alignment(horizontal="center")
+
+    header_row_idx = 3
+    headers = ["Parameters", "UOM", "Standard"] + [c["label"] for c in columns]
+    header_fill = PatternFill("solid", fgColor="E8EEF4")
+    for col_idx, htext in enumerate(headers, start=1):
+        cell = ws.cell(row=header_row_idx, column=col_idx, value=htext)
+        cell.font = Font(bold=True, color="36474F")
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        cell.border = border
+    # Highlight the "To Date" column header, same as .to-date-col in the UI.
+    ws.cell(row=header_row_idx, column=total_cols).fill = PatternFill("solid", fgColor="D0DFE9")
+
+    row_idx = header_row_idx + 1
+    total_fill = PatternFill("solid", fgColor="EEF3F7")
+    to_date_fill = PatternFill("solid", fgColor="D7E2EC")
+
+    for row in meta:
+        if row.get("header"):
+            fill_hex = SECTION_COLORS_HEX.get(row["sr"], "F5F5F5")
+            fill = PatternFill("solid", fgColor=fill_hex)
+            ws.merge_cells(start_row=row_idx, start_column=1, end_row=row_idx, end_column=total_cols)
+            cell = ws.cell(row=row_idx, column=1, value=row["label"])
+            cell.font = Font(bold=True, color="1A1A1A")
+            for c in range(1, total_cols + 1):
+                ws.cell(row=row_idx, column=c).fill = fill
+                ws.cell(row=row_idx, column=c).border = border
+            row_idx += 1
+            continue
+
+        is_total = row.get("total", False)
+        label_text = f"{row['sr']}  {row['label']}"
+        if row.get("item_code"):
+            label_text += f" ({row['item_code']})"
+
+        label_cell = ws.cell(row=row_idx, column=1, value=label_text)
+        label_cell.font = Font(bold=True, color="1F2B34")
+        label_cell.alignment = Alignment(horizontal="left")
+
+        uom_cell = ws.cell(row=row_idx, column=2, value=row.get("uom") or "")
+        uom_cell.alignment = Alignment(horizontal="center")
+
+        # Standard column: intentionally blank, matching the on-screen report.
+        ws.cell(row=row_idx, column=3, value=None)
+
+        for i, col in enumerate(columns):
+            val = col["values"].get(row["sr"])
+            cell = ws.cell(row=row_idx, column=n_fixed_cols + 1 + i)
+            cell.border = border
+            if isinstance(val, dict):
+                ideal = _fmt_num(val.get("ideal"))
+                actual = _fmt_num(val.get("actual"))
+                ideal_txt = "No data" if ideal is None else f"{ideal:,.2f}"
+                actual_txt = "No data" if actual is None else f"{actual:,.2f}"
+                cell.value = f"Std: {ideal_txt}  /  Act: {actual_txt}"
+                cell.alignment = Alignment(horizontal="right", wrap_text=True)
+            else:
+                num = _fmt_num(val)
+                cell.value = num if num is not None else "-"
+                if num is not None:
+                    cell.number_format = "#,##0.00"
+                cell.alignment = Alignment(horizontal="right")
+            if i == len(columns) - 1:
+                cell.fill = to_date_fill if not is_total else PatternFill("solid", fgColor="D7E2EC")
+
+        if is_total:
+            for c in range(1, total_cols + 1):
+                existing = ws.cell(row=row_idx, column=c)
+                existing.font = Font(bold=True, color=existing.font.color)
+                if c != total_cols:
+                    existing.fill = total_fill
+
+        for c in range(1, total_cols + 1):
+            ws.cell(row=row_idx, column=c).border = border
+
+        row_idx += 1
+
+    # Column widths
+    ws.column_dimensions["A"].width = 44
+    ws.column_dimensions["B"].width = 10
+    ws.column_dimensions["C"].width = 12
+    for i in range(n_date_cols):
+        col_letter = get_column_letter(n_fixed_cols + 1 + i)
+        ws.column_dimensions[col_letter].width = 22 if i == n_date_cols - 1 else 16
+
+    ws.freeze_panes = ws.cell(row=header_row_idx + 1, column=n_fixed_cols + 1).coordinate
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    filename = f"DMR_{from_date}_to_{to_date}.xlsx"
+    frappe.response["filename"] = filename
+    frappe.response["filecontent"] = buf.getvalue()
+    frappe.response["type"] = "binary"
+
+
+# =============================================================================
+# EXPORT — PDF
+# =============================================================================
+# Renders the same {meta, columns} payload as an HTML table (section colors,
+# total-row styling, To Date column highlight, Standard/Actual split) and
+# converts it via Frappe's wkhtmltopdf wrapper. Landscape + a wide page size
+# since the report can have many date columns.
+# =============================================================================
+def _render_report_html(payload, from_date, to_date):
+    meta, columns = payload["meta"], payload["columns"]
+    escape = frappe.utils.escape_html
+
+    head_cells = "<th>Parameters</th><th>UOM</th><th>Standard</th>"
+    for i, col in enumerate(columns):
+        style = ' style="background:#D0DFE9;"' if i == len(columns) - 1 else ""
+        head_cells += f"<th{style}>{escape(col['label'])}</th>"
+
+    body_rows = []
+    for row in meta:
+        if row.get("header"):
+            color = SECTION_COLORS_HEX.get(row["sr"], "F5F5F5")
+            colspan = 2 + len(columns)
+            body_rows.append(
+                f'<tr style="background:#{color};">'
+                f'<td style="font-weight:bold;">{escape(row["label"])}</td>'
+                f'<td colspan="{colspan}"></td></tr>'
+            )
+            continue
+
+        is_total = row.get("total")
+        row_style = "background:#EEF3F7;font-weight:bold;" if is_total else ""
+        label = f"{row['sr']}&nbsp;&nbsp;{escape(row['label'])}"
+        if row.get("item_code"):
+            label += f' <span style="color:#8ea0ac;font-size:8px;">({escape(row["item_code"])})</span>'
+
+        cells = f'<tr style="{row_style}"><td style="text-align:left;font-weight:bold;">{label}</td>'
+        cells += f'<td style="text-align:center;">{escape(row.get("uom") or "")}</td>'
+        cells += "<td></td>"
+
+        for i, col in enumerate(columns):
+            val = col["values"].get(row["sr"])
+            is_last = i == len(columns) - 1
+            td_style = "text-align:right;" + ("background:#D7E2EC;" if is_last else "")
+            if isinstance(val, dict):
+                ideal = _fmt_num(val.get("ideal"))
+                actual = _fmt_num(val.get("actual"))
+                ideal_txt = "No data" if ideal is None else f"{ideal:,.2f}"
+                actual_txt = "No data" if actual is None else f"{actual:,.2f}"
+                text = f"Std: {ideal_txt}<br/>Act: {actual_txt}"
+            else:
+                num = _fmt_num(val)
+                text = "-" if num is None else f"{num:,.2f}"
+            cells += f'<td style="{td_style}">{text}</td>'
+
+        cells += "</tr>"
+        body_rows.append(cells)
+
+    date_range = f"{formatdate(from_date, 'dd/mm/yy')} - {formatdate(to_date, 'dd/mm/yy')}"
+    html = f"""
+    <html>
+    <head>
+    <style>
+        body {{ font-family: Arial, sans-serif; font-size: 8px; }}
+        h2 {{ text-align:center; margin-bottom:2px; color:#24313B; }}
+        p.subtitle {{ text-align:center; color:#666; margin-top:0; margin-bottom:10px; }}
+        table {{ width:100%; border-collapse:collapse; }}
+        th, td {{ border:1px solid #AAB8C3; padding:3px 5px; white-space:nowrap; }}
+        th {{ background:#E8EEF4; text-align:right; color:#36474F; }}
+        th:first-child, td:first-child {{ text-align:left; min-width:160px; }}
+    </style>
+    </head>
+    <body>
+        <h2>Daily Manufacturing Report</h2>
+        <p class="subtitle">{date_range} &mdash; Values per section UOM</p>
+        <table>
+            <thead><tr>{head_cells}</tr></thead>
+            <tbody>{''.join(body_rows)}</tbody>
+        </table>
+    </body>
+    </html>
+    """
+    return html
+
+
+@frappe.whitelist()
+def export_pdf(companies, from_date, to_date, plants=None, segments=None):
+    from frappe.utils.pdf import get_pdf
+
+    companies = _parse_list_arg(companies)
+    plants = _parse_list_arg(plants) or None
+    segments = _parse_list_arg(segments) or None
+    from_date, to_date = getdate(from_date), getdate(to_date)
+
+    payload = _build_report_payload(companies, from_date, to_date, plants, segments)
+    html = _render_report_html(payload, from_date, to_date)
+
+    pdf_bytes = get_pdf(html, {"orientation": "Landscape", "page-size": "A3", "margin-top": "10mm",
+                                "margin-bottom": "10mm", "margin-left": "5mm", "margin-right": "5mm"})
+
+    filename = f"DMR_{from_date}_to_{to_date}.pdf"
+    frappe.response["filename"] = filename
+    frappe.response["filecontent"] = pdf_bytes
+    frappe.response["type"] = "download"
 
 
 @frappe.whitelist()
