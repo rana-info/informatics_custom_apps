@@ -25,7 +25,7 @@ LAB_PARAMETERS = [
     (20, "FRC", "mg/l"),
     (21, "Delta - T", "deg C"),
     (22, "CT - Evaporation", "m3/day"),
-    (23, "COC", ""),
+    (23, "COD", "mg/l"),
     (24, "SDI", "mg/l"),
     (25, "Turbudity", "NTU"),
 ]
