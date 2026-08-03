@@ -359,7 +359,7 @@ def get_plant_logbook(plant, date):
 
         for df in meta.fields:
 
-            if df.fieldtype not in ("Float", "Int", "Currency"):
+            if df.fieldtype not in ("Float", "Int", "Currency","Small Text","Percent"):
                 continue
 
             fieldname = df.fieldname
