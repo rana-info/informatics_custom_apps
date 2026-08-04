@@ -27,8 +27,7 @@ frappe.ui.form.on("Maize Rate Comparision", {
             grid.cannot_add_rows = true;
             grid.cannot_delete_rows = true;
 
-            // hide the buttons/checkboxes outright rather than relying on
-            // the flags alone -- v15 doesn't consistently honor them
+            // hide the buttons/checkboxes outright
             grid.wrapper.find(".grid-add-row").hide();
             grid.wrapper.find(".grid-remove-rows").hide();
             grid.wrapper.find(".grid-remove-all-rows").hide();
