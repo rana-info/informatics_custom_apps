@@ -32,8 +32,11 @@ frappe.ui.form.on("Competitor Rate Comparision", {
             grid.wrapper.find(".grid-remove-rows").hide();
             grid.wrapper.find(".grid-remove-all-rows").hide();
             grid.wrapper.find(".grid-append-row").hide();
-            grid.wrapper.find(".grid-row-check").hide();
-            grid.wrapper.find(".grid-body .grid-row .grid-row-check").hide();
+
+            // .row-check covers BOTH the header "select all" checkbox
+            // and every row's checkbox -- hiding only .grid-row-check
+            // (body only) leaves the empty header column behind
+            grid.wrapper.find(".row-check").hide();
 
             frm.refresh_field(fieldname);
         });
@@ -41,6 +44,8 @@ frappe.ui.form.on("Competitor Rate Comparision", {
 
     fetch_master_data(frm) {
         frappe.call({
+            // NOTE: verify this dotted path against your actual folder
+            // structure -- see message below, this looks one segment short
             method:
                 "informatics_custom_apps.ripl_customized_apps.doctype.competitor_rate_comparision.competitor_rate_comparision.get_master_plant_rows",
             callback: function (r) {
