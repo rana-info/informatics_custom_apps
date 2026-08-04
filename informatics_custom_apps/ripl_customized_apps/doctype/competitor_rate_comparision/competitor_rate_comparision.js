@@ -10,7 +10,7 @@ const CHILD_TABLE_FIELDS = [
     "karimganj_biofuel",
 ];
 
-frappe.ui.form.on("Maize Rate Comparision", {
+frappe.ui.form.on("Competitor Rate Comparision", {
     onload(frm) {
         if (frm.is_new()) {
             frm.trigger("fetch_master_data");
@@ -42,7 +42,7 @@ frappe.ui.form.on("Maize Rate Comparision", {
     fetch_master_data(frm) {
         frappe.call({
             method:
-                "informatics_custom_apps.ripl_customized_apps.doctype.maize_rate_comparision.maize_rate_comparision.get_master_plant_rows",
+                "informatics_custom_apps.ripl_customized_apps.doctype.competitor_rate_comparision.competitor_rate_comparision.get_master_plant_rows",
             callback: function (r) {
                 if (r.exc || !r.message) return;
 
