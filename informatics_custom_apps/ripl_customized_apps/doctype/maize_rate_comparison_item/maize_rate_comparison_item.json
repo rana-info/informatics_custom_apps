@@ -1,43 +1,70 @@
 {
+ "actions": [],
+ "creation": "2026-08-04 12:10:22.734963",
  "doctype": "DocType",
- "name": "Maize Rate Comparison Item",
- "module": "RIPL Customized Apps",
- "custom": 0,
- "istable": 1,
- "issingle": 0,
- "is_submittable": 0,
  "editable_grid": 1,
- "track_changes": 0,
  "engine": "InnoDB",
+ "field_order": [
+  "company_name",
+  "location",
+  "rate_per_qtl",
+  "ddgs_rate_per_qtl",
+  "dwgs_rate_per_qtl"
+ ],
  "fields": [
   {
+   "columns": 2,
    "fieldname": "company_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
    "label": "Company Name",
-   "fieldtype": "Data",
-   "reqd": 1,
    "read_only": 1,
-   "in_list_view": 1,
-   "columns": 2
+   "reqd": 1
   },
   {
+   "columns": 2,
    "fieldname": "location",
-   "label": "Location",
    "fieldtype": "Data",
-   "reqd": 1,
-   "read_only": 1,
    "in_list_view": 1,
-   "columns": 2
+   "label": "Location",
+   "read_only": 1,
+   "reqd": 1
   },
   {
+   "columns": 2,
    "fieldname": "rate_per_qtl",
-   "label": "Rate per Qtl",
-   "fieldtype": "Float",
-   "precision": "2",
-   "reqd": 0,
-   "read_only": 0,
+   "fieldtype": "Currency",
    "in_list_view": 1,
-   "columns": 2
+   "label": "Maize Rate Per Qtl",
+   "precision": "2"
+  },
+  {
+   "columns": 2,
+   "fieldname": "ddgs_rate_per_qtl",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "DDGS Rate Per Qtl",
+   "precision": "2"
+  },
+  {
+   "columns": 2,
+   "fieldname": "dwgs_rate_per_qtl",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "DWGS Rate Per Qtl",
+   "precision": "2"
   }
  ],
- "permissions": []
+ "istable": 1,
+ "links": [],
+ "modified": "2026-08-04 13:30:59.257378",
+ "modified_by": "Administrator",
+ "module": "RIPL Customized Apps",
+ "name": "Maize Rate Comparison Item",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
 }

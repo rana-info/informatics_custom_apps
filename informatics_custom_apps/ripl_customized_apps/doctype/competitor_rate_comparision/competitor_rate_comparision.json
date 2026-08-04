@@ -1,6 +1,6 @@
 {
  "actions": [],
- "autoname": "naming_series:",
+ "autoname": "CRC.-.posting_date.-.####",
  "creation": "2026-08-04 12:10:22.563433",
  "doctype": "DocType",
  "editable_grid": 1,
@@ -8,15 +8,12 @@
  "field_order": [
   "naming_series",
   "posting_date",
-  "section_rsl_loukha",
   "rsl_loukha",
   "rsl_belwara",
-  "column_break_uzek",
-  "eth_biofuel",
   "superior_biofuels",
-  "column_break_fgko",
-  "buttar_biofuel",
+  "eth_biofuel",
   "karimganj_biofuel",
+  "buttar_biofuel",
   "section_karimganj_biofuel",
   "amended_from"
  ],
@@ -37,10 +34,7 @@
    "reqd": 1
   },
   {
-   "fieldname": "section_rsl_loukha",
-   "fieldtype": "Section Break"
-  },
-  {
+   "bold": 1,
    "fieldname": "rsl_loukha",
    "fieldtype": "Table",
    "label": "RSL Loukha",
@@ -85,25 +79,17 @@
    "fieldtype": "Link",
    "label": "Amended From",
    "no_copy": 1,
-   "options": "Maize Rate Comparision",
+   "options": "Competitor Rate Comparision",
    "print_hide": 1,
    "read_only": 1
-  },
-  {
-   "fieldname": "column_break_uzek",
-   "fieldtype": "Column Break"
-  },
-  {
-   "fieldname": "column_break_fgko",
-   "fieldtype": "Column Break"
   }
  ],
  "is_submittable": 1,
  "links": [],
- "modified": "2026-08-04 12:50:12.391952",
+ "modified": "2026-08-04 13:30:13.782766",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
- "name": "Maize Rate Comparision",
+ "name": "Competitor Rate Comparision",
  "naming_rule": "By \"Naming Series\" field",
  "owner": "Administrator",
  "permissions": [

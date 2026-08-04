@@ -15,12 +15,12 @@ CHILD_TABLE_FIELDS = [
 ]
 
 
-class MaizeRateComparision(Document):
+class CompetitorRateComparision(Document):
     def validate(self):
         self.sync_with_master()
 
-    def before_submit(self):
-        self.validate_all_rates_entered()
+    # def before_submit(self):
+    #     self.validate_all_rates_entered()
 
     def sync_with_master(self):
         """Rebuild every child table from the current master
