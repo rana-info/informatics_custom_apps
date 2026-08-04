@@ -1,0 +1,116 @@
+{
+ "actions": [],
+ "creation": "2026-08-04 12:10:22.871819",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "section_rsl_loukha",
+  "rsl_loukha",
+  "section_buttar_biofuel",
+  "buttar_biofuel",
+  "section_eth_biofuel",
+  "eth_biofuel",
+  "section_superior_biofuels",
+  "superior_biofuels",
+  "section_rsl_belwara",
+  "rsl_belwara",
+  "section_karimganj_biofuel",
+  "karimganj_biofuel"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_rsl_loukha",
+   "fieldtype": "Section Break",
+   "label": "RSL Loukha"
+  },
+  {
+   "allow_bulk_edit": 1,
+   "fieldname": "rsl_loukha",
+   "fieldtype": "Table",
+   "label": "RSL Loukha",
+   "options": "Maize Company Master Item"
+  },
+  {
+   "fieldname": "section_buttar_biofuel",
+   "fieldtype": "Section Break",
+   "label": "Buttar Biofuel"
+  },
+  {
+   "allow_bulk_edit": 1,
+   "fieldname": "buttar_biofuel",
+   "fieldtype": "Table",
+   "label": "Buttar Biofuel",
+   "options": "Maize Company Master Item"
+  },
+  {
+   "fieldname": "section_eth_biofuel",
+   "fieldtype": "Section Break",
+   "label": "ETH Biofuel"
+  },
+  {
+   "allow_bulk_edit": 1,
+   "fieldname": "eth_biofuel",
+   "fieldtype": "Table",
+   "label": "ETH Biofuel",
+   "options": "Maize Company Master Item"
+  },
+  {
+   "fieldname": "section_superior_biofuels",
+   "fieldtype": "Section Break",
+   "label": "Superior Biofuels"
+  },
+  {
+   "allow_bulk_edit": 1,
+   "fieldname": "superior_biofuels",
+   "fieldtype": "Table",
+   "label": "Superior Biofuels",
+   "options": "Maize Company Master Item"
+  },
+  {
+   "fieldname": "section_rsl_belwara",
+   "fieldtype": "Section Break",
+   "label": "RSL Belwara"
+  },
+  {
+   "allow_bulk_edit": 1,
+   "fieldname": "rsl_belwara",
+   "fieldtype": "Table",
+   "label": "RSL Belwara",
+   "options": "Maize Company Master Item"
+  },
+  {
+   "fieldname": "section_karimganj_biofuel",
+   "fieldtype": "Section Break",
+   "label": "Karimganj Biofuel"
+  },
+  {
+   "allow_bulk_edit": 1,
+   "fieldname": "karimganj_biofuel",
+   "fieldtype": "Table",
+   "label": "Karimganj Biofuel",
+   "options": "Maize Company Master Item"
+  }
+ ],
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-08-04 12:19:34.320410",
+ "modified_by": "Administrator",
+ "module": "RIPL Customized Apps",
+ "name": "Maize Rate Comparison Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "role": "System Manager",
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
