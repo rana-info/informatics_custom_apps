@@ -7,6 +7,7 @@ const CHILD_TABLE_FIELDS = [
     "eth_biofuel",
     "superior_biofuels",
     "rsl_belwara",
+    "rsld_karnal",
     "karimganj_biofuel",
 ];
 

@@ -1,6 +1,28 @@
 import frappe
 
 
+# Master list of known DMR parameters. Used as the base row-set for the
+# "Key Operational Parameters" table so a row still shows (with Total
+# pulled from the parent doc) even when the child table has no matching
+# row yet. Any fieldname found in the child table but missing here is
+# appended automatically at render time.
+#
+# NOTE: this is a partial list - extend with the remaining parameters
+# from your field_tag_map before relying on this in production.
+FIELD_TAG_MAP = {
+    "float_zcpn": {"tag": "FT302", "label": "Steam Produced", "agg": "sum"},
+    "float_pvrh": {"tag": "EKW2000", "label": "Power Generation", "agg": "sum"},
+    "float_reke": {"tag": "TE414", "label": "ESP Outlet Temp", "agg": "avg"},
+    "deaerator": {"tag": "FT102", "label": "Deartor", "agg": "sum"},
+    "main_steam_pressure": {"tag": "PT302", "label": "Main Steam Pressure", "agg": "avg"},
+    "main_steam_temprature": {"tag": "TT303", "label": "Main Steam Temprature", "agg": "avg"},
+    "oxygen__at_eco_ol": {"tag": "AT401", "label": "Oxygen % At Eco O/L", "agg": "avg"},
+    "boiler_feed_water_flow": {"tag": "FT301", "label": "Boiler Feed Water Flow", "agg": "sum"},
+    "dm_flow_to_dearator": {"tag": "FT101", "label": "DM Flow To Dearator", "agg": "sum"},
+    "turbine_steam": {"tag": "FT2001", "label": "Turbine Steam", "agg": "sum"}
+}
+
+
 # Maps generic parameter name -> actual Power Plant Log Book fieldname,
 # per section. "Power Plant Log Norms" stores norms against these exact
 # fieldnames (ph, ph1, ph2, conductivity, conductivity1, ...).
@@ -28,25 +50,60 @@ def get_dashboard(date):
 
     norms = get_norms()
 
-    logs = frappe.get_all(
+    log_rows = frappe.get_all(
         "Power Plant Log Book",
         filters={
-            "log_date": date
+            "log_date": date,
+
         },
+        or_filters=[
+        ["ph", "!=", 0],
+        ["ph1", "!=", 0],
+        ["ph2", "!=", 0],
+        ["conductivity", "!=", 0],
+        ["conductivity1", "!=", 0],
+        ["conductivity2", "!=", 0],
+        ["silica", "!=", 0],
+        ["silica1", "!=", 0],
+        ["silica2", "!=", 0],
+    ],
         fields=[
             "name",
             "plant"
         ]
     )
 
+    log_map = {row.plant: row.name for row in log_rows}
+
+    dmr_parent_rows = frappe.get_all(
+        "DMR Boiler And Turbine Parameters",
+        filters={
+            "date": date
+        },
+        or_filters=[
+        ["float_zcpn", "!=", 0],
+        ["float_pvrh", "!=", 0],
+        ["float_reke", "!=", 0],
+        ["deaerator", "!=", 0],
+        ["main_steam_pressure", "!=", 0],
+        ["main_steam_temprature", "!=", 0],
+        ["oxygen__at_eco_ol", "!=", 0],
+        ["boiler_feed_water_flow", "!=", 0],
+        ["dm_flow_to_dearator", "!=", 0],
+        ["turbine_steam", "!=", 0],
+        ],
+        fields=[
+            "plant"
+        ]
+    )
+
+    dmr_plant_set = {row.plant for row in dmr_parent_rows}
+
+    all_plants = sorted(set(log_map.keys()) | dmr_plant_set)
+
     plants = []
 
-    for log in logs:
-
-        doc = frappe.get_doc(
-            "Power Plant Log Book",
-            log.name
-        )
+    for plant_name in all_plants:
 
         feed_water = {
             "ph": [],
@@ -66,28 +123,30 @@ def get_dashboard(date):
             "silica": []
         }
 
-        for row in doc.logs:
+        if plant_name in log_map:
 
-            add_value(feed_water["ph"], row.ph)
-            add_value(feed_water["conductivity"], row.conductivity)
-            add_value(feed_water["silica"], row.silica)
+            doc = frappe.get_doc(
+                "Power Plant Log Book",
+                log_map[plant_name]
+            )
 
-            add_value(boiler_water["ph"], row.ph1)
-            add_value(boiler_water["conductivity"], row.conductivity1)
-            add_value(boiler_water["silica"], row.silica1)
+            for row in doc.logs:
 
-            add_value(steam["ph"], row.ph2)
-            add_value(steam["conductivity"], row.conductivity2)
-            add_value(steam["silica"], row.silica2)
+                add_value(feed_water["ph"], row.ph)
+                add_value(feed_water["conductivity"], row.conductivity)
+                add_value(feed_water["silica"], row.silica)
 
-        # Skip plant if no required values found
+                add_value(boiler_water["ph"], row.ph1)
+                add_value(boiler_water["conductivity"], row.conductivity1)
+                add_value(boiler_water["silica"], row.silica1)
 
-        if not has_data(feed_water, boiler_water, steam):
-            continue
+                add_value(steam["ph"], row.ph2)
+                add_value(steam["conductivity"], row.conductivity2)
+                add_value(steam["silica"], row.silica2)
 
         plants.append({
 
-            "plant": log.plant,
+            "plant": plant_name,
 
             "feed_water": calculate_section(feed_water, norms, SECTION_FIELD_MAP["Feed Water"]),
 
@@ -95,7 +154,7 @@ def get_dashboard(date):
 
             "steam": calculate_section(steam, norms, SECTION_FIELD_MAP["Steam"]),
 
-            "dmr": get_dmr_data(log.plant, date)
+            "dmr": get_dmr_data(plant_name, date)
 
         })
 
@@ -152,13 +211,45 @@ def get_norms():
 
     return norms
 
+def round_value(value):
+    if value is None:
+        return None
+    try:
+        return round(float(value), 2)
+    except (ValueError, TypeError):
+        return value
+
+
+def format_time(value):
+    if not value:
+        return None
+
+    try:
+        # datetime.time object
+        return value.strftime("%H:%M")
+    except AttributeError:
+        pass
+
+    try:
+        # string values
+        parts = str(value).split(":")
+        return f"{int(parts[0]):02d}:{int(parts[1]):02d}"
+    except Exception:
+        return value
 
 def get_dmr_data(plant, date):
     """
-    Fetches all DMR Parameters Range child rows for the given plant + date,
-    and attaches a "total" pulled off the parent doc at the same fieldname
-    as the row's field_name (e.g. row.field_name = "float_zcpn" ->
-    total = parent_doc.float_zcpn).
+    Returns one row per known DMR parameter (from FIELD_TAG_MAP, plus any
+    extra fieldname found in the child table that isn't in the map).
+
+    For each parameter:
+    - If a matching "DMR Parameters Range" child row exists, its
+      max/min/avg/time values are used.
+    - "total" is always pulled straight off the parent doc at the same
+      fieldname, regardless of whether a child row exists - this is what
+      lets Total show up even when the child table hasn't been filled in.
+
+    If no parent record exists for this plant + date at all, returns [].
     """
 
     parents = frappe.get_all(
@@ -169,6 +260,9 @@ def get_dmr_data(plant, date):
         },
         fields=["name"]
     )
+
+    if not parents:
+        return []
 
     dmr_rows = []
 
@@ -198,20 +292,42 @@ def get_dmr_data(plant, date):
             order_by="idx asc"
         )
 
-        for row in child_rows:
+        rows_by_field = {
+            row.field_name: row
+            for row in child_rows
+            if row.field_name
+        }
 
-            total = getattr(parent_doc, row.field_name, None) if row.field_name else None
+        # Master fieldname list = known map + anything extra in child data
+        all_fieldnames = list(FIELD_TAG_MAP.keys())
+
+        for fieldname in rows_by_field:
+            if fieldname not in all_fieldnames:
+                all_fieldnames.append(fieldname)
+
+        for fieldname in all_fieldnames:
+
+            child_row = rows_by_field.get(fieldname)
+            map_entry = FIELD_TAG_MAP.get(fieldname, {})
+
+            label = (
+                (child_row.parameter_name if child_row else None)
+                or map_entry.get("label")
+                or fieldname
+            )
+
+            total = getattr(parent_doc, fieldname, None)
 
             dmr_rows.append({
-                "parameter_name": row.parameter_name,
-                "engg_units": row.engg_units,
-                "max_value": row.max_value,
-                "max_value_time": row.max_value_time,
-                "min_value": row.min_value,
-                "min_value_time": row.min_value_time,
-                "average_value": row.average_value,
-                "total": total
-            })
+            "parameter_name": label,
+            "engg_units": child_row.engg_units if child_row else None,
+            "max_value": round_value(child_row.max_value) if child_row else None,
+            "max_value_time": format_time(child_row.max_value_time) if child_row else None,
+            "min_value": round_value(child_row.min_value) if child_row else None,
+            "min_value_time": format_time(child_row.min_value_time) if child_row else None,
+            "average_value": round_value(child_row.average_value) if child_row else None,
+            "total": round_value(total)
+        })
 
     return dmr_rows
 
@@ -221,18 +337,6 @@ def add_value(target, value):
     if value not in [None, "", 0]:
 
         target.append(float(value))
-
-
-def has_data(*sections):
-
-    for section in sections:
-
-        for values in section.values():
-
-            if values:
-                return True
-
-    return False
 
 
 def calculate_section(section, norms, field_map):

@@ -140,6 +140,7 @@
    "fieldname": "company",
    "fieldtype": "Link",
    "in_list_view": 1,
+   "in_standard_filter": 1,
    "label": "Company",
    "options": "Company",
    "reqd": 1
@@ -147,6 +148,7 @@
   {
    "fieldname": "plant",
    "fieldtype": "Link",
+   "in_standard_filter": 1,
    "label": "Plant",
    "options": "Branch",
    "reqd": 1
@@ -276,7 +278,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-08-06 13:11:05.211704",
+ "modified": "2026-08-06 15:09:16.388587",
  "modified_by": "Administrator",
  "module": "ETH",
  "name": "DMR Boiler And Turbine Parameters",

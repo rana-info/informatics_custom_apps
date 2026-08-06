@@ -12,6 +12,7 @@ CHILD_TABLE_FIELDS = [
     "superior_biofuels",
     "rsl_belwara",
     "karimganj_biofuel",
+    "rsld_karnal"
 ]
 
 
