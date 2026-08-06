@@ -14,6 +14,7 @@
   "eth_biofuel",
   "karimganj_biofuel",
   "buttar_biofuel",
+  "rsld_karnal",
   "section_karimganj_biofuel",
   "amended_from"
  ],
@@ -82,11 +83,17 @@
    "options": "Competitor Rate Comparision",
    "print_hide": 1,
    "read_only": 1
+  },
+  {
+   "fieldname": "rsld_karnal",
+   "fieldtype": "Table",
+   "label": "RSLD Karnal",
+   "options": "Maize Rate Comparison Item"
   }
  ],
  "is_submittable": 1,
  "links": [],
- "modified": "2026-08-04 13:30:13.782766",
+ "modified": "2026-08-06 15:52:11.038573",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "Competitor Rate Comparision",

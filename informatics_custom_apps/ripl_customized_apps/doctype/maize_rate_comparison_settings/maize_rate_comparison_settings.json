@@ -16,7 +16,9 @@
   "section_rsl_belwara",
   "rsl_belwara",
   "section_karimganj_biofuel",
-  "karimganj_biofuel"
+  "karimganj_biofuel",
+  "section_break_rjux",
+  "rsld_karnal"
  ],
  "fields": [
   {
@@ -90,11 +92,22 @@
    "fieldtype": "Table",
    "label": "Karimganj Biofuel",
    "options": "Maize Company Master Item"
+  },
+  {
+   "fieldname": "section_break_rjux",
+   "fieldtype": "Section Break"
+  },
+  {
+   "allow_bulk_edit": 1,
+   "fieldname": "rsld_karnal",
+   "fieldtype": "Table",
+   "label": "RSLD Karnal",
+   "options": "Maize Company Master Item"
   }
  ],
  "issingle": 1,
  "links": [],
- "modified": "2026-08-04 12:19:34.320410",
+ "modified": "2026-08-06 15:52:56.289159",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "Maize Rate Comparison Settings",
