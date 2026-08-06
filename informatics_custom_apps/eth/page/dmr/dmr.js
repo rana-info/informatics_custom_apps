@@ -6,14 +6,13 @@ class DistilleryProductionReport {
     constructor(wrapper) {
         this.wrapper = wrapper;
         this.section_colors = {
-            A: '#e3f2fd', B: '#fff3e0', C: '#e8f5e9', D: '#f3e5f5',
-            E: '#e0f7fa', F: '#fce4ec', G: '#fff8e1', H: '#efebe9',
-            I: '#e8eaf6', J: '#f1f8e9', K: '#e0f2f1', L: '#fbe9e7',
-            M: '#ede7f6', N: '#e1f5fe'
+            A: '#e3f2fd',
+            B: '#fff3e0'
         };
         this.plant_options = [];
+        this.segment_options = [];
         this.loading = false;
-        this.filters_dirty = true; // true until a successful load happens for current filters
+        this.filters_dirty = true;
 
         this.page = frappe.ui.make_app_page({
             parent: wrapper,
@@ -21,11 +20,12 @@ class DistilleryProductionReport {
             single_column: true
         });
 
+        this.page.wrapper.addClass('dmr-full-width-page');
+
         this.make_filters();
         this.make_table_container();
+        this.bind_fullscreen_events();
     }
-
-    // ── Filters ─────────────────────────────────────────────────────────
 
     make_filters() {
         this.company_field = this.page.add_field({
@@ -57,8 +57,12 @@ class DistilleryProductionReport {
             label: 'Segment',
             fieldtype: 'MultiSelectList',
             hidden:1,
-            // Segment is its own doctype, not Cost Center.
-            get_data: (txt) => frappe.db.get_link_options('Segment', txt),
+            get_data: (txt) => {
+                const q = (txt || '').toLowerCase();
+                return this.segment_options
+                    .filter(s => s.toLowerCase().includes(q))
+                    .map(s => ({ value: s, description: '' }));
+            },
             change: () => this.mark_dirty()
         });
 
@@ -78,11 +82,6 @@ class DistilleryProductionReport {
             change: () => this.mark_dirty()
         });
 
-        // Explicit trigger — filters no longer auto-refresh the report.
-        // Note: these page filters render their label as placeholder text
-        // inside the input itself (no separate label row above), so each
-        // button just needs to sit in its own input-wrapper, bottom-aligned
-        // with the row — no extra label spacer needed.
         this.$show_data_btn_wrapper = $(`
             <div class="frappe-control toolbar-btn-wrapper show-data-btn-wrapper">
                 <div class="control-input-wrapper">
@@ -97,14 +96,12 @@ class DistilleryProductionReport {
         `).appendTo(this.page.page_form || this.page.wrapper.find('.page-form'));
 
         this.$show_data_btn = this.$show_data_btn_wrapper.find('.show-data-btn');
-        this.$show_data_btn.on('click', () => this.refresh());
 
-        // Export buttons — disabled until a successful Show Data load, and
-        // re-disabled the moment any filter changes (see mark_dirty), so an
-        // export can never be triggered against a payload that doesn't
-        // match what's currently rendered on screen. Each toolbar button
-        // has its own color identity and icon so the three actions read as
-        // distinct at a glance rather than a uniform row of grey buttons.
+        this.$show_data_btn.on('click', () => {
+            this.enter_fullscreen();
+            this.refresh();
+        });
+
         this.$export_excel_btn_wrapper = $(`
             <div class="frappe-control toolbar-btn-wrapper export-btn-wrapper excel-btn-wrapper">
                 <div class="control-input-wrapper">
@@ -124,17 +121,15 @@ class DistilleryProductionReport {
 
         this.$export_pdf_btn_wrapper = $(`
             <div class="frappe-control toolbar-btn-wrapper export-btn-wrapper pdf-btn-wrapper">
-                <div class="control-input-wrapper">
-                    <button class="btn btn-sm export-pdf-btn toolbar-btn" disabled>
-                        <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                            <polyline points="14 2 14 8 20 8"></polyline>
-                            <line x1="9" y1="15" x2="15" y2="15"></line>
-                            <line x1="9" y1="18" x2="12" y2="18"></line>
-                        </svg>
-                        <span>PDF</span>
-                    </button>
-                </div>
+                <button class="btn btn-sm export-pdf-btn toolbar-btn" disabled>
+                    <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="9" y1="15" x2="15" y2="15"></line>
+                        <line x1="9" y1="18" x2="12" y2="18"></line>
+                    </svg>
+                    <span>PDF</span>
+                </button>
             </div>
         `).appendTo(this.page.page_form || this.page.wrapper.find('.page-form'));
 
@@ -144,12 +139,35 @@ class DistilleryProductionReport {
         this.$export_excel_btn.on('click', () => this.export_report('excel'));
         this.$export_pdf_btn.on('click', () => this.export_report('pdf'));
 
+        this.$fullscreen_btn_wrapper = $(`
+            <div class="frappe-control toolbar-btn-wrapper fullscreen-btn-wrapper">
+                <div class="control-input-wrapper">
+                    <button class="btn btn-sm toolbar-btn fullscreen-btn">
+                        <svg class="icon icon-sm fullscreen-icon-enter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M8 3H5a2 2 0 0 0-2 2v3"></path>
+                            <path d="M21 8V5a2 2 0 0 0-2-2h-3"></path>
+                            <path d="M3 16v3a2 2 0 0 0 2 2h3"></path>
+                            <path d="M16 21h3a2 2 0 0 0 2-2v-3"></path>
+                        </svg>
+                        <svg class="icon icon-sm fullscreen-icon-exit" style="display:none;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M8 3v3a2 2 0 0 1-2 2H3"></path>
+                            <path d="M21 8h-3a2 2 0 0 1-2-2V3"></path>
+                            <path d="M3 16h3a2 2 0 0 1 2 2v3"></path>
+                            <path d="M16 21v-3a2 2 0 0 1 2-2h3"></path>
+                        </svg>
+                        <span class="fullscreen-btn-label">Fullscreen</span>
+                    </button>
+                </div>
+            </div>
+        `).appendTo(this.page.page_form || this.page.wrapper.find('.page-form'));
+
+        this.$fullscreen_btn = this.$fullscreen_btn_wrapper.find('.fullscreen-btn');
+        this.$fullscreen_btn.on('click', () => this.toggle_fullscreen());
+
         this.load_plant_options();
+        this.load_segment_options();
     }
 
-    // Any filter change invalidates the currently-shown data so the user
-    // isn't left looking at results that no longer match their filters.
-    // Export buttons are disabled at the same time, for the same reason.
     mark_dirty() {
         this.filters_dirty = true;
         this.set_export_buttons_enabled(false);
@@ -180,9 +198,16 @@ class DistilleryProductionReport {
         });
     }
 
-    // Drops any currently-selected plants that are no longer valid for the
-    // newly-selected company(ies). Does NOT trigger a refresh — the user
-    // must press "Show Data" explicitly.
+    load_segment_options(done) {
+        frappe.call({
+            method: 'informatics_custom_apps.eth.page.dmr.dmr.get_segment_options',
+            callback: (r) => {
+                this.segment_options = r.message || [];
+                if (done) done();
+            }
+        });
+    }
+
     reconcile_plant_selection() {
         const selected = this.plant_field.get_value() || [];
         const valid_set = new Set(this.plant_options);
@@ -193,7 +218,89 @@ class DistilleryProductionReport {
         }
     }
 
-    // ── Table shell ─────────────────────────────────────────────────────
+    _fs_request_fn(el) {
+        return el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+    }
+
+    _fs_exit_fn() {
+        return document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+    }
+
+    _fs_element() {
+        return document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement;
+    }
+
+    enter_fullscreen() {
+        if (this._fs_element()) return;
+        const el = this.page.wrapper[0];
+        const fn = this._fs_request_fn(el);
+        if (!fn) return;
+
+        try {
+            const p = fn.call(el);
+            if (p && p.catch) p.catch(() => {});
+        } catch (e) {}
+    }
+
+    exit_fullscreen() {
+        if (!this._fs_element()) return;
+        const fn = this._fs_exit_fn();
+        if (!fn) return;
+        try {
+            const p = fn.call(document);
+            if (p && p.catch) p.catch(() => {});
+        } catch (e) {}
+    }
+
+    toggle_fullscreen() {
+        if (this._fs_element()) {
+            this.exit_fullscreen();
+        } else {
+            this.enter_fullscreen();
+        }
+    }
+
+    bind_fullscreen_events() {
+        const events = 'fullscreenchange.dmr webkitfullscreenchange.dmr MSFullscreenChange.dmr';
+        $(document).on(events, () => {
+            this.update_fullscreen_button();
+            this.size_table_responsive();
+            if (this._fs_element()) this.reset_scroll_to_top();
+        });
+        this.update_fullscreen_button();
+    }
+
+    reset_scroll_to_top() {
+        window.scrollTo(0, 0);
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+        const el = this.page.wrapper[0];
+        if (el) el.scrollTop = 0;
+    }
+
+    update_fullscreen_button() {
+        if (!this.$fullscreen_btn) return;
+        const is_fullscreen = !!this._fs_element();
+        this.$fullscreen_btn.find('.fullscreen-icon-enter').toggle(!is_fullscreen);
+        this.$fullscreen_btn.find('.fullscreen-icon-exit').toggle(is_fullscreen);
+        this.$fullscreen_btn.find('.fullscreen-btn-label').text(is_fullscreen ? 'Exit Fullscreen' : 'Fullscreen');
+    }
+
+    size_table_responsive() {
+        if (!this.$table_scroll || !this.$table_scroll.length) return;
+
+        if (!this._fs_element()) {
+            this.$table_scroll.css('max-height', '');
+            return;
+        }
+
+        if (!this.$card.is(':visible')) return;
+
+        const top = this.$table_scroll[0].getBoundingClientRect().top;
+        const bottom_margin = 16;
+        const available = Math.max(200, window.innerHeight - top - bottom_margin);
+        this.$table_scroll.css('max-height', available + 'px');
+    }
 
     make_table_container() {
         this.$wrapper = $(`<div class="distillery-report-wrapper"></div>`).appendTo(this.page.body);
@@ -204,16 +311,24 @@ class DistilleryProductionReport {
             </div>
         `).appendTo(this.$wrapper);
 
+        this.$loading = $(`
+            <div class="distillery-loading" style="display:none;">
+                <div class="distillery-loading-bar"><div class="distillery-loading-bar-fill"></div></div>
+                <div class="distillery-loading-text">Loading report...</div>
+            </div>
+        `).appendTo(this.$wrapper);
+
         this.$card = $(`
             <div class="distillery-report-card" style="display:none;">
                 <div class="distillery-report-card-title">
-                    Daily Manufacturing Report
                     <span class="unit-badge">Values per section UOM</span>
                     <span class="stale-badge" style="display:none;">Filters changed — click Show Data to refresh</span>
                 </div>
                 <div class="table-responsive">
                     <table class="distillery-report-table">
-                        <thead><tr class="distillery-head-row"></tr></thead>
+                        <thead>
+                            <tr class="distillery-head-row"></tr>
+                        </thead>
                         <tbody class="distillery-body"></tbody>
                     </table>
                 </div>
@@ -222,10 +337,26 @@ class DistilleryProductionReport {
 
         this.$container = this.$card.find('tbody.distillery-body');
         this.$head_row = this.$card.find('tr.distillery-head-row');
+        this.$table_scroll = this.$card.find('.table-responsive');
         this.$stale_notice = this.$card.find('.stale-badge');
 
         this.inject_styles();
-        // No auto-load on page open — wait for the user to press "Show Data".
+        this.bind_item_code_toggle();
+
+        $(window).on('resize.dmr-report', () => {
+            if (this.$card && this.$card.is(':visible')) {
+                this.sync_frozen_column_offsets();
+                this.sync_frozen_section_offsets();
+                this.size_table_responsive();
+            }
+        });
+    }
+
+    bind_item_code_toggle() {
+        this.$container.on('click', 'td.row-label-col.has-item-codes', (e) => {
+            $(e.currentTarget).toggleClass('codes-visible');
+            this.sync_frozen_section_offsets();
+        });
     }
 
     inject_styles() {
@@ -237,15 +368,32 @@ class DistilleryProductionReport {
             padding: 10px 0 30px;
         }
 
-        /* ── Toolbar buttons (Show Data / Excel / PDF) ─────────────────── */
+        .dmr-full-width-page .container {
+            max-width: 100% !important;
+            width: 100% !important;
+        }
+
+        .dmr-full-width-page:fullscreen,
+        .dmr-full-width-page:-webkit-full-screen {
+            background: #fff;
+            overflow: hidden;
+            padding: 0 16px 10px;
+            --navbar-height: 0px;
+        }
+
+        .dmr-full-width-page:fullscreen .page-head,
+        .dmr-full-width-page:-webkit-full-screen .page-head,
+        .dmr-full-width-page:fullscreen .page-head-content,
+        .dmr-full-width-page:-webkit-full-screen .page-head-content,
+        .dmr-full-width-page:fullscreen .container.page-body,
+        .dmr-full-width-page:-webkit-full-screen .container.page-body {
+            margin-top: 0 !important;
+            padding-top: 0 !important;
+            top: 0 !important;
+        }
 
         .toolbar-btn-wrapper {
-            /* Matches the width Frappe gives other filter controls so the
-               button doesn't stretch full-width or collapse to text width. */
             min-width: 116px;
-            /* Bottom-align with the input row regardless of whatever
-               align-items the parent filter row uses, since this wrapper
-               has no label row above it while some other fields might. */
             align-self: flex-end;
             display: flex;
         }
@@ -264,6 +412,10 @@ class DistilleryProductionReport {
             margin-left: 8px;
         }
 
+        .fullscreen-btn-wrapper {
+            margin-left: 14px;
+        }
+
         .toolbar-btn {
             position: relative;
             display: flex;
@@ -272,64 +424,109 @@ class DistilleryProductionReport {
             gap: 7px;
             width: 100%;
             height: 32px;
-            padding: 0 16px;
+            padding: 0 15px;
             line-height: 1;
-            font-weight: 600;
-            font-size: 13px;
-            letter-spacing: .1px;
-            color: #fff !important;
-            border: none !important;
+            font-weight: 700;
+            font-size: 12.5px;
+            letter-spacing: .2px;
+            border: 1px solid transparent;
             border-radius: 8px;
             cursor: pointer;
-            background-size: 100% 200%;
-            background-position: top;
-            box-shadow: 0 1px 2px rgba(16,24,32,.12), 0 2px 6px -2px rgba(16,24,32,.18);
-            transition: background-position .25s ease, transform .12s ease, box-shadow .2s ease, opacity .15s ease;
+            box-shadow: 0 1px 2px rgba(31,39,46,.06);
+            transition: filter .15s ease, transform .12s ease, box-shadow .2s ease, opacity .15s ease;
         }
 
         .toolbar-btn svg {
-            width: 15px;
-            height: 15px;
+            width: 14px;
+            height: 14px;
             flex-shrink: 0;
+            stroke-width: 2;
         }
 
         .toolbar-btn:hover:not(:disabled) {
-            background-position: bottom;
+            filter: brightness(0.97);
             transform: translateY(-1px);
-            box-shadow: 0 3px 8px rgba(16,24,32,.16), 0 4px 12px -3px rgba(16,24,32,.22);
+            box-shadow: 0 2px 6px rgba(31,39,46,.10);
         }
 
         .toolbar-btn:active:not(:disabled) {
             transform: translateY(0);
-            box-shadow: 0 1px 2px rgba(16,24,32,.14) inset;
+            filter: brightness(0.93);
+            box-shadow: none;
         }
 
         .toolbar-btn:focus-visible {
-            outline: 2px solid rgba(0,0,0,.25);
+            outline: 2px solid rgba(0,0,0,.2);
             outline-offset: 2px;
         }
 
-        /* Show Data — indigo/blue, the "primary" action */
         .show-data-btn {
-            background-image: linear-gradient(180deg, #4f6bf0 0%, #3d55d1 100%);
+            background: #e8f1fb;
+            color: #2953a8 !important;
+            border-color: #cfe1f6;
         }
 
-        /* Excel — emerald green, evokes the Excel brand without copying it */
         .export-excel-btn {
-            background-image: linear-gradient(180deg, #22a06b 0%, #168554 100%);
+            background: #e6f5ee;
+            color: #1f8f5f !important;
+            border-color: #c9e8d9;
         }
 
-        /* PDF — warm red/coral, evokes the PDF brand without copying it */
         .export-pdf-btn {
-            background-image: linear-gradient(180deg, #ef5350 0%, #d8342f 100%);
+            background: #fbecea;
+            color: #b23c34 !important;
+            border-color: #f3d3ce;
+        }
+
+        .fullscreen-btn {
+            background: #eef1f4;
+            color: #46545e !important;
+            border-color: #dde3e9;
         }
 
         .toolbar-btn:disabled {
-            opacity: .42;
+            opacity: 1;
             cursor: not-allowed;
             transform: none !important;
             box-shadow: none !important;
-            background-image: linear-gradient(180deg, #aab4bd 0%, #8f99a3 100%) !important;
+            color: #a7b1ba !important;
+            background: #eef1f4 !important;
+            border-color: #dde3e9 !important;
+        }
+
+        .distillery-loading {
+            padding: 60px 20px;
+            text-align: center;
+        }
+
+        .distillery-loading-text {
+            margin-top: 14px;
+            color: #5b7284;
+            font-weight: 600;
+            font-size: 13px;
+        }
+
+        .distillery-loading-bar {
+            height: 6px;
+            width: 100%;
+            max-width: 420px;
+            margin: 0 auto;
+            background: #e4ecf3;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .distillery-loading-bar-fill {
+            height: 100%;
+            width: 40%;
+            background: #4f83c4;
+            border-radius: 6px;
+            animation: distillery-loading-slide 1.1s ease-in-out infinite;
+        }
+
+        @keyframes distillery-loading-slide {
+            0%   { transform: translateX(-150%); }
+            100% { transform: translateX(350%); }
         }
 
         .distillery-report-card {
@@ -375,7 +572,7 @@ class DistilleryProductionReport {
         .table-responsive {
             overflow-x: auto;
             overflow-y: auto;
-            max-height: 75vh;
+            max-height: 90vh;
             -webkit-overflow-scrolling: touch;
             border-radius: 10px;
             border: 2px solid #aab8c3;
@@ -411,7 +608,7 @@ class DistilleryProductionReport {
             color: #36474f;
             font-weight: 700;
             border-bottom: 2px solid #aab8c3;
-            z-index: 2;
+            z-index: 5;
             text-align: right;
         }
 
@@ -422,22 +619,45 @@ class DistilleryProductionReport {
 
         .row-label-col {
             text-align: left !important;
-            min-width: 220px;
+            min-width: 180px;
             font-weight: 700;
             color: #1f2b34;
             background: #f5f7fa !important;
-            border-right: 3px solid #8fa8bb !important;
             position: sticky;
             left: 0;
             z-index: 1;
         }
 
+        .row-label-col.has-item-codes {
+            cursor: pointer;
+        }
+
+        .row-label-col.has-item-codes .toggle-chevron {
+            display: inline-block;
+            margin-left: 6px;
+            color: #8ea0ac;
+            font-size: 10px;
+            transition: transform .15s ease;
+        }
+
+        .row-label-col.has-item-codes.codes-visible .toggle-chevron {
+            transform: rotate(90deg);
+        }
+
+        .item-code-line {
+            display: none;
+            margin-top: 3px;
+        }
+
+        .row-label-col.codes-visible .item-code-line {
+            display: block;
+        }
+
         .distillery-report-table thead th.label-head {
             position: sticky;
             left: 0;
-            z-index: 3;
+            z-index: 6;
             background: #e8eef4 !important;
-            border-right: 3px solid #8fa8bb !important;
         }
 
         .sr-badge {
@@ -456,9 +676,31 @@ class DistilleryProductionReport {
             text-align: center !important;
             font-weight: 600;
             color: #74838f;
-            border-right: 3px solid #8fa8bb !important;
             background: #f9fbfc !important;
             min-width: 70px;
+            position: sticky;
+            z-index: 1;
+        }
+
+        .distillery-report-table thead th.uom-head {
+            position: sticky;
+            z-index: 6;
+            background: #e8eef4 !important;
+        }
+
+        .standard-col {
+            min-width: 90px;
+            background: #f9fbfc !important;
+            border-right: 3px solid #8fa8bb !important;
+            position: sticky;
+            z-index: 1;
+        }
+
+        .distillery-report-table thead th.standard-head {
+            position: sticky;
+            z-index: 6;
+            background: #e8eef4 !important;
+            border-right: 3px solid #8fa8bb !important;
         }
 
         .uom-badge {
@@ -502,12 +744,20 @@ class DistilleryProductionReport {
             border-top: 2px solid #b0bec5;
             border-bottom: 2px solid #b0bec5;
             color: #1a1a1a;
+            position: sticky;
+            top: 0;
+            z-index: 3;
         }
 
         tr.section-header-row .row-label-col {
             position: sticky;
             left: 0;
             background: inherit !important;
+        }
+
+        tr.section-header-row td.uom-col,
+        tr.section-header-row td.standard-col {
+            z-index: 4;
         }
 
         .section-dot {
@@ -531,7 +781,6 @@ class DistilleryProductionReport {
             filter: brightness(0.99);
         }
 
-        /* Total rows — inserted after each section's data rows */
         tr.total-row td {
             font-weight: 800;
             background: #eef3f7 !important;
@@ -550,78 +799,27 @@ class DistilleryProductionReport {
             background: #d7e2ec !important;
         }
 
-        /* Standard vs Actual split cell (Section I.11-I.18) */
-        .ideal-actual-cell {
-            display: flex;
-            align-items: stretch;
-            justify-content: flex-end;
-            gap: 0;
-            white-space: nowrap;
+        tr.frozen-row td {
+            position: sticky;
+            z-index: 2;
         }
 
-        .ideal-actual-cell .ia-half {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            /* min-width (not a fixed width) keeps Standard/Actual columns
-               visually aligned for typical values, but still lets the box
-               grow when a value is wider than that — e.g. large Indian-
-               format numbers like "1,18,49,220" — instead of clipping or
-               spilling past the cell edge. */
-            min-width: 86px;
-            padding: 0 6px;
+        tr.frozen-row td.row-label-col,
+        tr.frozen-row td.uom-col,
+        tr.frozen-row td.standard-col {
+            z-index: 4;
         }
 
-        .ideal-actual-cell .ia-half:first-child {
-            padding-left: 0;
+        tr.frozen-row.data-row:not(.total-row) td:not(.row-label-col):not(.uom-col):not(.standard-col):not(.to-date-col) {
+            background: #fff;
         }
 
-        .ideal-actual-cell .ia-half:last-child {
-            padding-right: 0;
-        }
-
-        .ideal-actual-cell .ia-divider {
-            width: 0;
-            border-left: 2px solid #b6c3cd;
-            margin: 0 4px;
-            align-self: stretch;
-        }
-
-        .ideal-actual-cell .ia-num {
-            display: block;
-            width: 100%;
-            text-align: right;
-            font-size: 13px;
-            font-weight: 700;
-            color: #2d3942;
-            margin-top: 3px;
-            white-space: nowrap;
-        }
-
-        .ideal-actual-cell .ia-actual .ia-num {
-            color: #45596a;
-        }
-
-        .ideal-actual-cell .ia-tag {
-            /* inline-block sized to its own text (not stretched to the
-               half's full width) so the pill background always wraps the
-               text exactly, regardless of "STANDARD" vs "ACTUAL" length. */
-            display: inline-block;
-            white-space: nowrap;
-            font-size: 9px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: .2px;
-            color: #6b7f8c;
-            background: #eef2f5;
-            border-radius: 20px;
-            padding: 1px 7px;
+        tr.frozen-row-end td {
+            border-bottom: 3px solid #8fa8bb !important;
         }
 
         </style>`).appendTo('head');
     }
-
-    // ── Data loading ────────────────────────────────────────────────────
 
     refresh() {
         const companies = this.company_field.get_value();
@@ -635,14 +833,18 @@ class DistilleryProductionReport {
                 message: __('Select at least one Company along with From Date and To Date.'),
                 indicator: 'orange'
             });
+            this.$loading.hide();
             this.$message.show();
             this.$card.hide();
             return;
         }
 
-        // Guard against duplicate concurrent requests (e.g. rapid double-click).
         if (this.loading) return;
         this.loading = true;
+
+        this.$message.hide();
+        this.$card.hide();
+        this.$loading.show();
 
         frappe.call({
             method: 'informatics_custom_apps.eth.page.dmr.dmr.get_report_data',
@@ -653,11 +855,9 @@ class DistilleryProductionReport {
                 plants: plants && plants.length ? plants : null,
                 segments: segments && segments.length ? segments : null
             },
-            freeze: true,
-            freeze_message: __('Loading report...'),
             callback: (r) => {
+                this.$loading.hide();
                 if (r.message) {
-                    this.$message.hide();
                     this.$card.show();
                     this.$stale_notice.hide();
                     this.filters_dirty = false;
@@ -670,8 +870,6 @@ class DistilleryProductionReport {
             }
         });
     }
-
-    // ── Export ──────────────────────────────────────────────────────────
 
     export_report(kind) {
         if (this.filters_dirty) {
@@ -708,26 +906,18 @@ class DistilleryProductionReport {
             segments: segments && segments.length ? JSON.stringify(segments) : ''
         };
 
-        // open_url_post builds a hidden form and submits it as a real POST,
-        // so the browser's native download handling picks up the
-        // binary/file response that export_excel/export_pdf set on
-        // frappe.response — frappe.call's XHR can't hand that off to a
-        // save-file dialog the way a form submission can.
         open_url_post(`/api/method/${method}`, args);
     }
-
-    // ── Rendering ───────────────────────────────────────────────────────
 
     render_table(data) {
         const { meta, columns } = data;
         const last_col_index = columns.length - 1;
         const escape = frappe.utils.escape_html;
 
-        // ── Header row ──────────────────────────────────────────────────
         const head_parts = [
             `<th class="row-label-col label-head">Parameters</th>`,
             `<th class="uom-col uom-head">UOM</th>`,
-            `<th>Standard</th>`
+            `<th class="standard-col standard-head">Standard</th>`
         ];
         columns.forEach((col, i) => {
             const cls = i === last_col_index ? 'to-date-col' : '';
@@ -735,37 +925,60 @@ class DistilleryProductionReport {
         });
         this.$head_row.html(head_parts.join(''));
 
-        // ── Body rows ───────────────────────────────────────────────────
-        // Building an array and joining once is significantly faster than
-        // repeated string concatenation for large tables (many sections x
-        // many date columns), and avoids intermediate string reallocation.
         const body_parts = [];
+
+        let current_section = null;
 
         meta.forEach(row => {
             if (row.header) {
+                current_section = row.sr;
+                const is_frozen = current_section === 'A';
                 const color = this.section_colors[row.sr] || '#f5f5f5';
+                const row_cls = is_frozen ? 'section-header-row frozen-row' : 'section-header-row';
+
                 body_parts.push(
-                    `<tr class="section-header-row" style="background:${color};">`,
-                    `<td class="row-label-col" style="background:${color};">`,
+                    `<tr class="${row_cls}" style="background:${color} !important;">`,
+                    `<td class="row-label-col" style="background:${color} !important;">`,
                     `<span class="section-dot"></span>${escape(row.label)}</td>`,
-                    `<td colspan="${2 + columns.length}"></td></tr>`
+                    `<td class="uom-col" style="background:${color} !important;"></td>`,
+                    `<td class="standard-col" style="background:${color} !important;"></td>`
                 );
+
+                columns.forEach(() => {
+                    body_parts.push(`<td class="section-header-cell" style="background:${color} !important;"></td>`);
+                });
+                body_parts.push(`</tr>`);
                 return;
             }
 
-            // Total rows (inserted server-side by _add_section_totals) get
-            // their own row class so they can be styled distinctly from
-            // regular data rows.
-            const row_cls = row.total ? 'data-row total-row' : 'data-row';
-            const item_code_html = row.item_code
-                ? ` <span class="item-code-badge">(${escape(row.item_code)})</span>`
-                : '';
+            const is_frozen = current_section === 'A';
+            let row_cls = row.total ? 'data-row total-row' : 'data-row';
+            if (is_frozen) row_cls += ' frozen-row';
+
+            const sr_badge_html = row.total ? '' : `<span class="sr-badge">${row.sr}</span>`;
+
+            let item_code_html = '';
+            let has_codes = false;
+            if (row.item_code) {
+                has_codes = true;
+                item_code_html = `<span class="item-code-line"><a href="/app/item/${encodeURIComponent(row.item_code)}" class="item-code-badge" target="_blank">${escape(row.item_code)}</a></span>`;
+            } else if (row.item_codes && row.item_codes.length) {
+                const unique_codes = [...new Set(row.item_codes.map(String))];
+                has_codes = true;
+                const links = unique_codes
+                    .map(c => `<a href="/app/item/${encodeURIComponent(c)}" class="item-code-badge" target="_blank">${escape(c)}</a>`)
+                    .join(', ');
+                item_code_html = `<span class="item-code-line">${links}</span>`;
+            }
+
+            const label_cls = has_codes ? 'row-label-col has-item-codes' : 'row-label-col';
+            const chevron_html = has_codes ? `<span class="toggle-chevron">&#9656;</span>` : '';
 
             body_parts.push(
                 `<tr class="${row_cls}">`,
-                `<td class="row-label-col"><span class="sr-badge">${row.sr}</span>${escape(row.label)}${item_code_html}</td>`,
+                `<td class="${label_cls}" title="${escape(row.label)}">${sr_badge_html}${escape(row.label)}${chevron_html}${item_code_html}</td>`,
                 `<td class="uom-col"><span class="uom-badge">${row.uom || ''}</span></td>`,
-                `<td class="num-cell"></td>`
+                `<td class="num-cell standard-col">${row.standard !== undefined && row.standard !== null ? this.format_value(row.standard) : ''}</td>`
             );
 
             columns.forEach((col, i) => {
@@ -779,31 +992,53 @@ class DistilleryProductionReport {
         });
 
         this.$container.html(body_parts.join(''));
+
+        this.$container.find('tr.frozen-row').removeClass('frozen-row-end');
+        this.$container.find('tr.frozen-row').last().addClass('frozen-row-end');
+
+        this.sync_frozen_column_offsets();
+        this.sync_frozen_section_offsets();
+        this.size_table_responsive();
+
+        requestAnimationFrame(() => {
+            this.sync_frozen_column_offsets();
+            this.sync_frozen_section_offsets();
+            this.size_table_responsive();
+        });
+    }
+
+    sync_frozen_column_offsets() {
+        const $label_head = this.$card.find('thead th.label-head');
+        const $uom_head = this.$card.find('thead th.uom-head');
+        if (!$label_head.length || !$uom_head.length) return;
+
+        const label_w = $label_head.outerWidth();
+        const uom_w = $uom_head.outerWidth();
+        const uom_left = label_w;
+        const standard_left = label_w + uom_w;
+
+        this.$card.find('.uom-col').css('left', uom_left + 'px');
+        this.$card.find('.standard-col').css('left', standard_left + 'px');
+    }
+
+    sync_frozen_section_offsets() {
+        const head_h = this.$head_row.outerHeight() || 0;
+        let cumulative = head_h;
+
+        this.$container.find('tr.frozen-row').each((_, el) => {
+            const $row = $(el);
+            $row.find('> td').css('top', cumulative + 'px');
+            cumulative += $row.outerHeight();
+        });
+
+        this.$container.find('tr.section-header-row')
+            .not('.frozen-row')
+            .find('> td')
+            .css('top', cumulative + 'px');
     }
 
     render_cell(val) {
-        if (val && typeof val === 'object' && ('ideal' in val || 'actual' in val)) {
-            return `<div class="ideal-actual-cell">
-                <div class="ia-half ia-ideal">
-                    <span class="ia-tag">Standard</span>
-                    <span class="ia-num">${this.format_value_labeled(val.ideal)}</span>
-                </div>
-                <div class="ia-divider"></div>
-                <div class="ia-half ia-actual">
-                    <span class="ia-tag">Actual</span>
-                    <span class="ia-num">${this.format_value_labeled(val.actual)}</span>
-                </div>
-            </div>`;
-        }
         return this.format_value(val);
-    }
-
-    format_value_labeled(val) {
-        if (val === null || val === undefined || val === '') return 'No data';
-        const n = parseFloat(val);
-        if (isNaN(n)) return 'No data';
-        const precision = (Math.abs(n) < 0.1 && n !== 0) ? 3 : 2;
-        return frappe.format(n, { fieldtype: 'Float', precision: precision });
     }
 
     format_value(val) {
