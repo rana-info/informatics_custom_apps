@@ -44,8 +44,6 @@ frappe.ui.form.on("Competitor Rate Comparision", {
 
     fetch_master_data(frm) {
         frappe.call({
-            // NOTE: verify this dotted path against your actual folder
-            // structure -- see message below, this looks one segment short
             method:
                 "informatics_custom_apps.ripl_customized_apps.doctype.competitor_rate_comparision.competitor_rate_comparision.get_master_plant_rows",
             callback: function (r) {
