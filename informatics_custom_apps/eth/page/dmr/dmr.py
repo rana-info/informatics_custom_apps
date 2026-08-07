@@ -51,7 +51,7 @@ BYPRODUCT_ITEMS = [
     ("100147", "DDGS from Maize", "D.4", "Quintal", "maize"),
     ("100145", "DDGS from DFG", "D.5", "Quintal", "dfg"),
     ("100146", "DDGS from FCI", "D.6", "Quintal", "fci"),
-    ("129946", "Crude Corn Oil", "D.7", "Ltr", None),
+    ("129946", "Crude Corn Oil", "D.7", "LTR", None),
 ]
 
 TECHNICAL_PARAMETER_ROWS = [
@@ -166,11 +166,52 @@ def build_plant_segment_conditions(plants, segments):
     return conditions, values
 
 
+def get_valid_target_uom(item_code, static_uom):
+    """Returns the UOM to actually use for this item.
+
+    If static_uom is missing, or isn't the item's stock_uom and isn't
+    present in the item's UOM Conversion Detail table, falls back to the
+    item's stock_uom instead of the hardcoded static UOM.
+    """
+    if not item_code:
+        return static_uom
+
+    stock_uom = frappe.get_cached_value("Item", item_code, "stock_uom")
+    if not stock_uom:
+        # Item doesn't exist / has no stock_uom - nothing sensible to fall back to.
+        return static_uom
+
+    if not static_uom or static_uom == stock_uom:
+        return stock_uom
+
+    has_conversion = frappe.db.exists(
+        "UOM Conversion Detail", {"parent": item_code, "uom": static_uom}
+    )
+    return static_uom if has_conversion else stock_uom
+
+
+def get_group_display_uom(item_codes, static_uom):
+    """For a group of items sharing one report row: if every item in the
+    group supports static_uom, use it. Otherwise fall back to the first
+    item's stock_uom as the group's display label."""
+    if not item_codes:
+        return static_uom
+
+    for code in item_codes:
+        if get_valid_target_uom(code, static_uom) != static_uom:
+            fallback = frappe.get_cached_value("Item", item_codes[0], "stock_uom")
+            return fallback or static_uom
+    return static_uom
+
+
 def get_stock_to_target_factor(item_code, target_uom):
     stock_uom = frappe.get_cached_value("Item", item_code, "stock_uom")
-    if not stock_uom or stock_uom == target_uom:
+    if not stock_uom:
         return 1
-    factor = (get_conversion_factor(item_code, target_uom) or {}).get("conversion_factor") or 1
+    effective_uom = get_valid_target_uom(item_code, target_uom)
+    if effective_uom == stock_uom:
+        return 1
+    factor = (get_conversion_factor(item_code, effective_uom) or {}).get("conversion_factor") or 1
     return 1 / factor if factor else 1
 
 
@@ -364,6 +405,7 @@ def build_consumption_rows(companies, from_date, to_date, plants=None, segments=
     quintal_consumed_total = 0
 
     for item_code, label, uom, opening_field, closing_field, consumed_sr, opening_sr, closing_sr in CONSUMPTION_ITEMS:
+        display_uom = get_valid_target_uom(item_code, uom)
         factor = get_stock_to_target_factor(item_code, uom)
         opening = get_lab_parameter_sum(companies, from_date, opening_field, plants) * factor
         closing = get_lab_parameter_sum(companies, to_date, closing_field, plants) * factor
@@ -375,11 +417,11 @@ def build_consumption_rows(companies, from_date, to_date, plants=None, segments=
         opening_display = None if is_range else opening
         closing_display = None if is_range else closing
 
-        rows.append({"sr": opening_sr, "label": f"Opening WIP {label}", "uom": uom, "value": opening_display,
+        rows.append({"sr": opening_sr, "label": f"Opening WIP {label}", "uom": display_uom, "value": opening_display,
                       "item_code": item_code, "exclude_from_total": True})
-        rows.append({"sr": closing_sr, "label": f"Closing WIP {label}", "uom": uom, "value": closing_display,
+        rows.append({"sr": closing_sr, "label": f"Closing WIP {label}", "uom": display_uom, "value": closing_display,
                       "item_code": item_code, "exclude_from_total": True})
-        rows.append({"sr": consumed_sr, "label": f"{label} Consumed ( Net of WIP)", "uom": uom, "value": net_consumed,
+        rows.append({"sr": consumed_sr, "label": f"{label} Consumed ( Net of WIP)", "uom": display_uom, "value": net_consumed,
                       "item_code": item_code, "exclude_from_total": True})
 
     rows.append({"sr": "B.Total.Quintal", "label": "Total", "uom": "Quintal",
@@ -450,10 +492,12 @@ def build_section_rows(companies, from_date, to_date, plants=None, segments=None
 
     rows.append({"sr": "A", "label": "Production of Finished Goods", "header": True})
     for code, label, sr, uom in PRODUCTION_ITEMS:
-        rows.append({"sr": sr, "label": label, "uom": uom, "value": prod.get(code, 0), "item_code": code})
+        display_uom = get_valid_target_uom(code, uom)
+        rows.append({"sr": sr, "label": label, "uom": display_uom, "value": prod.get(code, 0), "item_code": code})
     for label, sr, uom, item_codes in PRODUCTION_ITEM_GROUPS:
+        display_uom = get_group_display_uom(item_codes, uom) if item_codes else uom
         qty = get_production_qty_by_items(companies, from_date, to_date, item_codes, uom, plants, segments)
-        rows.append({"sr": sr, "label": label, "uom": uom, "value": qty, "item_codes": item_codes})
+        rows.append({"sr": sr, "label": label, "uom": display_uom, "value": qty, "item_codes": item_codes})
 
     consumption_rows = build_consumption_rows(
         companies, from_date, to_date, plants, segments
@@ -603,7 +647,8 @@ def build_byproduct_rows(companies, from_date, to_date, plants=None, segments=No
     )
 
     for code, label, sr, uom, _raw_key in BYPRODUCT_ITEMS:
-        rows.append({"sr": sr, "label": label, "uom": uom, "value": byproduct_qty.get(code, 0), "item_code": code})
+        display_uom = get_valid_target_uom(code, uom)
+        rows.append({"sr": sr, "label": label, "uom": display_uom, "value": byproduct_qty.get(code, 0), "item_code": code})
 
     return rows, byproduct_qty
 
@@ -640,7 +685,7 @@ def build_byproduct_recovery_rows(byproduct_qty, consumption_rows):
         {"sr": "E.7", "label": "DDGS from FCI", "uom": "Quintal/Quintal", "value": div(ddgs_fci, fci)},
         {"sr": "E.8", "label": "Average DDGS", "uom": "Quintal/Quintal",
          "value": div(ddgs_maize + ddgs_dfg + ddgs_fci, total_raw)},
-        {"sr": "E.9", "label": "Crude Corn Oil", "uom": "Ltr/Quintal", "value": div(crude_oil, total_raw)},
+        {"sr": "E.9", "label": "Crude Corn Oil", "uom": "LTR/Quintal", "value": div(crude_oil, total_raw)},
     ])
 
     return rows
@@ -666,14 +711,16 @@ def build_stock_rows(companies, from_date, to_date, plants=None):
         get_stock_balance_qty(companies, to_date, stock_codes, plants), stock_uom
     )
     for code, label, sr, uom in STOCK_ITEMS:
-        rows.append({"sr": sr, "label": label, "uom": uom, "value": stock_qty.get(code, 0), "item_code": code})
+        display_uom = get_valid_target_uom(code, uom)
+        rows.append({"sr": sr, "label": label, "uom": display_uom, "value": stock_qty.get(code, 0), "item_code": code})
 
     for label, sr, uom, item_codes in STOCK_BYPRODUCT_GROUPS:
         item_codes_str = [str(c) for c in item_codes]
+        display_uom = get_group_display_uom(item_codes_str, uom)
         raw_qty = get_stock_balance_qty(companies, to_date, item_codes_str, plants)
         converted = convert_qty_dict(raw_qty, {c: uom for c in item_codes_str})
         qty = sum(converted.get(c, 0) for c in item_codes_str)
-        rows.append({"sr": sr, "label": label, "uom": uom, "value": qty, "item_codes": item_codes})
+        rows.append({"sr": sr, "label": label, "uom": display_uom, "value": qty, "item_codes": item_codes})
 
     return rows
 
@@ -716,12 +763,14 @@ def build_fuel_rows(companies, from_date, to_date, plants=None, segments=None):
     )
 
     for code, label, sr, uom in FUEL_ITEMS:
-        rows.append({"sr": sr, "label": label, "uom": uom, "value": fuel_qty.get(code, 0), "item_code": code})
+        display_uom = get_valid_target_uom(code, uom)
+        rows.append({"sr": sr, "label": label, "uom": display_uom, "value": fuel_qty.get(code, 0), "item_code": code})
 
     for label, sr, uom, item_codes in FUEL_ITEM_GROUPS:
+        display_uom = get_group_display_uom(item_codes, uom)
         qty = get_issued_qty_by_items(companies, from_date, to_date, item_codes, uom, plants, segments)
         fuel_qty[label] = qty
-        rows.append({"sr": sr, "label": label, "uom": uom, "value": qty, "item_codes": item_codes})
+        rows.append({"sr": sr, "label": label, "uom": display_uom, "value": qty, "item_codes": item_codes})
 
     return rows, fuel_qty
 

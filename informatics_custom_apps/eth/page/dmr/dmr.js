@@ -346,7 +346,6 @@ class DistilleryProductionReport {
         $(window).on('resize.dmr-report', () => {
             if (this.$card && this.$card.is(':visible')) {
                 this.sync_frozen_column_offsets();
-                this.sync_frozen_section_offsets();
                 this.size_table_responsive();
             }
         });
@@ -355,7 +354,6 @@ class DistilleryProductionReport {
     bind_item_code_toggle() {
         this.$container.on('click', 'td.row-label-col.has-item-codes', (e) => {
             $(e.currentTarget).toggleClass('codes-visible');
-            this.sync_frozen_section_offsets();
         });
     }
 
@@ -744,20 +742,12 @@ class DistilleryProductionReport {
             border-top: 2px solid #b0bec5;
             border-bottom: 2px solid #b0bec5;
             color: #1a1a1a;
-            position: sticky;
-            top: 0;
-            z-index: 3;
         }
 
         tr.section-header-row .row-label-col {
             position: sticky;
             left: 0;
             background: inherit !important;
-        }
-
-        tr.section-header-row td.uom-col,
-        tr.section-header-row td.standard-col {
-            z-index: 4;
         }
 
         .section-dot {
@@ -797,25 +787,6 @@ class DistilleryProductionReport {
 
         tr.total-row td.to-date-col {
             background: #d7e2ec !important;
-        }
-
-        tr.frozen-row td {
-            position: sticky;
-            z-index: 2;
-        }
-
-        tr.frozen-row td.row-label-col,
-        tr.frozen-row td.uom-col,
-        tr.frozen-row td.standard-col {
-            z-index: 4;
-        }
-
-        tr.frozen-row.data-row:not(.total-row) td:not(.row-label-col):not(.uom-col):not(.standard-col):not(.to-date-col) {
-            background: #fff;
-        }
-
-        tr.frozen-row-end td {
-            border-bottom: 3px solid #8fa8bb !important;
         }
 
         </style>`).appendTo('head');
@@ -932,12 +903,10 @@ class DistilleryProductionReport {
         meta.forEach(row => {
             if (row.header) {
                 current_section = row.sr;
-                const is_frozen = current_section === 'A';
                 const color = this.section_colors[row.sr] || '#f5f5f5';
-                const row_cls = is_frozen ? 'section-header-row frozen-row' : 'section-header-row';
 
                 body_parts.push(
-                    `<tr class="${row_cls}" style="background:${color} !important;">`,
+                    `<tr class="section-header-row" style="background:${color} !important;">`,
                     `<td class="row-label-col" style="background:${color} !important;">`,
                     `<span class="section-dot"></span>${escape(row.label)}</td>`,
                     `<td class="uom-col" style="background:${color} !important;"></td>`,
@@ -951,9 +920,7 @@ class DistilleryProductionReport {
                 return;
             }
 
-            const is_frozen = current_section === 'A';
             let row_cls = row.total ? 'data-row total-row' : 'data-row';
-            if (is_frozen) row_cls += ' frozen-row';
 
             const sr_badge_html = row.total ? '' : `<span class="sr-badge">${row.sr}</span>`;
 
@@ -993,16 +960,11 @@ class DistilleryProductionReport {
 
         this.$container.html(body_parts.join(''));
 
-        this.$container.find('tr.frozen-row').removeClass('frozen-row-end');
-        this.$container.find('tr.frozen-row').last().addClass('frozen-row-end');
-
         this.sync_frozen_column_offsets();
-        this.sync_frozen_section_offsets();
         this.size_table_responsive();
 
         requestAnimationFrame(() => {
             this.sync_frozen_column_offsets();
-            this.sync_frozen_section_offsets();
             this.size_table_responsive();
         });
     }
@@ -1019,22 +981,6 @@ class DistilleryProductionReport {
 
         this.$card.find('.uom-col').css('left', uom_left + 'px');
         this.$card.find('.standard-col').css('left', standard_left + 'px');
-    }
-
-    sync_frozen_section_offsets() {
-        const head_h = this.$head_row.outerHeight() || 0;
-        let cumulative = head_h;
-
-        this.$container.find('tr.frozen-row').each((_, el) => {
-            const $row = $(el);
-            $row.find('> td').css('top', cumulative + 'px');
-            cumulative += $row.outerHeight();
-        });
-
-        this.$container.find('tr.section-header-row')
-            .not('.frozen-row')
-            .find('> td')
-            .css('top', cumulative + 'px');
     }
 
     render_cell(val) {
