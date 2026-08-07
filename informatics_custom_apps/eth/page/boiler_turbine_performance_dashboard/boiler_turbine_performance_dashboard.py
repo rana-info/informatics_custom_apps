@@ -23,6 +23,12 @@ FIELD_TAG_MAP = {
 }
 
 
+# Master list of fuel item codes used in the "Boiler Fuel Parameters"
+# section. code -> fallback label (real label is fetched from Item master
+# at render time; this is just a fallback if the Item doesn't exist).
+FUEL_ITEMS = ["106441", "106436", "115566", "106440"]
+
+
 # Maps generic parameter name -> actual Power Plant Log Book fieldname,
 # per section. "Power Plant Log Norms" stores norms against these exact
 # fieldnames (ph, ph1, ph2, conductivity, conductivity1, ...).
@@ -154,7 +160,9 @@ def get_dashboard(date):
 
             "steam": calculate_section(steam, norms, SECTION_FIELD_MAP["Steam"]),
 
-            "dmr": get_dmr_data(plant_name, date)
+            "dmr": get_dmr_data(plant_name, date),
+
+            "fuel": get_fuel_data(plant_name, date)
 
         })
 
@@ -330,6 +338,267 @@ def get_dmr_data(plant, date):
         })
 
     return dmr_rows
+
+
+def get_fuel_data(plant, date):
+    """
+    Builds the "Boiler Fuel Parameters" + "Fuel Cost" section for a plant
+    on a given date:
+
+    - consumption: sum of qty (kg -> quintal) from submitted Material
+      Issue Stock Entries, per fuel item code, filtered by branch + date.
+    - pct_total_fuel: this item's share of total fuel consumed that day.
+    - pct_moisture / pct_dust: average of matching Quality Inspection
+      readings (specification "Moisture" / "Foreign Particle") for that
+      item, branch, and report_date. Only QC docs with an actual
+      non-blank reading are counted - a QC doc missing that reading is
+      excluded from both the sum and the denominator. If NO QC doc has
+      a reading for that parameter at all, returns None (shown as "-"
+      on the dashboard, not "0%").
+    - last_price: rate from a submitted Purchase Order dated EXACTLY on
+      the selected date for that item + branch. If no PO was raised for
+      that plant/item on that exact date, this is None ("-" on the
+      dashboard) - no fallback to an earlier or later date's price.
+    - cost: consumption_qtl * last_price, assuming rate is per quintal.
+
+    Fuel Cost:
+    - rupees_per_day: sum of cost across all fuel items.
+    - per_ton_steam: rupees_per_day / Total Steam Produced (from DMR
+      "float_zcpn" Total on the same plant + date).
+    """
+
+    item_names = get_item_names(FUEL_ITEMS)
+
+    consumption_kg = {code: 0.0 for code in FUEL_ITEMS}
+
+    stock_entries = frappe.get_all(
+        "Stock Entry",
+        filters={
+            "branch": plant,
+            "posting_date": date,
+            "stock_entry_type": "Material Issue",
+            "docstatus": 1
+        },
+        fields=["name"]
+    )
+
+    for se in stock_entries:
+
+        items = frappe.get_all(
+            "Stock Entry Detail",
+            filters={
+                "parent": se.name,
+                "parenttype": "Stock Entry",
+                "item_code": ["in", FUEL_ITEMS]
+            },
+            fields=["item_code", "qty"]
+        )
+
+        for it in items:
+            consumption_kg[it.item_code] = consumption_kg.get(it.item_code, 0) + (it.qty or 0)
+
+    consumption_qtl = {
+        code: round(qty / 100, 2)
+        for code, qty in consumption_kg.items()
+    }
+
+    total_qtl = sum(consumption_qtl.values())
+
+    fuel_rows = []
+    rupees_per_day = 0
+
+    for code in FUEL_ITEMS:
+
+        qty_qtl = consumption_qtl.get(code, 0)
+
+        pct_total_fuel = round((qty_qtl / total_qtl) * 100, 2) if total_qtl else 0
+
+        moisture, dust = get_quality_averages(code, plant, date)
+
+        last_price = get_last_price(code, plant, date)
+
+        cost = round(qty_qtl * last_price, 2) if last_price is not None else None
+
+        if cost is not None:
+            rupees_per_day += cost
+
+        fuel_rows.append({
+            "item_code": code,
+            "item_name": item_names.get(code, code),
+            "consumption_qtl": qty_qtl,
+            "pct_total_fuel": pct_total_fuel,
+            "pct_moisture": moisture,
+            "pct_dust": dust,
+            "last_price": last_price,
+            "cost": cost
+        })
+
+    rupees_per_day = round(rupees_per_day, 2)
+
+    steam_total = get_steam_total(plant, date)
+
+    per_ton_steam = (
+        round(rupees_per_day / steam_total, 2)
+        if steam_total
+        else None
+    )
+
+    return {
+        "fuel_rows": fuel_rows,
+        "rupees_per_day": rupees_per_day,
+        "per_ton_steam": per_ton_steam
+    }
+
+
+def get_item_names(item_codes):
+
+    rows = frappe.get_all(
+        "Item",
+        filters={
+            "name": ["in", item_codes]
+        },
+        fields=["name", "item_name"]
+    )
+
+    return {row.name: row.item_name for row in rows}
+
+
+def get_quality_averages(item_code, plant, date):
+    """
+    Returns (avg_moisture, avg_dust) across all submitted Quality
+    Inspections for this item + branch + report_date.
+
+    Averaging rule: only QC docs that actually have a non-blank
+    Moisture / Foreign Particle reading are counted. A QC doc with no
+    matching reading row, or a blank reading_1, is EXCLUDED from both
+    the sum and the denominator for that parameter (so if 5 of 7 QC
+    docs have a moisture reading, the average is over those 5, not 7).
+
+    Uses a single SQL join instead of one query per QC doc.
+    """
+
+    rows = frappe.db.sql(
+        """
+        select qir.specification as specification, qir.reading_1 as reading_1
+        from `tabQuality Inspection Reading` qir
+        inner join `tabQuality Inspection` qi on qi.name = qir.parent
+        where qi.item_code = %(item_code)s
+          and qi.custom_branch = %(plant)s
+          and qi.report_date = %(date)s
+          and qi.docstatus = 1
+        """,
+        {"item_code": item_code, "plant": plant, "date": date},
+        as_dict=True
+    )
+
+    moisture_values = []
+    dust_values = []
+
+    for r in rows:
+
+        if r.reading_1 in [None, ""]:
+            continue
+
+        try:
+            value = float(r.reading_1)
+        except (ValueError, TypeError):
+            continue
+
+        spec = (r.specification or "").strip().lower()
+
+        if spec == "moisture":
+            moisture_values.append(value)
+        elif spec == "foreign particle":
+            dust_values.append(value)
+
+    avg_moisture = round(sum(moisture_values) / len(moisture_values), 2) if moisture_values else None
+    avg_dust = round(sum(dust_values) / len(dust_values), 2) if dust_values else None
+
+    return avg_moisture, avg_dust
+
+
+def get_last_price(item_code, plant, date):
+    """
+    Rate from a submitted Purchase Order dated EXACTLY on the selected
+    date (transaction_date = date) with a line for this item_code and
+    branch. If no PO was raised for that plant/item on that exact date,
+    returns None (shown as "-" on the dashboard) - no fallback to an
+    earlier date's price.
+    """
+
+    rows = frappe.db.sql(
+        """
+        select poi.rate as rate, poi.uom as uom
+        from `tabPurchase Order Item` poi
+        inner join `tabPurchase Order` po on po.name = poi.parent
+        where poi.item_code = %(item_code)s
+          and po.branch = %(plant)s
+          and po.docstatus = 1
+          and po.transaction_date = %(date)s
+        order by po.creation desc
+        limit 1
+        """,
+        {"item_code": item_code, "plant": plant, "date": date},
+        as_dict=True
+    )
+
+    if not rows:
+        return None
+
+    return convert_rate_to_quintal(rows[0].rate, rows[0].uom)
+
+
+def convert_rate_to_quintal(rate, uom):
+    """
+    Normalizes a per-UOM rate to a per-quintal rate.
+
+    Recognized UOMs: Kg / Quintal / Ton variants. Anything else
+    (including blank/missing UOM) is treated as Kg, since that's the
+    dominant UOM (~90% of cases) for these fuel items - defaulting to
+    "unconverted raw rate" was silently wrong far more often than
+    defaulting to Kg would be.
+    """
+
+    if rate is None:
+        return None
+
+    uom_clean = (uom or "").strip().lower()
+
+    if uom_clean in ["quintal", "qtl", "quintals"]:
+        return round(rate, 2)
+
+    if uom_clean in ["ton", "tonne", "mt", "tonnes"]:
+        return round(rate / 10, 2)
+
+    # Kg, or unrecognized/blank UOM - assume Kg.
+    return round(rate * 100, 2)
+
+
+def get_steam_total(plant, date):
+    """
+    Pulls "Total Steam Produced" (fieldname float_zcpn) straight off the
+    DMR parent doc for this plant + date, for use in the Per Ton Steam
+    fuel-cost calculation.
+    """
+
+    parents = frappe.get_all(
+        "DMR Boiler And Turbine Parameters",
+        filters={
+            "plant": plant,
+            "date": date
+        },
+        fields=["name"]
+    )
+
+    if not parents:
+        return None
+
+    parent_doc = frappe.get_doc(
+        "DMR Boiler And Turbine Parameters",
+        parents[0].name
+    )
+
+    return getattr(parent_doc, "float_zcpn", None)
 
 
 def add_value(target, value):
