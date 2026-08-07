@@ -12,6 +12,8 @@ class BoilerTurbinePerformanceDashboard {
     constructor(wrapper) {
 
         this.wrapper = $(wrapper);
+        this.expanded = {};         // plant -> bool
+        this.view_mode = "normal";  // "normal" | "error" - applies to ALL plants
 
         this.page = frappe.ui.make_app_page({
             parent: wrapper,
@@ -35,6 +37,24 @@ class BoilerTurbinePerformanceDashboard {
             default: frappe.datetime.get_today(),
             change: () => {
                 this.load_dashboard();
+            }
+        });
+
+        this.view_field = this.page.add_field({
+            label: "View",
+            fieldtype: "Select",
+            fieldname: "view_mode",
+            options: ["Normal", "Error"],
+            default: "Normal",
+            change: () => {
+
+                const val = this.view_field.get_value();
+                this.view_mode = val === "Error" ? "error" : "normal";
+
+                if (this.dashboard_data) {
+                    this.render_dashboard(this.dashboard_data);
+                }
+
             }
         });
 
@@ -94,7 +114,9 @@ class BoilerTurbinePerformanceDashboard {
 
                     console.log("Dashboard Data:", r.message);
 
-                    this.render_dashboard(r.message);
+                    this.dashboard_data = r.message;
+                    this.expanded = {};
+                    this.render_dashboard(this.dashboard_data);
 
                 }
 
@@ -117,70 +139,131 @@ class BoilerTurbinePerformanceDashboard {
     }
 
 
-    render_dashboard(data) {
+    bind_events() {
 
-        let html = "";
+        // Click a plant row: expand/collapse only - mode is global now
+        this.$container.find(".plant-row").off("click").on("click", (e) => {
+
+            const plant = $(e.currentTarget).attr("data-plant");
+
+            this.expanded[plant] = !this.expanded[plant];
+
+            this.render_dashboard(this.dashboard_data);
+
+        });
+
+    }
+
+
+    render_dashboard(data) {
 
         if (!data.plants || data.plants.length === 0) {
 
-            html = `
+            this.$container.find(".plants-container").html(`
                 <div class="text-center text-muted"
                      style="padding:40px;">
                     No data available for selected date
                 </div>
-            `;
+            `);
 
-            this.$container.find(".plants-container").html(html);
             return;
 
         }
 
+        const mode = this.view_mode;
+
+        let html = `
+            <div class="plant-accordion"
+                 style="
+                    border:1px solid #e0e0e0;
+                    border-radius:8px;
+                    overflow:hidden;
+                 ">
+
+                <div style="
+                        padding:10px 16px;
+                        background:#f8f9fa;
+                        font-weight:600;
+                        color:#555;
+                        border-bottom:1px solid #e0e0e0;
+                        display:flex;
+                        justify-content:space-between;
+                        align-items:center;
+                    ">
+                    <span>Plant</span>
+                    <span style="
+                        font-size:12px;
+                        padding:3px 10px;
+                        border-radius:12px;
+                        color:#fff;
+                        background:${mode === "error" ? "#dc3545" : "#0e7c86"};
+                    ">
+                        ${mode === "error" ? "Error View" : "Normal View"}
+                    </span>
+                </div>
+        `;
+
         data.plants.forEach(plant => {
 
+            const isExpanded = !!this.expanded[plant.plant];
+
             html += `
+                <div class="plant-item" style="border-bottom:1px solid #eee;">
 
-                <div class="card"
-                     style="
-                        margin-bottom:20px;
-                        border-radius:10px;
-                     ">
-
-
-                    <div class="card-header"
+                    <div class="plant-row"
+                         data-plant="${plant.plant}"
                          style="
-                            text-align:center;
-                            background-color:#0e7c86;
-                            color:#ffffff;
-                            border-radius:10px 10px 0 0;
+                            display:flex;
+                            align-items:center;
+                            padding:12px 16px;
+                            cursor:pointer;
+                            user-select:none;
+                            background:${isExpanded ? "#f1f8f9" : "#ffffff"};
                          ">
-                        <h4 style="margin:0;">
+
+                        <span style="
+                            display:inline-block;
+                            width:16px;
+                            margin-right:10px;
+                            transition:transform .15s;
+                            transform:rotate(${isExpanded ? "90deg" : "0deg"});
+                        ">▶</span>
+
+                        <span style="font-weight:600;color:#2c3e50;">
                             ${plant.plant}
-                        </h4>
+                        </span>
+
                     </div>
 
+                    <div class="plant-content"
+                         style="
+                            display:${isExpanded ? "block" : "none"};
+                            padding:16px;
+                            background:#fbfbfb;
+                         ">
 
-                    <div class="card-body">
-
-                        ${this.render_dmr(plant.dmr)}
-
-                        ${this.render_section("Feed Water", plant.feed_water)}
-
-                        ${this.render_section("Boiler Water", plant.boiler_water)}
-
-                        ${this.render_section("Steam", plant.steam)}
+                        ${isExpanded ? `
+                            ${this.render_dmr(plant.dmr)}
+                            ${this.render_section("Feed Water", plant.feed_water, mode)}
+                            ${this.render_section("Boiler Water", plant.boiler_water, mode)}
+                            ${this.render_section("Steam", plant.steam, mode)}
+                            ${this.render_fuel(plant.fuel)}
+                        ` : ""}
 
                     </div>
 
                 </div>
-
             `;
 
         });
 
+        html += `</div>`;
 
         this.$container
             .find(".plants-container")
             .html(html);
+
+        this.bind_events();
 
     }
 
@@ -238,7 +321,84 @@ class BoilerTurbinePerformanceDashboard {
     }
 
 
-    render_section(title, section) {
+    render_fuel(fuel) {
+
+        if (!fuel) return "";
+
+        let rows = "";
+
+        if (!fuel.fuel_rows || fuel.fuel_rows.length === 0) {
+
+            rows = `
+                <tr>
+                    <td colspan="7" class="text-center text-muted">-</td>
+                </tr>
+            `;
+
+        } else {
+
+            fuel.fuel_rows.forEach(f => {
+
+                rows += `
+                    <tr>
+                        <td>${f.item_code || "-"}</td>
+                        <td>${f.item_name || "-"}</td>
+                        <td>${f.consumption_qtl !== null && f.consumption_qtl !== undefined ? f.consumption_qtl : "-"}</td>
+                        <td>${f.pct_total_fuel !== null && f.pct_total_fuel !== undefined ? f.pct_total_fuel + "%" : "-"}</td>
+                        <td>${f.pct_moisture !== null && f.pct_moisture !== undefined ? f.pct_moisture + "%" : "-"}</td>
+                        <td>${f.pct_dust !== null && f.pct_dust !== undefined ? f.pct_dust + "%" : "-"}</td>
+                        <td>${f.last_price !== null && f.last_price !== undefined ? f.last_price : "-"}</td>
+                    </tr>
+                `;
+            });
+
+        }
+
+        const rupeesPerDay = fuel.rupees_per_day !== null && fuel.rupees_per_day !== undefined
+            ? fuel.rupees_per_day
+            : "-";
+
+        const perTonSteam = fuel.per_ton_steam !== null && fuel.per_ton_steam !== undefined
+            ? fuel.per_ton_steam
+            : "-";
+
+        return `
+            <h5 style="${this.section_label_style()}">Boiler Fuel Parameters</h5>
+            <table class="table table-bordered">
+                <thead>
+                    <tr>
+                        <th>Item Code</th>
+                        <th>Item Name</th>
+                        <th>Consumption (qtl)</th>
+                        <th>% of Total Fuel</th>
+                        <th>% Moisture</th>
+                        <th>% Dust</th>
+                        <th>Last Price</th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>
+
+            <h5 style="${this.section_label_style()}">Fuel Cost</h5>
+            <table class="table table-bordered">
+                <thead>
+                    <tr>
+                        <th>Rupees Per Day</th>
+                        <th>Per Ton Steam</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>${rupeesPerDay}</td>
+                        <td>${perTonSteam}</td>
+                    </tr>
+                </tbody>
+            </table>
+        `;
+    }
+
+
+    render_section(title, section, mode = "normal") {
 
         if (!section) return "";
 
@@ -247,9 +407,18 @@ class BoilerTurbinePerformanceDashboard {
         Object.keys(section).forEach(param => {
 
             const d = section[param];
+
+            if (
+                mode === "error" &&
+                !["High", "Low"].includes(d.status)
+            ) {
+                return;
+            }
+
             const avgStyle = this.status_cell_style(d.status);
             const badge = this.status_badge(d.status);
             const unit = this.format_unit(param);
+
             const avgDisplay = d.average !== null
                 ? `${d.average}${unit ? " " + unit : ""}`
                 : "-";
@@ -263,7 +432,18 @@ class BoilerTurbinePerformanceDashboard {
                     <td>${badge}</td>
                 </tr>
             `;
+
         });
+
+        if (!rows) {
+            rows = `
+                <tr>
+                    <td colspan="5" class="text-center text-success">
+                        No abnormal parameters
+                    </td>
+                </tr>
+            `;
+        }
 
         return `
             <h5 style="${this.section_label_style()}">${title}</h5>
