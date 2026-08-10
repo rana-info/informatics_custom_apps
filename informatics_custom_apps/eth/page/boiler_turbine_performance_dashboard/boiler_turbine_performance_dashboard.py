@@ -519,9 +519,9 @@ def get_quality_averages(item_code, plant, date):
 
 def get_last_price(item_code, plant, date):
     """
-    Rate from a submitted Purchase Order dated EXACTLY on the selected
-    date (transaction_date = date) with a line for this item_code and
-    branch. If no PO was raised for that plant/item on that exact date,
+    Rate from a submitted Purchase Order dated on or before the selected
+    date (transaction_date <= date) with a line for this item_code and
+    branch. If no PO was raised for that plant/item on or before that date,
     returns None (shown as "-" on the dashboard) - no fallback to an
     earlier date's price.
     """
@@ -534,7 +534,7 @@ def get_last_price(item_code, plant, date):
         where poi.item_code = %(item_code)s
           and po.branch = %(plant)s
           and po.docstatus = 1
-          and po.transaction_date = %(date)s
+          and po.transaction_date <= %(date)s
         order by po.creation desc
         limit 1
         """,
