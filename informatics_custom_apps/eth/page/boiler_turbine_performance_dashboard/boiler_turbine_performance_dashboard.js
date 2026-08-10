@@ -331,7 +331,7 @@ class BoilerTurbinePerformanceDashboard {
 
             rows = `
                 <tr>
-                    <td colspan="7" class="text-center text-muted">-</td>
+                    <td colspan="6" class="text-center text-muted">-</td>
                 </tr>
             `;
 
@@ -341,9 +341,8 @@ class BoilerTurbinePerformanceDashboard {
 
                 rows += `
                     <tr>
-                        <td>${f.item_code || "-"}</td>
                         <td>${f.item_name || "-"}</td>
-                        <td>${f.consumption_qtl !== null && f.consumption_qtl !== undefined ? f.consumption_qtl : "-"}</td>
+                        <td>${f.consumption_ton !== null && f.consumption_ton !== undefined ? f.consumption_ton : "-"}</td>
                         <td>${f.pct_total_fuel !== null && f.pct_total_fuel !== undefined ? f.pct_total_fuel + "%" : "-"}</td>
                         <td>${f.pct_moisture !== null && f.pct_moisture !== undefined ? f.pct_moisture + "%" : "-"}</td>
                         <td>${f.pct_dust !== null && f.pct_dust !== undefined ? f.pct_dust + "%" : "-"}</td>
@@ -367,9 +366,8 @@ class BoilerTurbinePerformanceDashboard {
             <table class="table table-bordered">
                 <thead>
                     <tr>
-                        <th>Item Code</th>
                         <th>Item Name</th>
-                        <th>Consumption (qtl)</th>
+                        <th>Consumption (TPD)</th>
                         <th>% of Total Fuel</th>
                         <th>% Moisture</th>
                         <th>% Dust</th>

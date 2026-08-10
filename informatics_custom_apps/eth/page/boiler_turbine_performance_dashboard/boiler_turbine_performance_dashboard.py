@@ -22,10 +22,18 @@ FIELD_TAG_MAP = {
 }
 
 
-# Master list of fuel item codes used in the "Boiler Fuel Parameters"
-# section. code -> fallback label (real label is fetched from Item master
-# at render time; this is just a fallback if the Item doesn't exist).
-FUEL_ITEMS = ["106441", "106436", "115566", "106440"]
+# Fixed item codes for the single-item fuel categories.
+FUEL_ITEM_CODES = {
+    "Paddy": "106441",
+    "Husk": "106436",
+    "Mustard": "106440"
+}
+
+# Coal isn't a single item code - there can be several coal items in the
+# system. Resolved dynamically at render time via item_group + name match,
+# and all matching item codes are aggregated into ONE "Coal" row.
+COAL_ITEM_GROUP = "Power & Fuel"
+COAL_NAME_MATCH = "%coal%"
 
 
 # Maps generic parameter name -> actual Power Plant Log Book fieldname,
@@ -252,9 +260,15 @@ def get_dmr_data(plant, date):
     For each parameter:
     - If a matching "DMR Parameters Range" child row exists, its
       max/min/avg/time values are used.
-    - "total" is always pulled straight off the parent doc at the same
-      fieldname, regardless of whether a child row exists - this is what
-      lets Total show up even when the child table hasn't been filled in.
+    - "total" is only populated for FIELD_TAG_MAP parameters marked
+      "agg": "sum" - pulled straight off the parent doc at the same
+      fieldname, regardless of whether a child row exists (this is what
+      lets Total show up even when the child table hasn't been filled
+      in). Parameters marked "agg": "avg" (temperature, pressure, %)
+      always get total = None, since summing/totaling an average-type
+      reading is meaningless even if the parent doc has a value there.
+      Fieldnames not in FIELD_TAG_MAP at all (only seen in child data)
+      default to getting a Total, since their agg type is unknown.
 
     If no parent record exists for this plant + date at all, returns [].
     """
@@ -323,7 +337,15 @@ def get_dmr_data(plant, date):
                 or fieldname
             )
 
-            total = getattr(parent_doc, fieldname, None)
+            # Only "sum" type parameters get a Total - a Total for an
+            # "avg" type (temperature, pressure, %) is meaningless, even
+            # if the parent doc happens to have a value in that field.
+            agg = map_entry.get("agg")
+
+            if agg == "avg":
+                total = None
+            else:
+                total = getattr(parent_doc, fieldname, None)
 
             dmr_rows.append({
             "parameter_name": label,
@@ -358,71 +380,146 @@ def format_indian_currency(value):
 
     return f"{integer_part}.{decimal_part}"
 
-def get_fuel_data(plant, date):
-    item_names = get_item_names(FUEL_ITEMS)
 
-    consumption_kg = {code: 0.0 for code in FUEL_ITEMS}
+def resolve_coal_item_codes():
+    """
+    Coal isn't one fixed item code - there can be several coal items in
+    the system. Resolves ALL item codes in the "Power & Fuel" item group
+    whose item_name contains "coal" (case-insensitive), so they can be
+    aggregated into a single "Coal" row instead of listed individually.
+    """
 
-    stock_entries = frappe.get_all(
-        "Stock Entry",
+    rows = frappe.get_all(
+        "Item",
         filters={
-            "branch": plant,
-            "posting_date": date,
-            "stock_entry_type": "Material Issue",
-            "docstatus": 1
+            "item_group": COAL_ITEM_GROUP,
+            "item_name": ["like", COAL_NAME_MATCH]
         },
         fields=["name"]
     )
 
-    for se in stock_entries:
+    return [row.name for row in rows]
 
-        items = frappe.get_all(
-            "Stock Entry Detail",
-            filters={
-                "parent": se.name,
-                "parenttype": "Stock Entry",
-                "item_code": ["in", FUEL_ITEMS]
-            },
-            fields=["item_code", "qty"]
+
+def build_fuel_categories():
+    """
+    Returns the list of fuel rows to show, each as:
+    {"label": "Paddy", "item_codes": ["106441"]}
+
+    Paddy / Husk / Mustard are single fixed item codes with their real
+    name pulled from Item master. Coal is resolved dynamically and can
+    map to multiple item codes, all aggregated under one "Coal" row.
+    """
+
+    fixed_codes = list(FUEL_ITEM_CODES.values())
+    item_names = get_item_names(fixed_codes)
+
+    categories = []
+
+    for label, code in FUEL_ITEM_CODES.items():
+        categories.append({
+            "label": item_names.get(code, label),
+            "item_codes": [code]
+        })
+
+    categories.append({
+        "label": "Coal",
+        "item_codes": resolve_coal_item_codes()
+    })
+
+    return categories
+
+
+def get_fuel_data(plant, date):
+    """
+    Builds the "Boiler Fuel Parameters" + "Fuel Cost" section for a plant
+    on a given date. One row per fuel CATEGORY (Paddy/Husk/Mustard/Coal),
+    where Coal can represent multiple underlying item codes aggregated
+    together. All quantities are in TON (not quintal).
+
+    - consumption_ton: sum of qty (kg -> ton, /1000) from submitted
+      Material Issue Stock Entries, summed across every item code in the
+      category, filtered by branch + date.
+    - pct_total_fuel: this category's share of total fuel consumed that
+      day (by ton).
+    - pct_moisture / pct_dust: average of matching Quality Inspection
+      readings (specification "Moisture" / "Foreign Particle") across
+      every item code in the category, for that branch + report_date.
+      Only QC docs with an actual non-blank reading are counted. If NO
+      QC doc has a reading for that parameter at all, returns None
+      (shown as "-", not "0%").
+    - last_price: a consumption-weighted average price (per ton) across
+      the category's item codes, using each item's own latest submitted
+      PO (transaction_date <= date). Items with no consumption or no
+      price that day are skipped; if none have a usable price, this is
+      None ("-").
+
+    Fuel Cost:
+    - rupees_per_day: sum of cost across all fuel categories.
+    - per_ton_steam: rupees_per_day / Total Steam Produced (from DMR
+      "float_zcpn" Total on the same plant + date).
+    """
+
+    categories = build_fuel_categories()
+
+    all_item_codes = [
+        code
+        for cat in categories
+        for code in cat["item_codes"]
+    ]
+
+    consumption_kg_by_item = get_consumption_by_item(all_item_codes, plant, date)
+
+    category_consumption = []
+    total_ton_all = 0
+
+    for cat in categories:
+
+        cat_kg = sum(
+            consumption_kg_by_item.get(code, 0)
+            for code in cat["item_codes"]
         )
 
-        for it in items:
-            consumption_kg[it.item_code] = consumption_kg.get(it.item_code, 0) + (it.qty or 0)
+        cat_ton = round(cat_kg / 1000, 2)
 
-    consumption_qtl = {
-        code: round(qty / 100, 2)
-        for code, qty in consumption_kg.items()
-    }
+        category_consumption.append({
+            "label": cat["label"],
+            "item_codes": cat["item_codes"],
+            "consumption_ton": cat_ton
+        })
 
-    total_qtl = sum(consumption_qtl.values())
+        total_ton_all += cat_ton
 
     fuel_rows = []
     rupees_per_day = 0
 
-    for code in FUEL_ITEMS:
+    for cat in category_consumption:
 
-        qty_qtl = consumption_qtl.get(code, 0)
+        pct_total_fuel = (
+            round((cat["consumption_ton"] / total_ton_all) * 100, 2)
+            if total_ton_all
+            else 0
+        )
 
-        pct_total_fuel = round((qty_qtl / total_qtl) * 100, 2) if total_qtl else 0
+        moisture, dust = get_quality_averages(cat["item_codes"], plant, date)
 
-        moisture, dust = get_quality_averages(code, plant, date)
-
-        last_price = get_last_price(code, plant, date)
-
-        cost = round(qty_qtl * last_price, 2) if last_price is not None else None
+        last_price, cost = get_category_price_and_cost(
+            cat["item_codes"],
+            consumption_kg_by_item,
+            plant,
+            date
+        )
 
         if cost is not None:
             rupees_per_day += cost
 
         fuel_rows.append({
-            "item_code": code,
-            "item_name": item_names.get(code, code),
-            "consumption_qtl": qty_qtl,
+            "item_name": cat["label"],
+            "consumption_ton": cat["consumption_ton"],
             "pct_total_fuel": pct_total_fuel,
             "pct_moisture": moisture,
             "pct_dust": dust,
-            "last_price": last_price,
-            "cost": cost
+            "last_price": last_price
         })
 
     rupees_per_day = round(rupees_per_day, 2)
@@ -436,13 +533,16 @@ def get_fuel_data(plant, date):
     )
 
     return {
-    "fuel_rows": fuel_rows,
-    "rupees_per_day": format_indian_currency(rupees_per_day),
-    "per_ton_steam": format_indian_currency(per_ton_steam)
-}
+        "fuel_rows": fuel_rows,
+        "rupees_per_day": format_indian_currency(rupees_per_day),
+        "per_ton_steam": format_indian_currency(per_ton_steam)
+    }
 
 
 def get_item_names(item_codes):
+
+    if not item_codes:
+        return {}
 
     rows = frappe.get_all(
         "Item",
@@ -455,31 +555,70 @@ def get_item_names(item_codes):
     return {row.name: row.item_name for row in rows}
 
 
-def get_quality_averages(item_code, plant, date):
+def get_consumption_by_item(item_codes, plant, date):
+    """
+    Sum of qty (kg, raw system unit) per item_code, from submitted
+    Material Issue Stock Entries for this branch + date. Single SQL
+    join covering every item code at once.
+    """
+
+    if not item_codes:
+        return {}
+
+    rows = frappe.db.sql(
+        """
+        select sed.item_code as item_code, sum(sed.qty) as qty
+        from `tabStock Entry Detail` sed
+        inner join `tabStock Entry` se on se.name = sed.parent
+        where se.branch = %(plant)s
+          and se.posting_date = %(date)s
+          and se.stock_entry_type = 'Material Issue'
+          and se.docstatus = 1
+          and sed.item_code in %(item_codes)s
+        group by sed.item_code
+        """,
+        {
+            "plant": plant,
+            "date": date,
+            "item_codes": tuple(item_codes)
+        },
+        as_dict=True
+    )
+
+    return {row.item_code: (row.qty or 0) for row in rows}
+
+
+def get_quality_averages(item_codes, plant, date):
     """
     Returns (avg_moisture, avg_dust) across all submitted Quality
-    Inspections for this item + branch + report_date.
+    Inspections for ANY of the given item codes + branch + report_date
+    (lets a multi-code category like Coal pool readings across all its
+    underlying items).
 
     Averaging rule: only QC docs that actually have a non-blank
     Moisture / Foreign Particle reading are counted. A QC doc with no
     matching reading row, or a blank reading_1, is EXCLUDED from both
-    the sum and the denominator for that parameter (so if 5 of 7 QC
-    docs have a moisture reading, the average is over those 5, not 7).
-
-    Uses a single SQL join instead of one query per QC doc.
+    the sum and the denominator for that parameter.
     """
+
+    if not item_codes:
+        return None, None
 
     rows = frappe.db.sql(
         """
         select qir.specification as specification, qir.reading_1 as reading_1
         from `tabQuality Inspection Reading` qir
         inner join `tabQuality Inspection` qi on qi.name = qir.parent
-        where qi.item_code = %(item_code)s
+        where qi.item_code in %(item_codes)s
           and qi.custom_branch = %(plant)s
           and qi.report_date = %(date)s
           and qi.docstatus = 1
         """,
-        {"item_code": item_code, "plant": plant, "date": date},
+        {
+            "item_codes": tuple(item_codes),
+            "plant": plant,
+            "date": date
+        },
         as_dict=True
     )
 
@@ -509,13 +648,52 @@ def get_quality_averages(item_code, plant, date):
     return avg_moisture, avg_dust
 
 
+def get_category_price_and_cost(item_codes, consumption_kg_by_item, plant, date):
+    """
+    Consumption-weighted average price (per ton) across a category's
+    item codes, plus the total cost for the category. Each item code's
+    own latest submitted PO price (as of the selected date) is used,
+    weighted by that item's own consumption that day. Items with zero
+    consumption, or no usable PO price, are skipped entirely - they
+    don't drag the average down or count as 0.
+
+    If NONE of the category's item codes have both consumption and a
+    price, returns (None, None) - shown as "-" on the dashboard.
+    """
+
+    total_cost = 0
+    total_ton_with_price = 0
+
+    for code in item_codes:
+
+        kg = consumption_kg_by_item.get(code, 0)
+        ton = kg / 1000
+
+        if ton <= 0:
+            continue
+
+        price = get_last_price(code, plant, date)
+
+        if price is None:
+            continue
+
+        total_cost += ton * price
+        total_ton_with_price += ton
+
+    if total_ton_with_price == 0:
+        return None, None
+
+    weighted_price = round(total_cost / total_ton_with_price, 2)
+
+    return weighted_price, round(total_cost, 2)
+
+
 def get_last_price(item_code, plant, date):
     """
     Rate from a submitted Purchase Order dated on or before the selected
     date (transaction_date <= date) with a line for this item_code and
-    branch. If no PO was raised for that plant/item on or before that date,
-    returns None (shown as "-" on the dashboard) - no fallback to an
-    earlier date's price.
+    branch, most recent first. If no such PO exists, returns None
+    (shown as "-" on the dashboard).
     """
 
     rows = frappe.db.sql(
@@ -527,7 +705,7 @@ def get_last_price(item_code, plant, date):
           and po.branch = %(plant)s
           and po.docstatus = 1
           and po.transaction_date <= %(date)s
-        order by po.creation desc
+        order by po.transaction_date desc, po.creation desc
         limit 1
         """,
         {"item_code": item_code, "plant": plant, "date": date},
@@ -537,18 +715,18 @@ def get_last_price(item_code, plant, date):
     if not rows:
         return None
 
-    return convert_rate_to_quintal(rows[0].rate, rows[0].uom)
+    return convert_rate_to_ton(rows[0].rate, rows[0].uom)
 
 
-def convert_rate_to_quintal(rate, uom):
+def convert_rate_to_ton(rate, uom):
     """
-    Normalizes a per-UOM rate to a per-quintal rate.
+    Normalizes a per-UOM rate to a per-TON rate.
 
     Recognized UOMs: Kg / Quintal / Ton variants. Anything else
     (including blank/missing UOM) is treated as Kg, since that's the
-    dominant UOM (~90% of cases) for these fuel items - defaulting to
-    "unconverted raw rate" was silently wrong far more often than
-    defaulting to Kg would be.
+    dominant UOM for these fuel items - defaulting to "unconverted raw
+    rate" was silently wrong far more often than defaulting to Kg would
+    be.
     """
 
     if rate is None:
@@ -556,14 +734,14 @@ def convert_rate_to_quintal(rate, uom):
 
     uom_clean = (uom or "").strip().lower()
 
-    if uom_clean in ["quintal", "qtl", "quintals"]:
+    if uom_clean in ["ton", "tonne", "mt", "tonnes"]:
         return round(rate, 2)
 
-    if uom_clean in ["ton", "tonne", "mt", "tonnes"]:
-        return round(rate / 10, 2)
+    if uom_clean in ["quintal", "qtl", "quintals"]:
+        return round(rate * 10, 2)
 
     # Kg, or unrecognized/blank UOM - assume Kg.
-    return round(rate * 100, 2)
+    return round(rate * 1000, 2)
 
 
 def get_steam_total(plant, date):
