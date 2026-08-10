@@ -1,6 +1,5 @@
 import frappe
 
-
 # Master list of known DMR parameters. Used as the base row-set for the
 # "Key Operational Parameters" table so a row still shows (with Total
 # pulled from the parent doc) even when the child table has no matching
@@ -339,34 +338,27 @@ def get_dmr_data(plant, date):
 
     return dmr_rows
 
+def format_indian_currency(value):
+    if value is None:
+        return None
+
+    value = round(float(value), 2)
+    integer_part, decimal_part = f"{value:.2f}".split(".")
+
+    if len(integer_part) > 3:
+        last_three = integer_part[-3:]
+        remaining = integer_part[:-3]
+
+        groups = []
+        while remaining:
+            groups.insert(0, remaining[-2:])
+            remaining = remaining[:-2]
+
+        integer_part = ",".join(groups) + "," + last_three
+
+    return f"{integer_part}.{decimal_part}"
 
 def get_fuel_data(plant, date):
-    """
-    Builds the "Boiler Fuel Parameters" + "Fuel Cost" section for a plant
-    on a given date:
-
-    - consumption: sum of qty (kg -> quintal) from submitted Material
-      Issue Stock Entries, per fuel item code, filtered by branch + date.
-    - pct_total_fuel: this item's share of total fuel consumed that day.
-    - pct_moisture / pct_dust: average of matching Quality Inspection
-      readings (specification "Moisture" / "Foreign Particle") for that
-      item, branch, and report_date. Only QC docs with an actual
-      non-blank reading are counted - a QC doc missing that reading is
-      excluded from both the sum and the denominator. If NO QC doc has
-      a reading for that parameter at all, returns None (shown as "-"
-      on the dashboard, not "0%").
-    - last_price: rate from a submitted Purchase Order dated EXACTLY on
-      the selected date for that item + branch. If no PO was raised for
-      that plant/item on that exact date, this is None ("-" on the
-      dashboard) - no fallback to an earlier or later date's price.
-    - cost: consumption_qtl * last_price, assuming rate is per quintal.
-
-    Fuel Cost:
-    - rupees_per_day: sum of cost across all fuel items.
-    - per_ton_steam: rupees_per_day / Total Steam Produced (from DMR
-      "float_zcpn" Total on the same plant + date).
-    """
-
     item_names = get_item_names(FUEL_ITEMS)
 
     consumption_kg = {code: 0.0 for code in FUEL_ITEMS}
@@ -444,10 +436,10 @@ def get_fuel_data(plant, date):
     )
 
     return {
-        "fuel_rows": fuel_rows,
-        "rupees_per_day": rupees_per_day,
-        "per_ton_steam": per_ton_steam
-    }
+    "fuel_rows": fuel_rows,
+    "rupees_per_day": format_indian_currency(rupees_per_day),
+    "per_ton_steam": format_indian_currency(per_ton_steam)
+}
 
 
 def get_item_names(item_codes):
