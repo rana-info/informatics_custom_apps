@@ -15,7 +15,7 @@ class MDDashboard {
 
         this.page = frappe.ui.make_app_page({
             parent: wrapper,
-            title: "Plant Compliance Overview",
+            title: "Plant Technical Monitoring Dashboard",
             single_column: true
         });
 
