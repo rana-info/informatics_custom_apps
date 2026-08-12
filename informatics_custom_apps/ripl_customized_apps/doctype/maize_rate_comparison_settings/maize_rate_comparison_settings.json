@@ -6,56 +6,29 @@
  "engine": "InnoDB",
  "field_order": [
   "section_rsl_loukha",
-  "rsl_loukha",
+  "punjab",
   "section_buttar_biofuel",
-  "buttar_biofuel",
-  "section_eth_biofuel",
-  "eth_biofuel",
+  "belwara",
   "section_superior_biofuels",
   "superior_biofuels",
-  "section_rsl_belwara",
-  "rsl_belwara",
-  "section_karimganj_biofuel",
-  "karimganj_biofuel",
-  "section_break_rjux",
-  "rsld_karnal"
+  "section_eth_biofuel",
+  "rsld"
  ],
  "fields": [
   {
    "fieldname": "section_rsl_loukha",
    "fieldtype": "Section Break",
-   "label": "RSL Loukha"
-  },
-  {
-   "allow_bulk_edit": 1,
-   "fieldname": "rsl_loukha",
-   "fieldtype": "Table",
-   "label": "RSL Loukha",
-   "options": "Maize Company Master Item"
+   "label": "Punjab"
   },
   {
    "fieldname": "section_buttar_biofuel",
    "fieldtype": "Section Break",
-   "label": "Buttar Biofuel"
-  },
-  {
-   "allow_bulk_edit": 1,
-   "fieldname": "buttar_biofuel",
-   "fieldtype": "Table",
-   "label": "Buttar Biofuel",
-   "options": "Maize Company Master Item"
+   "label": "Karimganj Biofuel & RSL Belwara"
   },
   {
    "fieldname": "section_eth_biofuel",
    "fieldtype": "Section Break",
-   "label": "ETH Biofuel"
-  },
-  {
-   "allow_bulk_edit": 1,
-   "fieldname": "eth_biofuel",
-   "fieldtype": "Table",
-   "label": "ETH Biofuel",
-   "options": "Maize Company Master Item"
+   "label": "RSL Distillery Pvt Ltd."
   },
   {
    "fieldname": "section_superior_biofuels",
@@ -70,44 +43,30 @@
    "options": "Maize Company Master Item"
   },
   {
-   "fieldname": "section_rsl_belwara",
-   "fieldtype": "Section Break",
-   "label": "RSL Belwara"
-  },
-  {
    "allow_bulk_edit": 1,
-   "fieldname": "rsl_belwara",
+   "fieldname": "punjab",
    "fieldtype": "Table",
-   "label": "RSL Belwara",
+   "label": "Punjab",
    "options": "Maize Company Master Item"
   },
   {
-   "fieldname": "section_karimganj_biofuel",
-   "fieldtype": "Section Break",
-   "label": "Karimganj Biofuel"
-  },
-  {
    "allow_bulk_edit": 1,
-   "fieldname": "karimganj_biofuel",
+   "fieldname": "belwara",
    "fieldtype": "Table",
-   "label": "Karimganj Biofuel",
+   "label": "Karimganj Biofuel & RSL Belwara",
    "options": "Maize Company Master Item"
   },
   {
-   "fieldname": "section_break_rjux",
-   "fieldtype": "Section Break"
-  },
-  {
    "allow_bulk_edit": 1,
-   "fieldname": "rsld_karnal",
+   "fieldname": "rsld",
    "fieldtype": "Table",
-   "label": "RSLD Karnal",
+   "label": "RSL Distillery Pvt Ltd.",
    "options": "Maize Company Master Item"
   }
  ],
  "issingle": 1,
  "links": [],
- "modified": "2026-08-06 15:52:56.289159",
+ "modified": "2026-08-12 13:11:49.644623",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "Maize Rate Comparison Settings",

@@ -6,13 +6,10 @@ from frappe.model.document import Document
 
 # fieldnames of the 6 Table fields on this doctype -- must match the doctype JSON
 CHILD_TABLE_FIELDS = [
-    "rsl_loukha",
-    "buttar_biofuel",
-    "eth_biofuel",
-    "superior_biofuels",
-    "rsl_belwara",
-    "karimganj_biofuel",
-    "rsld_karnal"
+   "punjab",
+   "belwara",
+   "superior_biofuels",
+   "rsld"
 ]
 
 

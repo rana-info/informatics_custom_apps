@@ -8,13 +8,10 @@
  "field_order": [
   "naming_series",
   "posting_date",
-  "rsl_loukha",
-  "rsl_belwara",
+  "punjab",
+  "belwara",
   "superior_biofuels",
-  "eth_biofuel",
-  "karimganj_biofuel",
-  "buttar_biofuel",
-  "rsld_karnal",
+  "rsld",
   "section_karimganj_biofuel",
   "amended_from"
  ],
@@ -35,45 +32,14 @@
    "reqd": 1
   },
   {
-   "bold": 1,
-   "fieldname": "rsl_loukha",
-   "fieldtype": "Table",
-   "label": "RSL Loukha",
-   "options": "Maize Rate Comparison Item"
-  },
-  {
-   "fieldname": "buttar_biofuel",
-   "fieldtype": "Table",
-   "label": "Buttar Biofuel",
-   "options": "Maize Rate Comparison Item"
-  },
-  {
-   "fieldname": "eth_biofuel",
-   "fieldtype": "Table",
-   "label": "ETH Biofuel",
-   "options": "Maize Rate Comparison Item"
-  },
-  {
    "fieldname": "superior_biofuels",
    "fieldtype": "Table",
    "label": "Superior Biofuels",
    "options": "Maize Rate Comparison Item"
   },
   {
-   "fieldname": "rsl_belwara",
-   "fieldtype": "Table",
-   "label": "RSL Belwara",
-   "options": "Maize Rate Comparison Item"
-  },
-  {
    "fieldname": "section_karimganj_biofuel",
    "fieldtype": "Section Break"
-  },
-  {
-   "fieldname": "karimganj_biofuel",
-   "fieldtype": "Table",
-   "label": "Karimganj Biofuel",
-   "options": "Maize Rate Comparison Item"
   },
   {
    "fieldname": "amended_from",
@@ -85,15 +51,28 @@
    "read_only": 1
   },
   {
-   "fieldname": "rsld_karnal",
+   "bold": 1,
+   "fieldname": "punjab",
    "fieldtype": "Table",
-   "label": "RSLD Karnal",
+   "label": "Punjab",
+   "options": "Maize Rate Comparison Item"
+  },
+  {
+   "fieldname": "belwara",
+   "fieldtype": "Table",
+   "label": "Karimganj Biofuel & RSL Belwara",
+   "options": "Maize Rate Comparison Item"
+  },
+  {
+   "fieldname": "rsld",
+   "fieldtype": "Table",
+   "label": "RSL Distillery Pvt Ltd.",
    "options": "Maize Rate Comparison Item"
   }
  ],
  "is_submittable": 1,
  "links": [],
- "modified": "2026-08-06 15:52:11.038573",
+ "modified": "2026-08-12 13:13:34.004929",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "Competitor Rate Comparision",
