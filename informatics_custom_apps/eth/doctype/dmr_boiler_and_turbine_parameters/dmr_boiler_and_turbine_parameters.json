@@ -10,7 +10,8 @@
   "date",
   "column_break_hppk",
   "plant",
-  "excel_file",
+  "section_break_nrjv",
+  "dmr_boiler_excel_upload",
   "boiler_and_turbine_section",
   "float_zcpn",
   "float_jgdk",
@@ -173,11 +174,6 @@
    "fieldtype": "Column Break"
   },
   {
-   "fieldname": "excel_file",
-   "fieldtype": "Attach",
-   "label": "Excel File"
-  },
-  {
    "fieldname": "process_data_tab",
    "fieldtype": "Tab Break",
    "label": "Process Data"
@@ -273,6 +269,16 @@
    "fieldtype": "Table",
    "label": "Min Max Avg",
    "options": "DMR Parameters Range"
+  },
+  {
+   "fieldname": "section_break_nrjv",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "dmr_boiler_excel_upload",
+   "fieldtype": "Table",
+   "label": "DMR Boiler Excel Upload",
+   "options": "DMR Boiler Excel Upload"
   }
  ],
  "grid_page_length": 50,
