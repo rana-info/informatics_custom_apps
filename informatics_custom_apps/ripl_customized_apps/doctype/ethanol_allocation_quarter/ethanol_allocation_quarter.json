@@ -23,26 +23,26 @@
    "fieldname": "ethanol_from_dfg",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Ethanol from DFG (LTR)"
+   "label": "Ethanol from DFG (KLR)"
   },
   {
    "fieldname": "ethanol_from_maize",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Ethanol from Maize (LTR)"
+   "label": "Ethanol from Maize (KLR)"
   },
   {
    "fieldname": "ethanol_from_fci",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Ethanol from FCI (LTR)"
+   "label": "Ethanol from FCI (KLR)"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-08-06 16:14:32.611363",
+ "modified": "2026-08-13 10:13:08.265602",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "Ethanol Allocation Quarter",
