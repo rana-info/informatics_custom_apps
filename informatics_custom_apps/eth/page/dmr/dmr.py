@@ -27,10 +27,32 @@ PRODUCTION_ITEMS = [
     ("100128", "Production of RS from DFG", "A.7", "BL"),
 ]
 
-PRODUCTION_ITEM_GROUPS = [
-    ("Production of IMFL", "A.8", "Case", [136168, 136167]),
-    ("Production of by Country Liquor", "A.9", "Case", []),
-]
+
+def get_production_item_groups():
+    production_groups = [
+        ("Production of IMFL", "A.8", "Case", "010205-IMFL-Mfg"),
+        ("Production of by Country Liquor", "A.9", "Case", "010204-Country Liquor-Mfg"),
+    ]
+
+    result = []
+
+    for name, code, uom, item_group in production_groups:
+        item_codes = frappe.db.get_all(
+            "Item",
+            filters={
+                "item_group": item_group,
+                "disabled": 0
+            },
+            pluck="name"
+        )
+
+        result.append(
+            (name, code, uom, item_codes)
+        )
+
+    return result
+
+PRODUCTION_ITEM_GROUPS = get_production_item_groups()
 
 CONSUMPTION_ITEMS = [
     ("106444", "Maize", "Quintal", "maize_opening_balance", "maize_closing_balance", "B.1", "B.6", "B.7"),
@@ -39,9 +61,30 @@ CONSUMPTION_ITEMS = [
 ]
 
 ENA_CONSUMPTION_ROWS = [
-    ("B.4", "ENA Mfg Consumed", "BL", []),
-    ("B.5", "ENA Trd Consumed", "BL", []),
+    ("B.4", "ENA Mfg Consumed", "BL", "010202-ENA-Mfg"),
+    ("B.5", "ENA Trd Consumed", "BL", "020201-ENA-Trd"),
 ]
+
+def get_ena_consumption_rows():
+    result = []
+
+    for name, code, uom, item_group in ENA_CONSUMPTION_ROWS:
+        item_codes = frappe.db.get_all(
+            "Item",
+            filters={
+                "item_group": item_group,
+                "disabled": 0
+            },
+            pluck="name"
+        )
+
+        result.append(
+            (name, code, uom, item_codes)
+        )
+
+    return result
+
+ENA_CONSUMPTION_ROWS = get_ena_consumption_rows()
 
 
 BYPRODUCT_ITEMS = [
@@ -404,6 +447,10 @@ def build_consumption_rows(companies, from_date, to_date, plants=None, segments=
 
     quintal_consumed_total = 0
 
+    consumed_rows = []
+    opening_rows = []
+    closing_rows = []
+
     for item_code, label, uom, opening_field, closing_field, consumed_sr, opening_sr, closing_sr in CONSUMPTION_ITEMS:
         display_uom = get_valid_target_uom(item_code, uom)
         factor = get_stock_to_target_factor(item_code, uom)
@@ -417,12 +464,23 @@ def build_consumption_rows(companies, from_date, to_date, plants=None, segments=
         opening_display = None if is_range else opening
         closing_display = None if is_range else closing
 
-        rows.append({"sr": opening_sr, "label": f"Opening WIP {label}", "uom": display_uom, "value": opening_display,
-                      "item_code": item_code, "exclude_from_total": True})
-        rows.append({"sr": closing_sr, "label": f"Closing WIP {label}", "uom": display_uom, "value": closing_display,
-                      "item_code": item_code, "exclude_from_total": True})
-        rows.append({"sr": consumed_sr, "label": f"{label} Consumed ( Net of WIP)", "uom": display_uom, "value": net_consumed,
-                      "item_code": item_code, "exclude_from_total": True})
+        consumed_rows.append({"sr": consumed_sr, "label": f"{label} Consumed ( Net of WIP)", "uom": display_uom,
+                               "value": net_consumed, "item_code": item_code, "exclude_from_total": True})
+        opening_rows.append({"sr": opening_sr, "label": f"Opening WIP {label}", "uom": display_uom,
+                              "value": opening_display, "item_code": item_code, "exclude_from_total": True})
+        closing_rows.append({"sr": closing_sr, "label": f"Closing WIP {label}", "uom": display_uom,
+                              "value": closing_display, "item_code": item_code, "exclude_from_total": True})
+
+    # sr on subheaders is a stable, non-colliding key (used as react key / excel anchor only —
+    # it never appears in columns[i]["values"], so it can't clash with a real data row's sr)
+    rows.append({"sr": "B.I", "label": "----------Consumed ( Net of WIP)----------", "subheader": True, "exclude_from_total": True})
+    rows.extend(consumed_rows)
+
+    rows.append({"sr": "B.II", "label": "----------Opening----------", "subheader": True, "exclude_from_total": True})
+    rows.extend(opening_rows)
+
+    rows.append({"sr": "B.III", "label": "----------Closing----------", "subheader": True, "exclude_from_total": True})
+    rows.extend(closing_rows)
 
     rows.append({"sr": "B.Total.Quintal", "label": "Total", "uom": "Quintal",
                   "value": quintal_consumed_total, "total": True})

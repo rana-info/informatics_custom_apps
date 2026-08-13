@@ -3,22 +3,52 @@
 
 frappe.ui.form.on("DMR Boiler And Turbine Parameters", {
 	refresh(frm) {
-
+		lock_mapped_fields(frm);
 	},
-    company(frm){
-        frm.set_value("plant", "");
-        frm.set_query("plant", function() {
-            return {
-                filters: {
-                    company: frm.doc.company
-                }
-            };
-        });
-    },
-    date(frm){
-        if(frm.doc.date> frappe.datetime.nowdate()){
-            frappe.msgprint("Date cannot be in the future");
-            frm.set_value("date", frappe.datetime.nowdate());
-        }
-    }
+	company(frm) {
+		frm.set_value("plant", "");
+		frm.set_query("plant", function () {
+			return {
+				filters: {
+					company: frm.doc.company,
+				},
+			};
+		});
+	},
+	date(frm) {
+		if (frm.doc.date > frappe.datetime.nowdate()) {
+			frappe.msgprint("Date cannot be in the future");
+			frm.set_value("date", frappe.datetime.nowdate());
+		}
+	},
+	plant(frm) {
+		lock_mapped_fields(frm);
+	},
 });
+
+// Locks fields that are auto-populated from Excel uploads (per PLANT_CONFIG
+// on the server) so they can't be hand-edited, while leaving every other
+// field on the form editable as normal. The mapped-field list is fetched
+// from the server (get_field_lock_info) rather than duplicated here, so it
+// always stays in sync with PLANT_CONFIG.
+function lock_mapped_fields(frm) {
+	if (!frm.doc.plant) return;
+
+	frappe.call({
+		method:
+			"informatics_custom_apps.eth.doctype.dmr_boiler_and_turbine_parameters.dmr_boiler_and_turbine_parameters.get_field_lock_info",
+		args: { plant: frm.doc.plant },
+		callback: function (r) {
+			if (!r.message) return;
+			const { all_fields, mapped_fields } = r.message;
+
+			all_fields.forEach((fieldname) => {
+				if (!frm.fields_dict[fieldname]) return; // not on this form
+				const is_mapped = mapped_fields.includes(fieldname);
+				frm.set_df_property(fieldname, "read_only", is_mapped ? 1 : 0);
+			});
+
+			frm.refresh_fields();
+		},
+	});
+}

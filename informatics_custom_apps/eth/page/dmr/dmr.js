@@ -13,6 +13,7 @@ class DistilleryProductionReport {
         this.segment_options = [];
         this.loading = false;
         this.filters_dirty = true;
+        this._item_codes_by_sr = {};
 
         this.page = frappe.ui.make_app_page({
             parent: wrapper,
@@ -352,9 +353,59 @@ class DistilleryProductionReport {
     }
 
     bind_item_code_toggle() {
-        this.$container.on('click', 'td.row-label-col.has-item-codes', (e) => {
-            $(e.currentTarget).toggleClass('codes-visible');
+        // Rows with a single item_code keep an inline link (bound in render_table).
+        // Rows with multiple item_codes show a "N codes" trigger that opens a popup —
+        // this keeps the sticky label column from blowing out on groups with 50-100+ codes.
+        this.$container.on('click', 'td.has-item-codes-multi', (e) => {
+            const sr = $(e.currentTarget).data('sr');
+            this.show_item_codes_popup(sr);
         });
+    }
+
+    show_item_codes_popup(sr) {
+        const info = this._item_codes_by_sr && this._item_codes_by_sr[sr];
+        if (!info) return;
+
+        const escape = frappe.utils.escape_html;
+        const codes_html = info.codes.map(c =>
+            `<a href="/app/item/${encodeURIComponent(c)}" target="_blank" class="item-code-chip" data-code="${escape(c)}">${escape(c)}</a>`
+        ).join('');
+
+        const dialog = new frappe.ui.Dialog({
+            title: `${info.label} — Item Codes (${info.codes.length})`,
+            size: 'large',
+            fields: [
+                {
+                    fieldtype: 'Data',
+                    fieldname: 'search',
+                    label: 'Search',
+                    placeholder: 'Filter item codes…'
+                },
+                {
+                    fieldtype: 'HTML',
+                    fieldname: 'codes_html',
+                    options: `<div class="dmr-item-codes-popup">${codes_html}</div>`
+                }
+            ],
+            primary_action_label: 'Copy All',
+            primary_action: () => {
+                const text = info.codes.join(', ');
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(text);
+                }
+                frappe.show_alert({ message: __('Item codes copied'), indicator: 'green' });
+            }
+        });
+
+        dialog.fields_dict.search.$input.on('input', (e) => {
+            const q = e.target.value.trim().toLowerCase();
+            dialog.$wrapper.find('.item-code-chip').each(function () {
+                const code = $(this).data('code').toString().toLowerCase();
+                $(this).toggle(!q || code.includes(q));
+            });
+        });
+
+        dialog.show();
     }
 
     inject_styles() {
@@ -626,29 +677,51 @@ class DistilleryProductionReport {
             z-index: 1;
         }
 
-        .row-label-col.has-item-codes {
+        .has-item-codes-multi {
             cursor: pointer;
         }
 
-        .row-label-col.has-item-codes .toggle-chevron {
+        .view-codes-btn {
             display: inline-block;
-            margin-left: 6px;
-            color: #8ea0ac;
-            font-size: 10px;
-            transition: transform .15s ease;
+            margin-left: 8px;
+            font-size: 11px;
+            font-weight: 700;
+            color: #2953a8;
+            background: #e8f1fb;
+            border: 1px solid #cfe1f6;
+            border-radius: 20px;
+            padding: 1px 9px;
+            white-space: nowrap;
         }
 
-        .row-label-col.has-item-codes.codes-visible .toggle-chevron {
-            transform: rotate(90deg);
+        .has-item-codes-multi:hover .view-codes-btn {
+            background: #d9e9fa;
         }
 
-        .item-code-line {
-            display: none;
-            margin-top: 3px;
+        .dmr-item-codes-popup {
+            max-height: 50vh;
+            overflow-y: auto;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            padding-top: 8px;
         }
 
-        .row-label-col.codes-visible .item-code-line {
-            display: block;
+        .item-code-chip {
+            display: inline-block;
+            font-size: 12px;
+            font-weight: 600;
+            color: #36474f;
+            background: #f0f3f6;
+            border: 1px solid #dde3e9;
+            border-radius: 6px;
+            padding: 3px 8px;
+            text-decoration: none;
+        }
+
+        .item-code-chip:hover {
+            background: #e4ecf3;
+            color: #2953a8;
         }
 
         .distillery-report-table thead th.label-head {
@@ -885,6 +958,9 @@ class DistilleryProductionReport {
         const last_col_index = columns.length - 1;
         const escape = frappe.utils.escape_html;
 
+        // reset per-render lookup used by the item-codes popup
+        this._item_codes_by_sr = {};
+
         const head_parts = [
             `<th class="row-label-col label-head">Parameters</th>`,
             `<th class="uom-col uom-head">UOM</th>`,
@@ -898,11 +974,8 @@ class DistilleryProductionReport {
 
         const body_parts = [];
 
-        let current_section = null;
-
         meta.forEach(row => {
             if (row.header) {
-                current_section = row.sr;
                 const color = this.section_colors[row.sr] || '#f5f5f5';
 
                 body_parts.push(
@@ -921,29 +994,27 @@ class DistilleryProductionReport {
             }
 
             let row_cls = row.total ? 'data-row total-row' : 'data-row';
-
             const sr_badge_html = row.total ? '' : `<span class="sr-badge">${row.sr}</span>`;
 
             let item_code_html = '';
-            let has_codes = false;
-            if (row.item_code) {
-                has_codes = true;
-                item_code_html = `<span class="item-code-line"><a href="/app/item/${encodeURIComponent(row.item_code)}" class="item-code-badge" target="_blank">${escape(row.item_code)}</a></span>`;
-            } else if (row.item_codes && row.item_codes.length) {
-                const unique_codes = [...new Set(row.item_codes.map(String))];
-                has_codes = true;
-                const links = unique_codes
-                    .map(c => `<a href="/app/item/${encodeURIComponent(c)}" class="item-code-badge" target="_blank">${escape(c)}</a>`)
-                    .join(', ');
-                item_code_html = `<span class="item-code-line">${links}</span>`;
-            }
+            let label_cls = 'row-label-col';
 
-            const label_cls = has_codes ? 'row-label-col has-item-codes' : 'row-label-col';
-            const chevron_html = has_codes ? `<span class="toggle-chevron">&#9656;</span>` : '';
+            if (row.item_code) {
+                // Single code — keep it inline, no popup needed.
+                item_code_html = `<a href="/app/item/${encodeURIComponent(row.item_code)}" class="item-code-badge" target="_blank" onclick="event.stopPropagation()">${escape(row.item_code)}</a>`;
+            } else if (row.item_codes && row.item_codes.length) {
+                // Groups can have 50-100+ codes — inline rendering blows out the sticky
+                // label column and breaks frozen-column offsets, so show a compact
+                // trigger and render the full list in a popup dialog instead.
+                const unique_codes = [...new Set(row.item_codes.map(String))];
+                this._item_codes_by_sr[row.sr] = { label: row.label, codes: unique_codes };
+                label_cls = 'row-label-col has-item-codes-multi';
+                item_code_html = `<span class="view-codes-btn">${unique_codes.length} codes &#8250;</span>`;
+            }
 
             body_parts.push(
                 `<tr class="${row_cls}">`,
-                `<td class="${label_cls}" title="${escape(row.label)}">${sr_badge_html}${escape(row.label)}${chevron_html}${item_code_html}</td>`,
+                `<td class="${label_cls}" data-sr="${escape(row.sr)}" title="${escape(row.label)}">${sr_badge_html}${escape(row.label)}${item_code_html ? ' ' + item_code_html : ''}</td>`,
                 `<td class="uom-col"><span class="uom-badge">${row.uom || ''}</span></td>`,
                 `<td class="num-cell standard-col">${row.standard !== undefined && row.standard !== null ? this.format_value(row.standard) : ''}</td>`
             );
