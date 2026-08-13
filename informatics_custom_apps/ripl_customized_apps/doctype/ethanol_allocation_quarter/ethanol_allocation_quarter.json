@@ -1,0 +1,56 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-08-06 15:55:40.540129",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "quarter",
+  "ethanol_from_dfg",
+  "ethanol_from_maize",
+  "ethanol_from_fci"
+ ],
+ "fields": [
+  {
+   "fieldname": "quarter",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Quarter",
+   "read_only": 1
+  },
+  {
+   "fieldname": "ethanol_from_dfg",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Ethanol from DFG (LTR)"
+  },
+  {
+   "fieldname": "ethanol_from_maize",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Ethanol from Maize (LTR)"
+  },
+  {
+   "fieldname": "ethanol_from_fci",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Ethanol from FCI (LTR)"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-08-06 16:14:32.611363",
+ "modified_by": "Administrator",
+ "module": "RIPL Customized Apps",
+ "name": "Ethanol Allocation Quarter",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

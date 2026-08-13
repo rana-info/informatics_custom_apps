@@ -1,0 +1,41 @@
+{
+ "content": null,
+ "creation": "2026-07-31 14:41:22.169619",
+ "docstatus": 0,
+ "doctype": "Page",
+ "idx": 0,
+ "modified": "2026-08-12 10:46:15.792839",
+ "modified_by": "Administrator",
+ "module": "RIPL Customized Apps",
+ "name": "srv-clearing-tree",
+ "owner": "Administrator",
+ "page_name": "srv-clearing-tree",
+ "roles": [
+  {
+   "role": "Master Admin"
+  },
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "Employee"
+  },
+  {
+   "role": "Purchase Manager"
+  },
+  {
+   "role": "Purchase User"
+  },
+  {
+   "role": "Accounts Manager"
+  },
+  {
+   "role": "Accounts User"
+  }
+ ],
+ "script": null,
+ "standard": "Yes",
+ "style": null,
+ "system_page": 0,
+ "title": "SRV Clearing Tree"
+}

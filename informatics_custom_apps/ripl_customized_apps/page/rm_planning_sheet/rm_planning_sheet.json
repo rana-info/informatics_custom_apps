@@ -1,0 +1,26 @@
+{
+ "content": null,
+ "creation": "2026-08-06 15:30:54.007073",
+ "docstatus": 0,
+ "doctype": "Page",
+ "idx": 0,
+ "modified": "2026-08-12 12:34:07.180930",
+ "modified_by": "Administrator",
+ "module": "RIPL Customized Apps",
+ "name": "rm-planning-sheet",
+ "owner": "Administrator",
+ "page_name": "rm-planning-sheet",
+ "roles": [
+  {
+   "role": "Master Admin"
+  },
+  {
+   "role": "Accounts Manager"
+  }
+ ],
+ "script": null,
+ "standard": "Yes",
+ "style": null,
+ "system_page": 0,
+ "title": "RM Planning Sheet"
+}
