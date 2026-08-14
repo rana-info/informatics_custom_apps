@@ -437,9 +437,10 @@ def get_fuel_data(plant, date):
     where Coal can represent multiple underlying item codes aggregated
     together. All quantities are in TON (not quintal).
 
-    - consumption_ton: sum of qty (kg -> ton, /1000) from submitted
-      Material Issue Stock Entries, summed across every item code in the
-      category, filtered by branch + date.
+    - consumption_ton: sum of qty from submitted Material Issue Stock
+      Entries, with each row converted from its own UOM (Kg/Quintal/Ton)
+      to TON before summing, across every item code in the category,
+      filtered by branch + date.
     - pct_total_fuel: this category's share of total fuel consumed that
       day (by ton).
     - pct_moisture / pct_dust: average of matching Quality Inspection
@@ -468,19 +469,20 @@ def get_fuel_data(plant, date):
         for code in cat["item_codes"]
     ]
 
-    consumption_kg_by_item = get_consumption_by_item(all_item_codes, plant, date)
+    consumption_ton_by_item = get_consumption_by_item(all_item_codes, plant, date)
 
     category_consumption = []
     total_ton_all = 0
 
     for cat in categories:
 
-        cat_kg = sum(
-            consumption_kg_by_item.get(code, 0)
-            for code in cat["item_codes"]
+        cat_ton = round(
+            sum(
+                consumption_ton_by_item.get(code, 0)
+                for code in cat["item_codes"]
+            ),
+            2
         )
-
-        cat_ton = round(cat_kg / 1000, 2)
 
         category_consumption.append({
             "label": cat["label"],
@@ -505,7 +507,7 @@ def get_fuel_data(plant, date):
 
         last_price, cost = get_category_price_and_cost(
             cat["item_codes"],
-            consumption_kg_by_item,
+            consumption_ton_by_item,
             plant,
             date
         )
@@ -554,13 +556,15 @@ def get_item_names(item_codes):
 
     return {row.name: row.item_name for row in rows}
 
-def convert_qty_to_kg(qty, uom):
+
+def convert_qty_to_ton(qty, uom):
     """
-    Normalizes a stock qty to Kg, based on its UOM.
+    Normalizes a stock qty to TON, based on its UOM.
 
     Recognized UOMs: Kg / Quintal / Ton variants. Anything else
-    (including blank/missing UOM) is treated as Kg, same convention
-    as convert_rate_to_ton.
+    (including blank/missing UOM) is treated as Kg, since that's the
+    dominant UOM for these fuel items - same convention as
+    convert_rate_to_ton.
     """
 
     if qty is None:
@@ -569,18 +573,18 @@ def convert_qty_to_kg(qty, uom):
     uom_clean = (uom or "").strip().lower()
 
     if uom_clean in ["ton", "tonne", "mt", "tonnes"]:
-        return qty * 1000
+        return qty
 
     if uom_clean in ["quintal", "qtl", "quintals"]:
-        return qty * 100
+        return qty / 10
 
     # Kg, or unrecognized/blank UOM - assume Kg.
-    return qty
+    return qty / 1000
 
 
 def get_consumption_by_item(item_codes, plant, date):
     """
-    Sum of qty, normalized to KG, per item_code, from submitted
+    Sum of qty, normalized to TON, per item_code, from submitted
     Material Issue Stock Entries for this branch + date. Each row's
     own UOM (Kg/Quintal/Ton) is converted before summing, since rows
     for the same item can be entered in different UOMs.
@@ -608,15 +612,15 @@ def get_consumption_by_item(item_codes, plant, date):
         as_dict=True
     )
 
-    consumption_kg_by_item = {}
+    consumption_ton_by_item = {}
 
     for row in rows:
-        kg = convert_qty_to_kg(row.qty, row.uom)
-        consumption_kg_by_item[row.item_code] = (
-            consumption_kg_by_item.get(row.item_code, 0) + kg
+        ton = convert_qty_to_ton(row.qty, row.uom)
+        consumption_ton_by_item[row.item_code] = (
+            consumption_ton_by_item.get(row.item_code, 0) + ton
         )
 
-    return consumption_kg_by_item
+    return consumption_ton_by_item
 
 
 def get_quality_averages(item_codes, plant, date):
@@ -679,7 +683,7 @@ def get_quality_averages(item_codes, plant, date):
     return avg_moisture, avg_dust
 
 
-def get_category_price_and_cost(item_codes, consumption_kg_by_item, plant, date):
+def get_category_price_and_cost(item_codes, consumption_ton_by_item, plant, date):
     """
     Consumption-weighted average price (per ton) across a category's
     item codes, plus the total cost for the category. Each item code's
@@ -697,8 +701,7 @@ def get_category_price_and_cost(item_codes, consumption_kg_by_item, plant, date)
 
     for code in item_codes:
 
-        kg = consumption_kg_by_item.get(code, 0)
-        ton = kg / 1000
+        ton = consumption_ton_by_item.get(code, 0)
 
         if ton <= 0:
             continue
