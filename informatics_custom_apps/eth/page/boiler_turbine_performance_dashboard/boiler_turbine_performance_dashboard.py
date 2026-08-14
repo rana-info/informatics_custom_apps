@@ -554,12 +554,36 @@ def get_item_names(item_codes):
 
     return {row.name: row.item_name for row in rows}
 
+def convert_qty_to_kg(qty, uom):
+    """
+    Normalizes a stock qty to Kg, based on its UOM.
+
+    Recognized UOMs: Kg / Quintal / Ton variants. Anything else
+    (including blank/missing UOM) is treated as Kg, same convention
+    as convert_rate_to_ton.
+    """
+
+    if qty is None:
+        return 0
+
+    uom_clean = (uom or "").strip().lower()
+
+    if uom_clean in ["ton", "tonne", "mt", "tonnes"]:
+        return qty * 1000
+
+    if uom_clean in ["quintal", "qtl", "quintals"]:
+        return qty * 100
+
+    # Kg, or unrecognized/blank UOM - assume Kg.
+    return qty
+
 
 def get_consumption_by_item(item_codes, plant, date):
     """
-    Sum of qty (kg, raw system unit) per item_code, from submitted
-    Material Issue Stock Entries for this branch + date. Single SQL
-    join covering every item code at once.
+    Sum of qty, normalized to KG, per item_code, from submitted
+    Material Issue Stock Entries for this branch + date. Each row's
+    own UOM (Kg/Quintal/Ton) is converted before summing, since rows
+    for the same item can be entered in different UOMs.
     """
 
     if not item_codes:
@@ -567,7 +591,7 @@ def get_consumption_by_item(item_codes, plant, date):
 
     rows = frappe.db.sql(
         """
-        select sed.item_code as item_code, sum(sed.qty) as qty
+        select sed.item_code as item_code, sed.qty as qty, sed.uom as uom
         from `tabStock Entry Detail` sed
         inner join `tabStock Entry` se on se.name = sed.parent
         where se.branch = %(plant)s
@@ -575,7 +599,6 @@ def get_consumption_by_item(item_codes, plant, date):
           and se.stock_entry_type = 'Material Issue'
           and se.docstatus = 1
           and sed.item_code in %(item_codes)s
-        group by sed.item_code
         """,
         {
             "plant": plant,
@@ -585,7 +608,15 @@ def get_consumption_by_item(item_codes, plant, date):
         as_dict=True
     )
 
-    return {row.item_code: (row.qty or 0) for row in rows}
+    consumption_kg_by_item = {}
+
+    for row in rows:
+        kg = convert_qty_to_kg(row.qty, row.uom)
+        consumption_kg_by_item[row.item_code] = (
+            consumption_kg_by_item.get(row.item_code, 0) + kg
+        )
+
+    return consumption_kg_by_item
 
 
 def get_quality_averages(item_codes, plant, date):
