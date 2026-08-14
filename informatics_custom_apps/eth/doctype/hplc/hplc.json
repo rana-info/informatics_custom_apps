@@ -1,0 +1,109 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-08-13 16:46:47.835037",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "company",
+  "sample_date",
+  "column_break_gdib",
+  "plant",
+  "injection_date",
+  "section_break_iucs",
+  "sugar_profile",
+  "column_break_ubre",
+  "organic_and_alcohol_profile",
+  "section_break_nlqb",
+  "data"
+ ],
+ "fields": [
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Company",
+   "options": "Company"
+  },
+  {
+   "fieldname": "plant",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Plant",
+   "options": "Branch"
+  },
+  {
+   "fieldname": "column_break_gdib",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "section_break_iucs",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "sugar_profile",
+   "fieldtype": "Attach",
+   "label": "Sugar Profile"
+  },
+  {
+   "fieldname": "column_break_ubre",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "organic_and_alcohol_profile",
+   "fieldtype": "Attach",
+   "label": "Organic and Alcohol Profile"
+  },
+  {
+   "fieldname": "sample_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Sample Date"
+  },
+  {
+   "fieldname": "injection_date",
+   "fieldtype": "Date",
+   "label": "Injection Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_nlqb",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "data",
+   "fieldtype": "Table",
+   "label": "Data",
+   "options": "HPLC Data"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-13 16:58:19.213134",
+ "modified_by": "Administrator",
+ "module": "ETH",
+ "name": "HPLC",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
