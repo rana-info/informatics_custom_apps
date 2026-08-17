@@ -254,23 +254,15 @@ def format_time(value):
 
 def get_dmr_data(plant, date):
     """
-    Returns one row per known DMR parameter (from FIELD_TAG_MAP, plus any
-    extra fieldname found in the child table that isn't in the map).
+    Returns one row per known DMR parameter, in exactly the same order
+    as the 'DMR Parameters Range' child table on the document (idx asc).
+    Reordering rows in the child table (drag-drop, manual idx change,
+    whatever) changes this output order too - there is no separate
+    hardcoded order applied anywhere.
 
-    For each parameter:
-    - If a matching "DMR Parameters Range" child row exists, its
-      max/min/avg/time values are used.
-    - "total" is only populated for FIELD_TAG_MAP parameters marked
-      "agg": "sum" - pulled straight off the parent doc at the same
-      fieldname, regardless of whether a child row exists (this is what
-      lets Total show up even when the child table hasn't been filled
-      in). Parameters marked "agg": "avg" (temperature, pressure, %)
-      always get total = None, since summing/totaling an average-type
-      reading is meaningless even if the parent doc has a value there.
-      Fieldnames not in FIELD_TAG_MAP at all (only seen in child data)
-      default to getting a Total, since their agg type is unknown.
-
-    If no parent record exists for this plant + date at all, returns [].
+    FIELD_TAG_MAP parameters with no matching child row yet (e.g. before
+    the child table has been filled in) are appended at the end, in
+    FIELD_TAG_MAP dict order, purely so their Total can still show.
     """
 
     parents = frappe.get_all(
@@ -310,7 +302,7 @@ def get_dmr_data(plant, date):
                 "min_value_time",
                 "average_value"
             ],
-            order_by="idx asc"
+            order_by="idx asc"   # <- this is the single source of truth for order
         )
 
         rows_by_field = {
@@ -319,14 +311,16 @@ def get_dmr_data(plant, date):
             if row.field_name
         }
 
-        # Master fieldname list = known map + anything extra in child data
-        all_fieldnames = list(FIELD_TAG_MAP.keys())
+        # Order = child table's own row order, full stop.
+        ordered_fieldnames = [row.field_name for row in child_rows if row.field_name]
 
-        for fieldname in rows_by_field:
-            if fieldname not in all_fieldnames:
-                all_fieldnames.append(fieldname)
+        # Anything in FIELD_TAG_MAP not yet in the child table gets
+        # appended at the end, so Total can still appear pre-fill-in.
+        for fieldname in FIELD_TAG_MAP:
+            if fieldname not in rows_by_field:
+                ordered_fieldnames.append(fieldname)
 
-        for fieldname in all_fieldnames:
+        for fieldname in ordered_fieldnames:
 
             child_row = rows_by_field.get(fieldname)
             map_entry = FIELD_TAG_MAP.get(fieldname, {})
@@ -337,26 +331,20 @@ def get_dmr_data(plant, date):
                 or fieldname
             )
 
-            # Only "sum" type parameters get a Total - a Total for an
-            # "avg" type (temperature, pressure, %) is meaningless, even
-            # if the parent doc happens to have a value in that field.
             agg = map_entry.get("agg")
-
-            if agg == "avg":
-                total = None
-            else:
-                total = getattr(parent_doc, fieldname, None)
+            total = None if agg == "avg" else getattr(parent_doc, fieldname, None)
 
             dmr_rows.append({
-            "parameter_name": label,
-            "engg_units": child_row.engg_units if child_row else None,
-            "max_value": round_value(child_row.max_value) if child_row else None,
-            "max_value_time": format_time(child_row.max_value_time) if child_row else None,
-            "min_value": round_value(child_row.min_value) if child_row else None,
-            "min_value_time": format_time(child_row.min_value_time) if child_row else None,
-            "average_value": round_value(child_row.average_value) if child_row else None,
-            "total": round_value(total)
-        })
+                "field_name": fieldname,
+                "parameter_name": label,
+                "engg_units": child_row.engg_units if child_row else None,
+                "max_value": round_value(child_row.max_value) if child_row else None,
+                "max_value_time": format_time(child_row.max_value_time) if child_row else None,
+                "min_value": round_value(child_row.min_value) if child_row else None,
+                "min_value_time": format_time(child_row.min_value_time) if child_row else None,
+                "average_value": round_value(child_row.average_value) if child_row else None,
+                "total": round_value(total)
+            })
 
     return dmr_rows
 

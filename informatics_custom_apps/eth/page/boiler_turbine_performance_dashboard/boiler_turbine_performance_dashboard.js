@@ -270,57 +270,52 @@ class BoilerTurbinePerformanceDashboard {
 
     render_dmr(dmr) {
 
-        let rows = "";
+    const AVG_CELL_STYLE = "background-color: #fff3cd; font-weight: 600;";
 
-        if (!dmr || dmr.length === 0) {
+    let rows = "";
 
-            rows = `
+    if (!dmr || dmr.length === 0) {
+        rows = `
+            <tr>
+                <td colspan="8" class="text-center text-muted">-</td>
+            </tr>
+        `;
+    } else {
+        dmr.forEach(d => {
+            rows += `
                 <tr>
-                    <td colspan="8" class="text-center text-muted">-</td>
+                    <td>${d.parameter_name || "-"}</td>
+                    <td>${d.engg_units || "-"}</td>
+                    <td>${d.total !== null && d.total !== undefined ? d.total : "-"}</td>
+                    <td style="${AVG_CELL_STYLE}">${d.average_value !== null && d.average_value !== undefined ? d.average_value : "-"}</td>
+                    <td>${d.max_value !== null && d.max_value !== undefined ? d.max_value : "-"}</td>
+                    <td>${d.max_value_time || "-"}</td>
+                    <td>${d.min_value !== null && d.min_value !== undefined ? d.min_value : "-"}</td>
+                    <td>${d.min_value_time || "-"}</td>
                 </tr>
             `;
-
-        } else {
-
-            dmr.forEach(d => {
-
-                rows += `
-                    <tr>
-                        <td>${d.parameter_name || "-"}</td>
-                        <td>${d.engg_units || "-"}</td>
-                        <td>${d.max_value !== null && d.max_value !== undefined ? d.max_value : "-"}</td>
-                        <td>${d.max_value_time || "-"}</td>
-                        <td>${d.min_value !== null && d.min_value !== undefined ? d.min_value : "-"}</td>
-                        <td>${d.min_value_time || "-"}</td>
-                        <td>${d.average_value !== null && d.average_value !== undefined ? d.average_value : "-"}</td>
-                        <td>${d.total !== null && d.total !== undefined ? d.total : "-"}</td>
-                    </tr>
-                `;
-            });
-
-        }
-
-        return `
-            <h5 style="${this.section_label_style()}">Key Operational Parameters of Boiler & Turbine</h5>
-            <table class="table table-bordered">
-                <thead>
-                    <tr>
-                        <th>Description</th>
-                        <th>Engg Units</th>
-                        <th>Max Value</th>
-                        <th>Time</th>
-                        <th>Min Value</th>
-                        <th>Time</th>
-                        <th>Avg Value</th>
-                        <th>Total</th>
-                    </tr>
-                </thead>
-                <tbody>${rows}</tbody>
-            </table>
-        `;
+        });
     }
 
-
+    return `
+        <h5 style="${this.section_label_style()}">Key Operational Parameters of Boiler & Turbine</h5>
+        <table class="table table-bordered">
+            <thead>
+                <tr>
+                    <th>Description</th>
+                    <th>Engg Units</th>
+                    <th>Total</th>
+                    <th style="${AVG_CELL_STYLE}">Avg Value</th>
+                    <th>Max Value</th>
+                    <th>Time</th>
+                    <th>Min Value</th>
+                    <th>Time</th>
+                </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+        </table>
+    `;
+}
     render_fuel(fuel) {
 
         if (!fuel) return "";
