@@ -1,7 +1,7 @@
 frappe.pages['rm-planning-sheet'].on_page_load = function (wrapper) {
 	var page = frappe.ui.make_app_page({
 		parent: wrapper,
-		title: 'RM Planning Sheet',
+		title: 'RM Planning / Ethanol Tender',
 		single_column: true
 	});
 
@@ -24,7 +24,7 @@ class RMPlanningSheet {
 		style.innerHTML = `
 			.rm-planning-toolbar {
 				display: flex;
-				align-items: flex-end;
+				align-items: flex-start;
 				gap: 16px;
 				flex-wrap: wrap;
 				background: #f8f9fb;
@@ -34,6 +34,21 @@ class RMPlanningSheet {
 				margin-bottom: 16px;
 			}
 			.rm-planning-toolbar .frappe-control { margin-bottom: 0; min-width: 220px; }
+			.rm-toolbar-actions {
+				display: flex;
+				flex-direction: column;
+			}
+			.rm-toolbar-actions-spacer {
+				visibility: hidden;
+				height: 1em;
+				margin-bottom: 4px;
+				font-size: 12px;
+				line-height: 1;
+			}
+			.rm-toolbar-actions-buttons {
+				display: flex;
+				gap: 8px;
+			}
 			.rm-show-data-btn {
 				height: 34px;
 				padding: 0 20px;
@@ -200,16 +215,36 @@ class RMPlanningSheet {
 			render_input: true
 		});
 
+		this.capacity_filter = frappe.ui.form.make_control({
+			parent: this.toolbar,
+			df: {
+				fieldtype: 'Float',
+				fieldname: 'daily_capacity',
+				label: 'Daily Capacity (KL/day)',
+				reqd: 1,
+				description: 'Mandatory: enter the plant\'s full production capacity'
+			},
+			render_input: true
+		});
+
+		this.actions_wrap = $(`
+			<div class="rm-toolbar-actions">
+				<div class="rm-toolbar-actions-spacer">&nbsp;</div>
+				<div class="rm-toolbar-actions-buttons"></div>
+			</div>
+		`).appendTo(this.toolbar);
+		this.actions_buttons = this.actions_wrap.find('.rm-toolbar-actions-buttons');
+
 		this.show_btn = $(`<button class="rm-show-data-btn">Show data</button>`)
-			.appendTo(this.toolbar)
+			.appendTo(this.actions_buttons)
 			.on('click', () => this.refresh());
 
 		this.export_excel_btn = $(`<button class="rm-export-btn" disabled>Export Excel</button>`)
-			.appendTo(this.toolbar)
+			.appendTo(this.actions_buttons)
 			.on('click', () => this.export_excel());
 
 		this.export_pdf_btn = $(`<button class="rm-export-btn" disabled>Export PDF</button>`)
-			.appendTo(this.toolbar)
+			.appendTo(this.actions_buttons)
 			.on('click', () => this.export_pdf());
 
 		this.progress_wrap = $(`<div class="rm-progress-wrap"><div class="rm-progress-bar"></div></div>`)
@@ -249,19 +284,27 @@ class RMPlanningSheet {
 			return;
 		}
 
+		const capacity = this.capacity_filter.get_value();
+		if (!capacity || flt(capacity) <= 0) {
+			frappe.msgprint('Please enter the Daily Capacity (KL/day) - it is mandatory.');
+			return;
+		}
+
 		this.show_progress(true);
 
 		frappe.call({
 			method: 'informatics_custom_apps.ripl_customized_apps.page.rm_planning_sheet.rm_planning_sheet.get_planning_data',
 			args: {
 				plants: plants,
-				ethanol_supply_year: this.year_filter.get_value()
+				ethanol_supply_year: this.year_filter.get_value(),
+				daily_capacity: this.capacity_filter.get_value()
 			},
 			always: () => this.show_progress(false),
 			callback: (r) => {
 				if (r.message) {
 					this.last_plants = plants;
 					this.last_year = this.year_filter.get_value();
+					this.last_capacity = this.capacity_filter.get_value();
 					this.render(r.message);
 				}
 			}
@@ -273,11 +316,16 @@ class RMPlanningSheet {
 			frappe.msgprint('Please load data first.');
 			return;
 		}
+		if (!this.last_capacity || flt(this.last_capacity) <= 0) {
+			frappe.msgprint('Please enter the Daily Capacity (KL/day) and click "Show data" again before exporting.');
+			return;
+		}
 
 		open_url_post(frappe.request.url, {
 			cmd: 'informatics_custom_apps.ripl_customized_apps.page.rm_planning_sheet.rm_planning_sheet.export_planning_excel',
 			plants: JSON.stringify(this.last_plants),
-			ethanol_supply_year: this.last_year
+			ethanol_supply_year: this.last_year,
+			daily_capacity: this.last_capacity
 		});
 	}
 
@@ -333,6 +381,7 @@ class RMPlanningSheet {
 
 	build_table(d) {
 		const fmt = (v) => frappe.format(v || 0, { fieldtype: 'Float', precision: 2 });
+		const fmt1 = (v) => frappe.format(v || 0, { fieldtype: 'Float', precision: 1 });
 
 		const row = (label, vals, uom, cls) => `
 			<tr class="${cls || ''}">
@@ -344,8 +393,18 @@ class RMPlanningSheet {
 				<td class="text-right">${fmt((vals.DFG || 0) + (vals.Maize || 0) + (vals.FCI || 0))}</td>
 			</tr>`;
 
-		const fg_uom = d.fg_uom || 'LTR';
-		const rm_uom = d.rm_uom || 'LTR';
+		const row_total_only = (label, value, uom, cls) => `
+			<tr class="${cls || ''}">
+				<td class="rm-label">${label}</td>
+				<td class="text-center">${frappe.utils.escape_html(uom || '')}</td>
+				<td class="text-right"></td>
+				<td class="text-right"></td>
+				<td class="text-right"></td>
+				<td class="text-right">${fmt1(value)}</td>
+			</tr>`;
+
+		const fg_uom = d.fg_uom || 'KL';
+		const rm_uom = d.rm_uom || 'Quintal';
 
 		let quarter_rows = '';
 		Object.keys(d.quarters || {}).forEach((q) => {
@@ -376,11 +435,13 @@ class RMPlanningSheet {
 					${row('Total dispatch (B)', d.total_dispatch, fg_uom, 'rm-row-total')}
 					${row('Pending Dispatch (A-B)', d.pending_dispatch, fg_uom, 'rm-row-net')}
 					${row('Total stock in hand (C)', d.stock_in_hand, fg_uom, 'rm-row-total')}
+					${row_total_only('No. of Days in Hand (Full Capacity)', d.days_in_hand, 'Days', 'rm-row-net')}
 					${row('Net pending production (A-B-C)', d.net_pending, fg_uom, 'rm-row-net')}
 					${row('Recovery', d.recovery, '%')}
 					${row('Qty of RM required', d.qty_rm_required, rm_uom, 'rm-row-total')}
 					${row('RM at factory', d.rm_at_factory, rm_uom)}
-					${row('RO in hand', d.ro_in_hand, rm_uom)}
+					${row('Sauda in hand', d.sauda_in_hand, rm_uom)}
+					${row('Sauda not delivered', d.sauda_not_delivered, rm_uom)}
 					${row('Net qty need to purchase', d.net_qty_purchase, rm_uom, 'rm-row-total')}
 					${row('Rate of RM', d.rate_rm, `₹/${rm_uom}`)}
 					${row('Value of RM needs to purchase (Lakhs)', d.value_rm, 'Lakhs', 'rm-row-purchase')}
