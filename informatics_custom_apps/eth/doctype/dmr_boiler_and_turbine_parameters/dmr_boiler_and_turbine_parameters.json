@@ -45,10 +45,13 @@
   "main_steam_pressure",
   "oxygen__at_eco_ol",
   "dm_flow_to_dearator",
+  "feed_water_inlet_temp",
+  "exhaust_pressure",
   "column_break_hcih",
   "main_steam_temprature",
   "boiler_feed_water_flow",
   "turbine_steam",
+  "return_condensate",
   "section_break_viww",
   "min_max_avg"
  ],
@@ -279,12 +282,27 @@
    "fieldtype": "Table",
    "label": "DMR Boiler Excel Upload",
    "options": "DMR Boiler Excel Upload"
+  },
+  {
+   "fieldname": "feed_water_inlet_temp",
+   "fieldtype": "Float",
+   "label": "Feed Water Inlet Temperature"
+  },
+  {
+   "fieldname": "return_condensate",
+   "fieldtype": "Float",
+   "label": "Return Condensate"
+  },
+  {
+   "fieldname": "exhaust_pressure",
+   "fieldtype": "Float",
+   "label": "Exhaust Pressure"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-08-06 15:09:16.388587",
+ "modified": "2026-08-18 09:58:38.544147",
  "modified_by": "Administrator",
  "module": "ETH",
  "name": "DMR Boiler And Turbine Parameters",

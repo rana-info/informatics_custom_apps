@@ -12,6 +12,12 @@ frappe.query_reports["Procurement Pending Report"] = {
 			fieldtype: "Data",
 		},
 		{
+			fieldname: "cost_center",
+			label: __("Cost Center"),
+			fieldtype: "Link",
+			options: "Cost Center",
+		},
+		{
 			fieldname: "from_date",
 			label: __("From Date"),
 			fieldtype: "Date",
@@ -21,6 +27,42 @@ frappe.query_reports["Procurement Pending Report"] = {
 			label: __("To Date"),
 			fieldtype: "Date",
 			default: frappe.datetime.get_today(),
+		},
+		{
+			fieldname: "only_above_1lakh",
+			label: __("Only Above Amount"),
+			fieldtype: "Check",
+			default: 1,
+			description: __("Only count/show documents whose own amount exceeds the threshold set below"),
+			on_change: function () {
+				// The threshold field is only meaningful while this is
+				// checked -- toggle it in step so it's obvious the two
+				// are linked, and re-run so unchecking it immediately
+				// drops the amount filter instead of waiting for the
+				// person to also touch the threshold field.
+				toggle_above_amount_field();
+				frappe.query_report.refresh();
+			},
+		},
+		{
+			// The actual cutoff value, previously hardcoded server-side
+			// as a flat 1 Lakh. Now editable here -- the python side
+			// reads it straight from this filter (fieldname
+			// "above_amount") on every query, so changing it and
+			// re-running immediately reflects the new threshold in both
+			// the summary counts and every drilldown.
+			fieldname: "above_amount",
+			label: __("Amount Threshold"),
+			fieldtype: "Currency",
+			default: 100000,
+			description: __("Documents at or below this amount are excluded when 'Only Above Amount' is checked"),
+		},
+		{
+			fieldname: "min_days_delayed",
+			label: __("Minimum Days Delayed"),
+			fieldtype: "Int",
+			default: 10,
+			description: __("Only count/show documents delayed by at least this many days"),
 		},
 		{
 			fieldname: "drill_type",
@@ -34,27 +76,39 @@ frappe.query_reports["Procurement Pending Report"] = {
 	_detail_registry: {},
 	_report: null,
 
+	// Grid fieldname that holds the per-row item name in every
+	// item-exploded drilldown. Continuation rows (2nd+ item of the same
+	// document) blank out every OTHER column so the grid reads as one
+	// merged block per document with an item per line, instead of
+	// repeating the same date/supplier/amount/etc. on every row.
+	_item_column_fieldname: "item_name",
+
 	// Fields shown inside the "basic details" popup for each drilldown's
 	// document link, in display order. Pulled straight from the row data
 	// already fetched for the table -- no extra server round-trip.
+	// "Items" (item_list) is the full ", "-joined list for the document,
+	// built server-side from the same exploded rows -- distinct from the
+	// grid's per-row "item_name" column.
 	// NOTE: received_pct here is fieldtype "Percent" -- that's fine and
 	// intentional. This map only feeds frappe.format() inside the plain
 	// dialog popup (show_detail_popup below), which is a different code
 	// path from the query-report DataTable grid. The grid column itself
-	// (see the .py report's get_pr_drilldown_columns) is deliberately
+	// (see the .py report's get_po_pending_drilldown_columns) is deliberately
 	// "Data", not "Percent" -- see the comment on the received_pct
 	// formatter branch below for why.
 	_detail_fields_map: {
-		po: [
+		indent: [
 			{ label: __("Date"), fieldname: "posting_date", fieldtype: "Date" },
 			{ label: __("Schedule Date"), fieldname: "schedule_date", fieldtype: "Date" },
 			{ label: __("Items"), fieldname: "item_list", fieldtype: "Small Text" },
+			{ label: __("Amount"), fieldname: "amount", fieldtype: "Currency" },
 			{ label: __("Responsible User"), fieldname: "responsible_user", fieldtype: "Data" },
 			{ label: __("Days Delayed"), fieldname: "days_delayed", fieldtype: "Int" },
 		],
 		purchase_order: [
 			{ label: __("Date"), fieldname: "posting_date", fieldtype: "Date" },
 			{ label: __("Supplier"), fieldname: "supplier", fieldtype: "Link", options: "Supplier" },
+			{ label: __("Items"), fieldname: "item_list", fieldtype: "Small Text" },
 			{ label: __("Amount"), fieldname: "amount", fieldtype: "Currency" },
 			{ label: __("Received %"), fieldname: "received_pct", fieldtype: "Percent" },
 			{ label: __("Days Delayed"), fieldname: "days_delayed", fieldtype: "Int" },
@@ -63,6 +117,7 @@ frappe.query_reports["Procurement Pending Report"] = {
 		pr: [
 			{ label: __("Date"), fieldname: "posting_date", fieldtype: "Date" },
 			{ label: __("Supplier"), fieldname: "supplier", fieldtype: "Link", options: "Supplier" },
+			{ label: __("Items"), fieldname: "item_list", fieldtype: "Small Text" },
 			{ label: __("Amount"), fieldname: "amount", fieldtype: "Currency" },
 			{ label: __("Weighment Required"), fieldname: "is_weighment_required", fieldtype: "Data" },
 			{ label: __("Weighment Status"), fieldname: "weighment_status", fieldtype: "Data" },
@@ -73,6 +128,7 @@ frappe.query_reports["Procurement Pending Report"] = {
 			{ label: __("Date"), fieldname: "posting_date", fieldtype: "Date" },
 			{ label: __("Purchase Receipt"), fieldname: "purchase_receipt", fieldtype: "Link", options: "Purchase Receipt" },
 			{ label: __("Supplier"), fieldname: "supplier", fieldtype: "Link", options: "Supplier" },
+			{ label: __("Items"), fieldname: "item_list", fieldtype: "Small Text" },
 			{ label: __("Amount"), fieldname: "amount", fieldtype: "Currency" },
 			{ label: __("Responsible User"), fieldname: "responsible_user", fieldtype: "Data" },
 			{ label: __("Days Delayed"), fieldname: "days_delayed", fieldtype: "Int" },
@@ -80,6 +136,7 @@ frappe.query_reports["Procurement Pending Report"] = {
 		prsub: [
 			{ label: __("Date"), fieldname: "posting_date", fieldtype: "Date" },
 			{ label: __("Supplier"), fieldname: "supplier", fieldtype: "Link", options: "Supplier" },
+			{ label: __("Items"), fieldname: "item_list", fieldtype: "Small Text" },
 			{ label: __("Amount"), fieldname: "amount", fieldtype: "Currency" },
 			{ label: __("Quality Inspection"), fieldname: "quality_inspection", fieldtype: "Link", options: "Quality Inspection" },
 			{ label: __("Responsible User"), fieldname: "responsible_user", fieldtype: "Data" },
@@ -88,6 +145,7 @@ frappe.query_reports["Procurement Pending Report"] = {
 		pi: [
 			{ label: __("Date"), fieldname: "posting_date", fieldtype: "Date" },
 			{ label: __("Supplier"), fieldname: "supplier", fieldtype: "Link", options: "Supplier" },
+			{ label: __("Items"), fieldname: "item_list", fieldtype: "Small Text" },
 			{ label: __("Amount"), fieldname: "amount", fieldtype: "Currency" },
 			{ label: __("Responsible User"), fieldname: "responsible_user", fieldtype: "Data" },
 			{ label: __("Days Delayed"), fieldname: "days_delayed", fieldtype: "Int" },
@@ -98,8 +156,13 @@ frappe.query_reports["Procurement Pending Report"] = {
 	// its drill_type. Used by BOTH the formatter (to decide which cells
 	// are clickable) and drill_down() (to decide which report view to
 	// switch to) so the two can never drift out of sync.
+	//
+	// NOTE: "pending_po" -> "indent" -- this bucket is Material Requests
+	// not yet converted into a Purchase Order ("Pending Indents"). It is
+	// intentionally NOT called "po" to avoid confusion with the
+	// "purchase_order" drilldown below, which is actual pending POs.
 	_drill_field_map: {
-		pending_po: "po",
+		pending_po: "indent",
 		pending_purchase_order: "purchase_order",
 		pending_gate_entry: "pr",
 		pending_qi: "qi",
@@ -114,7 +177,7 @@ frappe.query_reports["Procurement Pending Report"] = {
 	// weighment has progressed, see the days_delayed branch in
 	// formatter() below.
 	_drill_doctype_map: {
-		po: "Material Request",
+		indent: "Material Request",
 		purchase_order: "Purchase Order",
 		pr: "Purchase Order",
 		qi: "Quality Inspection",
@@ -123,7 +186,20 @@ frappe.query_reports["Procurement Pending Report"] = {
 	},
 
 	formatter: function (value, row, column, data, default_formatter) {
-		// Combined Plant / Segment column (summary view)
+		const item_col = frappe.query_reports["Procurement Pending Report"]._item_column_fieldname;
+
+		// Item-exploded drilldowns: the server sends one row per item
+		// (see mark_continuation_rows in the .py report), flagging every
+		// row after a document's first as "_merged_continuation". Blank
+		// every column except the item column on those rows, so the
+		// grid reads as one merged block per document -- items stack on
+		// their own lines instead of being comma-joined into one cell.
+		if (data && data._merged_continuation && column.fieldname !== item_col) {
+			return "";
+		}
+
+		// Combined Plant / Segment column (summary view). Plant is shown
+		// in bold as plain text (not a link) -- segment stays plain text.
 		if (column.fieldname === "plant_segment") {
 			const plant = data.plant || "";
 			const segment = data.segment || "";
@@ -134,8 +210,7 @@ frappe.query_reports["Procurement Pending Report"] = {
 
 			let html = "";
 			if (plant) {
-				html += `<a href="/app/branch/${encodeURIComponent(plant)}"
-					class="ppr-plant-link">${frappe.utils.escape_html(plant)}</a>`;
+				html += `<strong class="ppr-plant-name">${frappe.utils.escape_html(plant)}</strong>`;
 			}
 			if (segment) {
 				html += plant
@@ -150,7 +225,7 @@ frappe.query_reports["Procurement Pending Report"] = {
 		// lists server-side where relevant).
 		//   drill_type "purchase_order" -> Pending Purchase Orders (POs,
 		//                                   0% received, no Gate Entry yet)
-		//   drill_type "po"             -> Pending Indents (MRs, 0% ordered)
+		//   drill_type "indent"         -> Pending Indents (MRs, 0% ordered)
 		if (column.fieldname === "posting_date") {
 			const drill_type = frappe.query_report.get_filter_value("drill_type");
 			value = default_formatter(value, row, column, data);
@@ -160,7 +235,7 @@ frappe.query_reports["Procurement Pending Report"] = {
 					"No Gate Entry created against this PO yet, and nothing received"
 				)}">${__("Not Received")}</span> ${value}`;
 			}
-			if (drill_type === "po") {
+			if (drill_type === "indent") {
 				return `<span class="ppr-not-received-badge" title="${__(
 					"No Purchase Order created against this Material Request yet"
 				)}">${__("Not Ordered")}</span> ${value}`;
@@ -289,7 +364,18 @@ frappe.query_reports["Procurement Pending Report"] = {
 
 		inject_styles();
 		set_fiscal_year_default();
+		watch_datatable_and_merge(report);
+		toggle_above_amount_field();
 
+		// "Back to Summary" clears the drilldown filters and refreshes
+		// once. NOTE: frappe.set_route("query-report", report_name) was
+		// tried here first, but it's a no-op when you're already on that
+		// exact route -- Frappe's router only reacts to an ACTUAL route
+		// change, so it never reset anything. Clearing the filters via
+		// set_filter_value + a single refresh is what actually resets
+		// the report content, and Frappe's own filter-change handling
+		// already syncs those cleared values into the URL as a side
+		// effect -- so a refresh or shared link still lands on summary.
 		const back_btn = report.page.add_inner_button(__("Back to Summary"), function () {
 			set_filters_and_refresh_once(report, { drill_type: "", plant: "", segment: "" });
 		});
@@ -317,11 +403,51 @@ frappe.query_reports["Procurement Pending Report"] = {
 			}
 		});
 
+		// The page-level indicator (report.page.set_indicator) lives on
+		// the SHARED "query-report" Page instance that every script
+		// report reuses -- it was staying visible after navigating away
+		// to a different report because nothing ever cleared it. Watch
+		// the router and clear it the moment we're no longer on this
+		// report.
+		frappe.router.off("change", ppr_clear_indicator_on_route_leave);
+		frappe.router.on("change", ppr_clear_indicator_on_route_leave);
+
 		// handles the case where the report loads with drill_type already
 		// set (e.g. page refresh / shared URL)
 		update_drilldown_indicator(report);
 	},
 };
+
+/**
+ * Grays out / disables the "Amount Threshold" filter when "Only Above
+ * Amount" is unchecked, so it's visually obvious the field has no effect
+ * right now (its value is still sent, python just ignores it in that
+ * case -- see only_above_1lakh_clause in the .py report).
+ */
+function toggle_above_amount_field() {
+	const checked = cint(frappe.query_report.get_filter_value("only_above_1lakh"));
+	const field = frappe.query_report.get_filter("above_amount");
+	if (field && field.df) {
+		field.df.read_only = !checked;
+		field.refresh();
+	}
+}
+
+/**
+ * Bound once (re-registered per onload, de-duped via .off() above) to the
+ * router's "change" event. Clears this report's indicator the instant the
+ * route moves away from "Procurement Pending Report", so it can't bleed
+ * into whatever other script report the page instance gets reused for
+ * next.
+ */
+function ppr_clear_indicator_on_route_leave() {
+	const route = frappe.get_route();
+	const is_this_report = route[0] === "query-report" && route[1] === "Procurement Pending Report";
+	const report = frappe.query_reports["Procurement Pending Report"]._report;
+	if (!is_this_report && report && report.page) {
+		report.page.clear_indicator();
+	}
+}
 
 /**
  * Basic-details popup for a drilldown row's document link. Renders the
@@ -450,7 +576,7 @@ function update_drilldown_indicator(report) {
 	if (!report) return;
 
 	const labelMap = {
-		po: __("Pending Indents"),
+		indent: __("Pending Indents"),
 		purchase_order: __("Pending Purchase Orders"),
 		pr: __("Pending Gate Entries"),
 		qi: __("Pending Quality Inspection"),
@@ -472,30 +598,72 @@ function update_drilldown_indicator(report) {
 }
 
 /**
- * Small persistent hint shown below the report filters, ONLY on the
- * "purchase_order" (Pending Purchase Orders) drilldown -- that's the
- * sole view with a Received % column. Explains the bar-vs-plain-text
- * rule up front so nobody has to hover a cell to discover it. Called
- * from update_drilldown_indicator so it correctly appears/disappears on
- * every drilldown and "Back to Summary" transition, not just on initial
- * load.
+ * Watches the report's DOM directly with a MutationObserver instead of
+ * trying to hook a specific Frappe/datatable internal method. The
+ * datatable library virtualizes rows (it adds/removes cell nodes as you
+ * scroll and re-renders wholesale on every filter change or drilldown),
+ * and guessing its internal render method name is fragile across Frappe
+ * versions. Watching the DOM itself fires for every one of those cases
+ * with no version-specific assumptions.
+ *
+ * The observer callback is coalesced with requestAnimationFrame so a
+ * burst of mutations (e.g. scrolling past dozens of virtual rows) only
+ * triggers one scan per frame instead of one per mutation.
  */
-// function toggle_received_pct_legend(report, show) {
-// 	let $legend = $("#ppr-received-pct-legend");
+function watch_datatable_and_merge(report) {
+	const ns = frappe.query_reports["Procurement Pending Report"];
+	if (ns._merge_observer) return; // already watching, don't double-attach
 
-// 	if (!show) {
-// 		$legend.remove();
-// 		return;
-// 	}
-// 	if ($legend.length) return; // already showing
+	const container = report && report.page && report.page.wrapper && report.page.wrapper[0];
+	if (!container) return;
 
-// 	$legend = $(`
-// 		<div id="ppr-received-pct-legend" class="text-muted" style="font-size: 12px; padding: 4px 0 8px;">
-// 			${__("Received %: shown as a bar only when a PO has more than one Purchase Receipt against it; a single receipt is shown as plain text since the number already tells the whole story.")}
-// 		</div>
-// 	`);
-// 	report.page.wrapper.find(".page-form").after($legend);
-// }
+	let scheduled = false;
+	const run = () => {
+		scheduled = false;
+		apply_merged_row_styles(report);
+	};
+
+	const observer = new MutationObserver(() => {
+		if (scheduled) return;
+		scheduled = true;
+		requestAnimationFrame(run);
+	});
+	observer.observe(container, { childList: true, subtree: true });
+	ns._merge_observer = observer;
+
+	// Run once immediately in case the grid is already on screen.
+	apply_merged_row_styles(report);
+}
+
+/**
+ * Makes the "merged" look actually look merged instead of just blank.
+ * The server already sends "" for every column except the item on a
+ * continuation row (see mark_continuation_rows in the .py report, and
+ * the _merged_continuation check at the top of formatter() above) -- this
+ * finds every grid cell whose rendered content is empty and flags it so
+ * the CSS below can strip its row divider, so the value from the row
+ * above visually flows straight through instead of being cut off by a
+ * line.
+ *
+ * Deliberately keyed off "is this cell's content empty" rather than a
+ * specific column index: the datatable library can insert its own
+ * leading row-number/checkbox column and reorders columns on drag, so a
+ * hard-coded column-index offset would drift. Emptiness is what we
+ * actually control from the formatter, so it's what we match on.
+ */
+function apply_merged_row_styles(report) {
+	if (!report || !report.page) return;
+	const wrapper = report.page.wrapper && report.page.wrapper[0];
+	if (!wrapper) return;
+
+	const cells = wrapper.querySelectorAll(".dt-cell");
+	cells.forEach((cell) => {
+		const is_blank = (cell.innerText || cell.textContent || "").trim() === "";
+		if (is_blank !== cell.classList.contains("ppr-merged-cell")) {
+			cell.classList.toggle("ppr-merged-cell", is_blank);
+		}
+	});
+}
 
 /**
  * Color tier for the received-% progress bar:
@@ -526,14 +694,9 @@ function inject_styles() {
 			color: #1a73c7;
 			text-decoration: underline;
 		}
-		a.ppr-plant-link {
-			color: #2490ef;
-			text-decoration: none;
-			font-weight: 500;
-		}
-		a.ppr-plant-link:hover {
-			color: #1a73c7;
-			text-decoration: underline;
+		.ppr-plant-name {
+			color: var(--text-color, #1a1a1a);
+			font-weight: 700;
 		}
 		a.ppr-days-link {
 			color: #2490ef;
@@ -592,6 +755,25 @@ function inject_styles() {
 		}
 		.ppr-detail-popup .row:last-child {
 			border-bottom: none;
+		}
+		/* Blank continuation-row cells (see apply_merged_row_styles):
+		   drop the divider lines so the value from the row above reads
+		   as one continuous merged block instead of stopping at an
+		   empty row. Frappe's datatable has drawn cell borders via
+		   plain "border" in some versions and via "box-shadow" in
+		   others -- override both so this works either way. The
+		   box-shadow override only zeroes the vertical (y) offset,
+		   keeping the horizontal (x) offset intact, so the divider
+		   between COLUMNS is untouched -- only the line between this
+		   row and the next is removed. If your installed version still
+		   shows a line here, open devtools on one of these cells,
+		   check the Styles/Computed panel for whichever property is
+		   actually drawing it, and that exact value can be targeted.
+		*/
+		.dt-cell.ppr-merged-cell {
+			border-top-color: transparent !important;
+			border-bottom-color: transparent !important;
+			box-shadow: -1px 0 0 0 var(--dt-border-color, var(--border-color, #d1d8dd)) !important;
 		}
 	`;
 	document.head.appendChild(style);
