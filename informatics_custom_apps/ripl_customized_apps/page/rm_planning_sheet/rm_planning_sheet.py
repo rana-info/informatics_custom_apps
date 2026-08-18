@@ -6,7 +6,7 @@ from frappe.utils.xlsxutils import make_xlsx
 
 
 ITEM_MAP = {
-    "DFG": {"fg": "100112", "rm": "100474"},
+    "DFG": {"fg": "100112", "rm": "106446"},
     "Maize": {"fg": "100114", "rm": "106444"},
     "FCI": {"fg": "100113", "rm": "106448"},
 }

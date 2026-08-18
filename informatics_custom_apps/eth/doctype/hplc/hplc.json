@@ -15,7 +15,9 @@
   "column_break_ubre",
   "organic_and_alcohol_profile",
   "section_break_nlqb",
-  "data"
+  "sugar_parameters",
+  "column_break_okjl",
+  "organic_and_alcohol_parameters"
  ],
  "fields": [
   {
@@ -65,7 +67,7 @@
   {
    "fieldname": "injection_date",
    "fieldtype": "Date",
-   "label": "Injection Date",
+   "label": "Analysis Date",
    "read_only": 1
   },
   {
@@ -73,16 +75,26 @@
    "fieldtype": "Section Break"
   },
   {
-   "fieldname": "data",
+   "fieldname": "sugar_parameters",
    "fieldtype": "Table",
-   "label": "Data",
+   "label": "Sugar Parameters",
+   "options": "HPLC Data"
+  },
+  {
+   "fieldname": "column_break_okjl",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "organic_and_alcohol_parameters",
+   "fieldtype": "Table",
+   "label": "Organic and Alcohol Paramters",
    "options": "HPLC Data"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-08-13 16:58:19.213134",
+ "modified": "2026-08-18 10:21:07.798133",
  "modified_by": "Administrator",
  "module": "ETH",
  "name": "HPLC",

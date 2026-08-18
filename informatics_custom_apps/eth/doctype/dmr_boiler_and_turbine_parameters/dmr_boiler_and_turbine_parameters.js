@@ -26,11 +26,6 @@ frappe.ui.form.on("DMR Boiler And Turbine Parameters", {
 	},
 });
 
-// Locks fields that are auto-populated from Excel uploads (per PLANT_CONFIG
-// on the server) so they can't be hand-edited, while leaving every other
-// field on the form editable as normal. The mapped-field list is fetched
-// from the server (get_field_lock_info) rather than duplicated here, so it
-// always stays in sync with PLANT_CONFIG.
 function lock_mapped_fields(frm) {
 	if (!frm.doc.plant) return;
 

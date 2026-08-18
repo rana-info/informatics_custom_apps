@@ -12,27 +12,25 @@ const SRV_METHOD_MODULE =
 	"informatics_custom_apps.ripl_customized_apps.page.srv_clearing_tree.srv_clearing_tree";
 
 const SRV_PO_COLORS = [
-	{ border: "#60a5fa", header: "#eff6ff" },
-	{ border: "#4ade80", header: "#f0fdf4" },
-	{ border: "#fbbf24", header: "#fffbeb" },
-	{ border: "#f87171", header: "#fef2f2" },
-	{ border: "#a78bfa", header: "#f5f3ff" },
-	{ border: "#22d3ee", header: "#ecfeff" },
-	{ border: "#f472b6", header: "#fdf2f8" },
-	{ border: "#a3e635", header: "#f7fee7" },
+	{ border: "var(--blue-500, #2490ef)", header: "var(--blue-50, #eff6fc)" },
+	{ border: "var(--green-500, #29a745)", header: "var(--green-50, #eefcf5)" },
+	{ border: "var(--yellow-500, #ffca4b)", header: "var(--yellow-50, #fffbea)" },
+	{ border: "var(--red-500, #ff5858)", header: "var(--red-50, #fff5f5)" },
+	{ border: "var(--purple-500, #a05af7)", header: "var(--purple-50, #f6f2fe)" },
+	{ border: "var(--cyan-500, #4fb2e9)", header: "var(--cyan-50, #eafaff)" },
+	{ border: "var(--pink-500, #ff85c0)", header: "var(--pink-50, #fff0f6)" },
+	{ border: "var(--orange-500, #ff9f40)", header: "var(--orange-50, #fff7ed)" },
 ];
 
 const SRV_CHAIN_COLORS = [
-	"#fffbeb",
-	"#eff6ff",
-	"#f0fdf4",
-	"#fef2f2",
-	"#f5f3ff",
-	"#ecfeff",
-	"#fdf2f8",
-	"#f7fee7",
-	"#fff7ed",
-	"#eef2ff",
+	"var(--gray-50, #f9fafb)",
+	"var(--blue-50, #eff6fc)",
+	"var(--green-50, #eefcf5)",
+	"var(--yellow-50, #fffbea)",
+	"var(--purple-50, #f6f2fe)",
+	"var(--cyan-50, #eafaff)",
+	"var(--pink-50, #fff0f6)",
+	"var(--orange-50, #fff7ed)",
 ];
 
 class SRVClearingTree {
@@ -202,7 +200,6 @@ class SRVClearingTree {
 				}
 				table.srv-xl-table th, table.srv-xl-table td {
 					border: 1px solid var(--border-color);
-					border-right: 2px solid #374151;
 					padding: 6px 10px;
 					white-space: normal;
 					word-break: break-word;
@@ -222,11 +219,13 @@ class SRVClearingTree {
 				}
 				table.srv-xl-table td.srv-empty { color: var(--text-muted); text-align: center; }
 
-				tr.srv-group-header.srv-group-header-alert td { background: rgba(209,65,76,0.22) !important; }
-				tr.srv-group-header.srv-group-header-rounding td { background: rgba(184,134,11,0.22) !important; }
-
-				tr.srv-chain-start td {
-					border-top: 3px solid #111827 !important;
+				tr.srv-group-header.srv-group-header-alert td {
+					background: var(--red-50, #fff5f5) !important;
+					color: var(--red-700, #c92a2a);
+				}
+				tr.srv-group-header.srv-group-header-rounding td {
+					background: var(--yellow-50, #fffbea) !important;
+					color: var(--yellow-700, #9a6a00);
 				}
 
 				tr.srv-group-header td {
@@ -234,9 +233,25 @@ class SRVClearingTree {
 					border-top: 2px solid var(--border-color);
 				}
 
+				tr.srv-chain-total {
+					cursor: pointer;
+					user-select: none;
+				}
 				tr.srv-chain-total td {
 					font-weight: 600;
 					border-top: 1px solid var(--border-color);
+				}
+				tr.srv-chain-total:hover td {
+					filter: brightness(0.97);
+				}
+				.srv-chain-toggle-icon {
+					display: inline-block;
+					margin-right: 6px;
+					color: var(--text-muted);
+					transition: transform 0.15s ease;
+				}
+				tr.srv-chain-total.srv-chain-expanded .srv-chain-toggle-icon {
+					transform: rotate(90deg);
 				}
 
 				tr.srv-grand-total td {
@@ -251,13 +266,13 @@ class SRVClearingTree {
 					letter-spacing: 0.02em; border-radius: 4px; padding: 1px 5px;
 					display: inline-block; margin-left: 4px;
 				}
-				.srv-flag-diff { color: #9a6a00; background: #fdf1d6; }
-				.srv-flag-rejected { color: #a4313a; background: #fbe3e5; }
-				.srv-flag-matched { color: #1f7a4d; background: #e2f5ea; }
-				.srv-flag-rounding { color: #9a6a00; background: #fdf1d6; }
+				.srv-flag-diff { color: var(--orange-700, #d9480f); background: var(--orange-50, #fff7ed); }
+				.srv-flag-rejected { color: var(--red-700, #c92a2a); background: var(--red-50, #fff5f5); }
+				.srv-flag-matched { color: var(--green-700, #2b8a3e); background: var(--green-50, #eefcf5); }
+				.srv-flag-rounding { color: var(--yellow-700, #9a6a00); background: var(--yellow-50, #fffbea); }
 
-				.srv-amt-diff-pos { color: #1f7a4d; font-weight: 600; }
-				.srv-amt-diff-neg { color: #a4313a; font-weight: 600; }
+				.srv-amt-diff-pos { color: var(--green-600, #2f9e44); font-weight: 600; }
+				.srv-amt-diff-neg { color: var(--red-600, #e03131); font-weight: 600; }
 				.srv-amt-diff-zero { color: var(--text-muted); }
 
 				.srv-remarks-cell { white-space: normal; min-width: 220px; }
@@ -274,7 +289,7 @@ class SRVClearingTree {
 					border-radius: 10px;
 					padding: 18px 20px;
 					margin-bottom: 16px;
-					box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+					box-shadow: var(--shadow-sm, 0 1px 2px rgba(0,0,0,0.04));
 				}
 				#page-srv-clearing-tree .page-form .frappe-control {
 					margin-bottom: 0;
@@ -286,56 +301,27 @@ class SRVClearingTree {
 					margin-bottom: 4px;
 				}
 
-				#page-srv-clearing-tree .page-actions .btn-primary,
-				#page-srv-clearing-tree .page-actions .btn-primary:focus {
-					background-color: #eaf2ff;
-					border-color: #cfe0ff;
-					color: #2563eb;
-					box-shadow: none;
-				}
-				#page-srv-clearing-tree .page-actions .btn-primary:hover {
-					background-color: #d9e8ff;
-					border-color: #b9d3ff;
-					color: #1d4ed8;
-				}
-				#page-srv-clearing-tree .btn-default,
-				#page-srv-clearing-tree .btn-secondary {
-					background-color: #f3f4f6;
-					border-color: #e5e7eb;
-					color: #374151;
-					box-shadow: none;
-				}
-				#page-srv-clearing-tree .btn-default:hover,
-				#page-srv-clearing-tree .btn-secondary:hover {
-					background-color: #e5e7eb;
-				}
-
 				#page-srv-clearing-tree .srv-inline-run-btn {
 					display: inline-flex; align-items: center; justify-content: center;
-					background-color: #2563eb;
-					border-color: #2563eb;
-					color: #fff;
+					background-color: var(--primary, #2490ef);
+					border-color: var(--primary, #2490ef);
+					color: var(--primary-contrast, #fff);
 					box-shadow: none;
 					height: 34px;
 					min-width: 130px;
 					padding: 0 18px;
-					border-radius: 6px;
+					border-radius: var(--border-radius-md, 6px);
 					font-weight: 600;
 					align-self: flex-end;
 					margin-left: 4px;
 					transition: background-color 0.12s ease;
 				}
 				#page-srv-clearing-tree .srv-inline-run-btn:hover:not(:disabled) {
-					background-color: #1d4ed8;
-					border-color: #1d4ed8;
-					color: #fff;
-				}
-				#page-srv-clearing-tree .srv-inline-run-btn:active:not(:disabled) {
-					background-color: #1e40af;
+					filter: brightness(0.92);
 				}
 				#page-srv-clearing-tree .srv-inline-run-btn:disabled {
-					background-color: #93b4f8;
-					border-color: #93b4f8;
+					background-color: var(--blue-200, #93b4f8);
+					border-color: var(--blue-200, #93b4f8);
 					cursor: not-allowed;
 				}
 
@@ -344,7 +330,7 @@ class SRVClearingTree {
 					height: 34px;
 					min-width: 150px;
 					padding: 0 18px;
-					border-radius: 6px;
+					border-radius: var(--border-radius-md, 6px);
 					font-weight: 600;
 					align-self: flex-end;
 					margin-left: 4px;
@@ -364,7 +350,7 @@ class SRVClearingTree {
 					top: 0; left: 0;
 					height: 100%;
 					width: 40%;
-					background: #2563eb;
+					background: var(--primary, #2490ef);
 					border-radius: 2px;
 					animation: srv-progress-slide 1.1s ease-in-out infinite;
 				}
@@ -459,16 +445,13 @@ class SRVClearingTree {
 				(childrenByParent[r.parent] = childrenByParent[r.parent] || []).push(r);
 			});
 
-		const ordered = roots
-			.map((root) => {
-				const children = childrenByParent[root.id] || [];
-				return {
-					root,
-					children,
-					earliest: this.get_earliest_date_from_rows(root.je ? [root] : children),
-				};
-			})
-			.sort((a, b) => (a.earliest < b.earliest ? -1 : a.earliest > b.earliest ? 1 : 0));
+		// Requirement: everything ordered by Net Impact, descending.
+				const ordered = roots
+			.map((root) => ({
+				root,
+				children: childrenByParent[root.id] || [],
+			}))
+			.sort((a, b) => Math.abs(b.root.net_impact || 0) - Math.abs(a.root.net_impact || 0));
 
 		this.$body.append(this.render_summary_bar(roots, totalRow));
 
@@ -504,18 +487,24 @@ class SRVClearingTree {
 		`);
 		const $tbody = $table.find("tbody");
 
-		const html_parts = [];
+		$tbody.on("click", "tr.srv-chain-total", function () {
+			const $row = $(this);
+			const chainId = $row.data("chain");
+			$tbody.find(`tr.srv-chain-detail[data-chain="${chainId}"]`).toggle();
+			$row.toggleClass("srv-chain-expanded");
+		});
 
-		let po_idx = 0;
+		const html_parts = [];
+		let group_idx = 0;
 
 		ordered.forEach(({ root, children }) => {
 			if (root.je) {
 				html_parts.push(this.render_je_row(root));
 				return;
 			}
-			const po_colors = SRV_PO_COLORS[po_idx % SRV_PO_COLORS.length];
-			po_idx++;
-			html_parts.push(...this.build_group_rows(root, children, po_colors));
+			group_idx++;
+			const po_colors = SRV_PO_COLORS[(group_idx - 1) % SRV_PO_COLORS.length];
+			html_parts.push(...this.build_group_rows(root, children, po_colors, group_idx));
 		});
 
 		if (totalRow) {
@@ -537,8 +526,8 @@ class SRVClearingTree {
 		return `
 			<div class="srv-tree-summary-bar">
 				<div><b>${groupRoots.length}</b> ${__("Groups")}</div>
-				<div><b style="${realGaps.length ? "color:#a4313a;" : ""}">${realGaps.length}</b> ${__("With Unresolved Gap")}</div>
-				${roundingGaps.length ? `<div><b style="color:#9a6a00;">${roundingGaps.length}</b> ${__("Rounding Only")}</div>` : ""}
+				<div><b style="${realGaps.length ? "color:var(--red-600,#e03131);" : ""}">${realGaps.length}</b> ${__("With Unresolved Gap")}</div>
+				${roundingGaps.length ? `<div><b style="color:var(--yellow-700,#9a6a00);">${roundingGaps.length}</b> ${__("Rounding Only")}</div>` : ""}
 				${totalRow ? `<div><b>${format_currency(totalRow.net_impact || 0)}</b> ${__("Net Difference")}</div>` : ""}
 			</div>
 		`;
@@ -548,7 +537,7 @@ class SRVClearingTree {
 		return `border-left:5px solid ${po_colors.border};`;
 	}
 
-	build_group_rows(root, children, po_colors) {
+	build_group_rows(root, children, po_colors, group_idx) {
 		const rows = [];
 		const stripe = this.po_stripe_style(po_colors);
 
@@ -568,7 +557,9 @@ class SRVClearingTree {
 					${root.purchase_order && (root.supplier_name || root.supplier) ? ` — ${frappe.utils.escape_html(root.supplier_name || root.supplier)}` : ""}
 				</td>
 				<td>${children.length} ${__("voucher(s)")}</td>
-				<td colspan="5"></td>
+				<td colspan="2"></td>
+				<td class="srv-num">${this.fmt_diff(root.net_impact)}</td>
+				<td colspan="2"></td>
 			</tr>
 		`);
 
@@ -585,7 +576,7 @@ class SRVClearingTree {
 		);
 
 		const consumed = new Set();
-		let chain_color_idx = 0;
+		const chain_candidates = [];
 
 		pi_docs_all.forEach((pi_name) => {
 			const pr_docs = this.unique(
@@ -637,14 +628,20 @@ class SRVClearingTree {
 				return;
 			}
 
-			const chain_color = SRV_CHAIN_COLORS[chain_color_idx % SRV_CHAIN_COLORS.length];
-			const is_chain_boundary = chain_color_idx > 0;
-			chain_color_idx++;
+			chain_candidates.push({ pi_name, chain_steps, chain_debit, chain_credit, chain_net });
+		});
 
-			const pi_child = child_by_doc[pi_name] || {};
+		// Requirement: chains ordered by Net Impact, descending.
+		chain_candidates.sort((a, b) => Math.abs(b.chain_net) - Math.abs(a.chain_net));
+
+		chain_candidates.forEach((chain, idx) => {
+			const chain_color = SRV_CHAIN_COLORS[idx % SRV_CHAIN_COLORS.length];
+			const chain_id = `g${group_idx}-c${idx}`;
+
+			const pi_child = child_by_doc[chain.pi_name] || {};
 			const remark_cell_html = this.render_remark_cell(pi_child.remarks || "");
 
-			const visible_steps = chain_steps
+			const visible_steps = chain.chain_steps
 				.map((step) => {
 					const c = child_by_doc[step.name];
 					const debit = c ? c.gl_debit || 0 : 0;
@@ -654,7 +651,21 @@ class SRVClearingTree {
 				})
 				.filter(({ step, net }) => step.is_anchor || step.always_show || Math.abs(net) >= 0.005);
 
-			const remarks_rowspan = visible_steps.length + 1;
+			const remarks_rowspan = visible_steps.length;
+
+			rows.push(`
+				<tr class="srv-chain-total" data-chain="${chain_id}" style="background-color:${chain_color};">
+					<td colspan="4" style="${stripe}">
+						<span class="srv-chain-toggle-icon">▸</span>${__("Chain Total")} — ${frappe.utils.escape_html(chain.pi_name)}
+						<span style="color:var(--text-muted);font-weight:400;font-size:11px;">(${visible_steps.length} ${__("voucher(s)")})</span>
+					</td>
+					<td class="srv-num">${this.fmt_currency(chain.chain_debit)}</td>
+					<td class="srv-num">${this.fmt_currency(chain.chain_credit)}</td>
+					<td class="srv-num">${this.fmt_diff(chain.chain_net)}</td>
+					<td></td>
+					<td></td>
+				</tr>
+			`);
 
 			visible_steps.forEach(({ step, c, debit, credit, net }) => {
 				const case_label = (c && c.case) || "";
@@ -666,7 +677,6 @@ class SRVClearingTree {
 					? "srv-flag-matched"
 					: "";
 
-				const boundary_cls = step.is_anchor && is_chain_boundary ? "srv-chain-start" : "";
 				const no_srv_impact = step.always_show && Math.abs(net) < 0.005;
 				const type_label = no_srv_impact
 					? `${frappe.utils.escape_html(step.label)} <span style="color:var(--text-muted);font-weight:400;font-size:11px;">(${__("no SRV impact")})</span>`
@@ -677,7 +687,7 @@ class SRVClearingTree {
 					: "";
 
 				rows.push(`
-					<tr class="${boundary_cls}" style="background-color:${chain_color};">
+					<tr class="srv-chain-detail" data-chain="${chain_id}" style="display:none;background-color:${chain_color};">
 						<td style="${stripe}">${frappe.utils.escape_html((c && c.posting_date) || "")}</td>
 						<td>${type_label}</td>
 						<td>${this.render_doc_cell(step.doctype, step.name)}</td>
@@ -690,16 +700,6 @@ class SRVClearingTree {
 					</tr>
 				`);
 			});
-
-			rows.push(`
-				<tr class="srv-chain-total" style="background-color:${chain_color};">
-					<td colspan="4" style="${stripe}">${__("Chain Total")} — ${frappe.utils.escape_html(pi_name)}</td>
-					<td class="srv-num">${this.fmt_currency(chain_debit)}</td>
-					<td class="srv-num">${this.fmt_currency(chain_credit)}</td>
-					<td class="srv-num">${this.fmt_diff(chain_net)}</td>
-					<td></td>
-				</tr>
-			`);
 		});
 
 		children
@@ -708,6 +708,7 @@ class SRVClearingTree {
 				if (!name || consumed.has(name)) return false;
 				return Math.abs(c.net_impact || 0) >= 0.005;
 			})
+			.sort((a, b) => (b.net_impact || 0) - (a.net_impact || 0))
 			.forEach((c) => {
 				const name = c.purchase_invoice || c.purchase_receipt || c.return_pr || c.return_invoice || c.lcv;
 				const meta = this.leftover_doc_meta(c);
@@ -867,6 +868,10 @@ class SRVClearingTree {
 			return;
 		}
 
+		const $export_table = $table.clone();
+		$export_table.find("tr.srv-chain-detail").css("display", "table-row");
+		$export_table.find(".srv-chain-toggle-icon").remove();
+
 		const html = `
 			<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
 			<head>
@@ -886,7 +891,7 @@ class SRVClearingTree {
 				</xml>
 				<![endif]-->
 			</head>
-			<body>${$table.prop("outerHTML")}</body>
+			<body>${$export_table.prop("outerHTML")}</body>
 			</html>
 		`;
 

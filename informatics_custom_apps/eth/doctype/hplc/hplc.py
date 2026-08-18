@@ -11,9 +11,23 @@ class HPLC(Document):
 	pass
 
 
+FIELD_TABLE_MAP = {
+	"sugar_profile": "sugar_parameters",
+	"organic_and_alcohol_profile": "organic_and_alcohol_parameters",
+}
+
+
+def _get_target_table(fieldname):
+	table_field = FIELD_TABLE_MAP.get(fieldname)
+	if not table_field:
+		frappe.throw(frappe._("No child table mapped for field {0}").format(fieldname))
+	return table_field
+
+
 @frappe.whitelist()
 def parse_hplc_pdf(docname, fieldname, file_url=None):
 	doc = frappe.get_doc("HPLC", docname)
+	table_field = _get_target_table(fieldname)
 
 	if not file_url:
 		file_url = doc.get(fieldname)
@@ -56,14 +70,12 @@ def parse_hplc_pdf(docname, fieldname, file_url=None):
 	if injection_date and not doc.injection_date:
 		doc.injection_date = injection_date
 
-
-	doc.set("data", [r for r in doc.get("data") if r.get("source_field") != fieldname])
+	doc.set(table_field, [r for r in doc.get(table_field) if r.get("source_field") != fieldname])
 
 	for row in rows:
 		doc.append(
-			"data",
+			table_field,
 			{
-
 				"parameter_name": row["name"],
 				"amount": row["amount"],
 				"source_field": fieldname,
@@ -145,9 +157,11 @@ def _extract_rows(text):
 
 	return rows
 
+
 @frappe.whitelist()
 def clear_hplc_data(docname, fieldname, file_url=None):
 	doc = frappe.get_doc("HPLC", docname)
+	table_field = _get_target_table(fieldname)
 	doc.set(fieldname, None)
 
 	removed = 0
@@ -159,13 +173,21 @@ def clear_hplc_data(docname, fieldname, file_url=None):
 			targets = {(r["name"].strip().lower(), round(r["amount"], 3)) for r in rows}
 
 			kept = []
-			for r in doc.get("data"):
+			for r in doc.get(table_field):
 				key = ((r.parameter_name or "").strip().lower(), round(r.amount or 0, 3))
 				if r.get("source_field") == fieldname or key in targets:
 					removed += 1
 					continue
 				kept.append(r)
-			doc.set("data", kept)
+			doc.set(table_field, kept)
+	else:
+		kept = []
+		for r in doc.get(table_field):
+			if r.get("source_field") == fieldname:
+				removed += 1
+				continue
+			kept.append(r)
+		doc.set(table_field, kept)
 
 	doc.save(ignore_permissions=True)
 

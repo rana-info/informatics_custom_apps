@@ -50,27 +50,36 @@ PLANT_CONFIG = {
 					"float_pvrh": {"tag": "EKW2000", "label": "Power Generation", "agg": "sum"},
 					"turbine_steam": {"tag": "FT2001", "label": "Turbine Steam", "agg": "sum"},
 					"deaerator": {"tag": "FT102", "label": "Deartor", "agg": "sum"},
+					"turbine_chest_pressure":{"tag": "ACT1000", "label": "Turbine Chest Pressure", "agg": "sum"},
 				},
 			},
-			# "Turbine": {
-			# 	"orientation": "column",
-			# 	"tag_name_row": 3,          # row containing "Tag Name" / tag headers
-			# 	"hourly_start_row": 4,       # first row of hourly values
-			# 	"hourly_end_row": 27,        # last row of hourly values
-			# 	"next_day_start_row": None,
-			# 	"next_day_end_row": None,
-			# 	"min_max_avg_rows": {
-			# 		"engg_units_row": 29,
-			# 		"max_row": 30,
-			# 		"max_time_row": 31,
-			# 		"min_row": 32,
-			# 		"min_time_row": 33,
-			# 		"avg_row": 34,
-			# 	},
-			# 	"field_tag_map": {
-			# 		"turbine_speed": {"tag": "SPD501", "label": "Turbine Speed", "agg": "avg"},
-			# 	},
-			# },
+   
+   
+   	"Evaporator Sheet": {
+				"orientation": "column",
+				"tag_name_row": 3,
+				"hourly_start_row": 4,
+				"hourly_end_row": 27,
+				"next_day_start_row": None,
+				"next_day_end_row": None,
+				"min_max_avg_rows": {
+					"engg_units_row": 29,
+					"max_row": 30,
+					"max_time_row": 31,
+					"min_row": 32,
+					"min_time_row": 33,
+					"avg_row": 34,
+				},
+				"field_tag_map": {
+					"evaporation": {
+						"label": "Evaporation",
+						"formula": [
+							{"col": "B", "row": 29},
+							{"col": "C", "row": 29},
+						],
+					}
+				},
+			},
 		},
 	},
 	"Superior Biofuels": {
@@ -99,12 +108,15 @@ PLANT_CONFIG = {
 				"field_tag_map": {
 					"main_steam_pressure": {"tag": "PT302", "label": "Main Steam Pressure", "agg": "avg"},
 					"main_steam_temprature": {"tag": "TT304", "label": "Main Steam Temprature", "agg": "avg"},
-					"float_reke": {"tag": "TE414", "label": "ESP Outlet Temp", "agg": "avg"},
+					"float_reke": {"tag": "TE417", "label": "ESP Outlet Temp", "agg": "avg"},
 					"oxygen__at_eco_ol": {"tag": "AT401", "label": "Oxygen % At Eco O/L", "agg": "avg"},
 					"boiler_feed_water_flow": {"tag": "FT201", "label": "Boiler Feed Water Flow", "agg": "sum"},
 					"float_zcpn": {"tag": "FT301", "label": "Steam Produced", "agg": "sum"},
 					"dm_flow_to_dearator": {"tag": "FI_2014", "label": "DM Flow To Dearator ", "agg": "sum"},
-					"deaerator": {"tag": "FI_2013", "label": "Deartor", "agg": "sum"},
+					"deaerator": {"tag": "FI_2013", "label": "Deaerator", "agg": "sum"},
+     				"feed_water_inlet_temp": {"tag": "TE201", "label": "Feed Water Inlet Temperature", "agg": "avg"},
+              		"return_codensate": {"tag": "FT102", "label": "Return Condensate", "agg": "sum"},
+              		"exhaust_pressure": {"tag": "PT01", "label": "Exhaust Pressure", "agg": "sum"}
 				},
 			},
 			"Distillary 80 KLPD": {
@@ -123,7 +135,6 @@ PLANT_CONFIG = {
 					"avg_row": 34,
 				},
 				"field_tag_map": {
-					# liquification = T33 + U33
 					"liquification": {
 						"label": "Liquification",
 						"formula": [
@@ -131,7 +142,6 @@ PLANT_CONFIG = {
 							{"col": "U", "row": 33},
 						],
 					},
-					# distillation = (O33 / 1000) + P33
 					"distillation": {
 						"label": "Distillation",
 						"formula": [
@@ -141,6 +151,39 @@ PLANT_CONFIG = {
 					},
 				},
 			},
+   
+   			"Distillary 300 KLPD": {
+					"orientation": "column",
+					"tag_name_row": 3,
+					"hourly_start_row": 4,
+					"hourly_end_row": 27,
+					"next_day_start_row": None,
+					"next_day_end_row": None,
+					"min_max_avg_rows": {
+						"engg_units_row": 29,
+						"max_row": 30,
+						"max_time_row": 31,
+						"min_row": 32,
+						"min_time_row": 33,
+						"avg_row": 34,
+					},
+					"field_tag_map": {
+						"liquification": {
+							"label": "Liquification",
+							"formula": [
+								{"col": "T", "row": 33},
+								{"col": "U", "row": 33},
+							],
+						},
+						"distillation": {
+							"label": "Distillation",
+							"formula": [
+								{"col": "O", "row": 33, "scale": 1000},
+								{"col": "P", "row": 33},
+							],
+						},
+					},
+				},
 		},
 	},
 }
@@ -194,13 +237,11 @@ class DMRBoilerAndTurbineParameters(Document):
 
 		sources = self.get_plant_sources()
 
-		# Rebuilt fresh every save from whatever files are currently attached -
-		# not accumulated, since a row can be removed/replaced.
 		self.set("min_max_avg", [])
 
-		field_totals = {}      # fieldname -> aggregated value across all files
-		field_agg = {}         # fieldname -> "sum" | "avg" (from config)
-		carry_over_totals = {} # fieldname -> aggregated next-day carry value
+		field_totals = {}     
+		field_agg = {}       
+		carry_over_totals = {} 
 		missing_all = []
 
 		for row in excel_files:
@@ -217,9 +258,6 @@ class DMRBoilerAndTurbineParameters(Document):
 				agg = source_config["field_tag_map"][fieldname].get("agg", "sum")
 				field_agg[fieldname] = agg
 				if agg == "avg":
-					# Last file wins for an avg field; multiple sources
-					# writing to the same avg field is an edge case, not
-					# something to blend.
 					field_totals[fieldname] = value
 				else:
 					field_totals[fieldname] = field_totals.get(fieldname, 0) + value

@@ -196,11 +196,11 @@ def get_supplier_map(valid_docs):
     rows = frappe.db.sql(f"""
         SELECT name, supplier, supplier_name, is_return, 'Purchase Invoice' AS doctype
         FROM `tabPurchase Invoice`
-        WHERE name IN {doc_tuple}
+        WHERE name IN {doc_tuple} AND docstatus = 1
         UNION
         SELECT name, supplier, supplier_name, is_return, 'Purchase Receipt' AS doctype
         FROM `tabPurchase Receipt`
-        WHERE name IN {doc_tuple}
+        WHERE name IN {doc_tuple} AND docstatus = 1
     """, as_dict=1)
 
     return {
@@ -279,6 +279,13 @@ def get_gl_entries(filters, precision):
 
 
 def build_graph(valid_docs):
+    """Every hop below is restricted to non-cancelled (docstatus = 1)
+    documents on BOTH ends of the relationship. Cancelled/amended PI,
+    PR, Return PR, Debit Note and LCV rows stay in their child tables
+    forever (Purchase Invoice Item, Purchase Receipt Item, Landed Cost
+    Purchase Receipt etc. aren't cleaned up on cancel), so without this
+    filter a cancelled voucher still gets pulled into the graph as a
+    linked/excluded doc and shows up in the tree."""
 
     graph = defaultdict(set)
     edges = []
@@ -324,21 +331,25 @@ def build_graph(valid_docs):
                     newly_found.add(d)
 
         for r in frappe.db.sql(f"""
-            SELECT DISTINCT parent AS pi, purchase_receipt AS pr
-            FROM `tabPurchase Invoice Item`
-            WHERE purchase_receipt IS NOT NULL
-              AND (parent IN {doc_tuple} OR purchase_receipt IN {doc_tuple})
+            SELECT DISTINCT pii.parent AS pi, pii.purchase_receipt AS pr
+            FROM `tabPurchase Invoice Item` pii
+            INNER JOIN `tabPurchase Invoice` pi_doc ON pi_doc.name = pii.parent AND pi_doc.docstatus = 1
+            INNER JOIN `tabPurchase Receipt` pr_doc ON pr_doc.name = pii.purchase_receipt AND pr_doc.docstatus = 1
+            WHERE pii.purchase_receipt IS NOT NULL
+              AND (pii.parent IN {doc_tuple} OR pii.purchase_receipt IN {doc_tuple})
         """, as_dict=1):
             link(r.pi, r.pr, "PI", "PR", "PI-PR")
             discovered(r.pi, r.pr)
 
         # PR ↔ RETURN PR
         for r in frappe.db.sql(f"""
-            SELECT name AS return_pr, return_against AS pr
-            FROM `tabPurchase Receipt`
-            WHERE is_return = 1
-              AND return_against IS NOT NULL
-              AND (name IN {doc_tuple} OR return_against IN {doc_tuple})
+            SELECT rpr.name AS return_pr, rpr.return_against AS pr
+            FROM `tabPurchase Receipt` rpr
+            INNER JOIN `tabPurchase Receipt` opr ON opr.name = rpr.return_against AND opr.docstatus = 1
+            WHERE rpr.is_return = 1
+              AND rpr.docstatus = 1
+              AND rpr.return_against IS NOT NULL
+              AND (rpr.name IN {doc_tuple} OR rpr.return_against IN {doc_tuple})
         """, as_dict=1):
             link(r.pr, r.return_pr, "PR", "Return PR", "PR-RETURN_PR")
             discovered(r.pr, r.return_pr)
@@ -347,7 +358,8 @@ def build_graph(valid_docs):
         for r in frappe.db.sql(f"""
             SELECT DISTINCT pii.purchase_receipt AS return_pr, pii.parent AS return_pi
             FROM `tabPurchase Invoice Item` pii
-            INNER JOIN `tabPurchase Invoice` pi ON pi.name = pii.parent
+            INNER JOIN `tabPurchase Invoice` pi ON pi.name = pii.parent AND pi.docstatus = 1
+            INNER JOIN `tabPurchase Receipt` pr ON pr.name = pii.purchase_receipt AND pr.docstatus = 1
             WHERE pi.is_return = 1
               AND (pii.parent IN {doc_tuple} OR pii.purchase_receipt IN {doc_tuple})
         """, as_dict=1):
@@ -356,11 +368,13 @@ def build_graph(valid_docs):
 
         # PI ↔ RETURN PI (Debit Note raised directly against the PI)
         for r in frappe.db.sql(f"""
-            SELECT name AS return_pi, return_against AS pi
-            FROM `tabPurchase Invoice`
-            WHERE is_return = 1
-              AND return_against IS NOT NULL
-              AND (name IN {doc_tuple} OR return_against IN {doc_tuple})
+            SELECT rpi.name AS return_pi, rpi.return_against AS pi
+            FROM `tabPurchase Invoice` rpi
+            INNER JOIN `tabPurchase Invoice` opi ON opi.name = rpi.return_against AND opi.docstatus = 1
+            WHERE rpi.is_return = 1
+              AND rpi.docstatus = 1
+              AND rpi.return_against IS NOT NULL
+              AND (rpi.name IN {doc_tuple} OR rpi.return_against IN {doc_tuple})
         """, as_dict=1):
             link(r.pi, r.return_pi, "PI", "Return Invoice", "PI-RETURN_PI")
             discovered(r.pi, r.return_pi)
@@ -368,11 +382,13 @@ def build_graph(valid_docs):
         # LCV ↔ PR (one LCV can distribute cost across several PRs —
         # that's a genuine link, those PRs belong in the same group)
         for r in frappe.db.sql(f"""
-            SELECT DISTINCT parent AS lcv, receipt_document AS pr
-            FROM `tabLanded Cost Purchase Receipt`
-            WHERE receipt_document_type = 'Purchase Receipt'
-              AND receipt_document IS NOT NULL
-              AND (parent IN {doc_tuple} OR receipt_document IN {doc_tuple})
+            SELECT DISTINCT lcpr.parent AS lcv, lcpr.receipt_document AS pr
+            FROM `tabLanded Cost Purchase Receipt` lcpr
+            INNER JOIN `tabLanded Cost Voucher` lcv ON lcv.name = lcpr.parent AND lcv.docstatus = 1
+            INNER JOIN `tabPurchase Receipt` pr ON pr.name = lcpr.receipt_document AND pr.docstatus = 1
+            WHERE lcpr.receipt_document_type = 'Purchase Receipt'
+              AND lcpr.receipt_document IS NOT NULL
+              AND (lcpr.parent IN {doc_tuple} OR lcpr.receipt_document IN {doc_tuple})
         """, as_dict=1):
             link(r.lcv, r.pr, "LCV", "PR", "LCV-PR")
             discovered(r.lcv, r.pr)
@@ -381,11 +397,12 @@ def build_graph(valid_docs):
         # the PO is never added to `newly_found`, so a shared PO never
         # becomes a bridge that merges unrelated PR chains together.
         for r in frappe.db.sql(f"""
-            SELECT DISTINCT parent AS pr, purchase_order AS po
-            FROM `tabPurchase Receipt Item`
-            WHERE purchase_order IS NOT NULL
-              AND purchase_order != ''
-              AND parent IN {doc_tuple}
+            SELECT DISTINCT pri.parent AS pr, pri.purchase_order AS po
+            FROM `tabPurchase Receipt Item` pri
+            INNER JOIN `tabPurchase Receipt` pr ON pr.name = pri.parent AND pr.docstatus = 1
+            WHERE pri.purchase_order IS NOT NULL
+              AND pri.purchase_order != ''
+              AND pri.parent IN {doc_tuple}
         """, as_dict=1):
             link(r.pr, r.po, "PR", "PO", "PR-PO")
 
@@ -440,6 +457,7 @@ def get_rate_difference_prs(prs, tolerance=0.01):
         rows = frappe.db.sql(f"""
             SELECT pri.parent AS pr, pri.rate AS pr_rate, poi.rate AS po_rate
             FROM `tabPurchase Receipt Item` pri
+            INNER JOIN `tabPurchase Receipt` pr_doc ON pr_doc.name = pri.parent AND pr_doc.docstatus = 1
             INNER JOIN `tabPurchase Order Item` poi ON poi.name = pri.purchase_order_item
             WHERE pri.parent IN {doc_tuple}
         """, as_dict=1)
@@ -472,7 +490,7 @@ def batch_fetch_doc_info(doc_names):
         ("Landed Cost Voucher", "tabLanded Cost Voucher"),
     ):
         rows = frappe.db.sql(f"""
-            SELECT name, posting_date FROM `{table}` WHERE name IN {doc_tuple}
+            SELECT name, posting_date FROM `{table}` WHERE name IN {doc_tuple} AND docstatus = 1
         """, as_dict=1)
         for r in rows:
             info[r.name] = {"doctype": doctype, "posting_date": r.posting_date}
@@ -491,7 +509,7 @@ def get_lcv_details(doc_names):
     amount_rows = frappe.db.sql(f"""
         SELECT name, total_taxes_and_charges
         FROM `tabLanded Cost Voucher`
-        WHERE name IN {doc_tuple}
+        WHERE name IN {doc_tuple} AND docstatus = 1
     """, as_dict=1)
 
     if not amount_rows:
