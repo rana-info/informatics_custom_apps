@@ -29,7 +29,8 @@ app_include_css = "/assets/informatics_custom_apps/css/custom.css"
 # app_include_js = "/assets/informatics_custom_apps/js/informatics_custom_apps.js"
 
 app_include_js = [
-    "/assets/informatics_custom_apps/js/uom_lock.js"
+    "/assets/informatics_custom_apps/js/uom_lock.js",
+    "/assets/informatics_custom_apps/js/hide_delete_permission.js"
 ]
 
 # include js, css files in header of web template
