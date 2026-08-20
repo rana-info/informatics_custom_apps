@@ -89,6 +89,7 @@ frappe.ui.form.on("zzLeaves Adjustment Tool", {
                                             row.employee_name = item.employee_name;
                                             row.leave_type = item.leave_type;
                                             row.leave_allocation = item.leave_allocation;
+                                            row.current_leave_balance = item.current_leave_balance;
                                         });
                                     } else {
                                         frappe.msgprint(__("No Leave Allocations (Earned Leave / Sick Leave-Sugar) found for selected employees."));
@@ -130,6 +131,7 @@ frappe.ui.form.on("zzLeaves Adjustment Tool", {
                                 row.employee_name = item.employee_name;
                                 row.leave_type = item.leave_type;
                                 row.leave_allocation = item.leave_allocation;
+                                row.current_leave_balance = item.current_leave_balance;
                             });
                         } else {
                             frappe.msgprint(__("No Leave Allocations (Earned Leave / Sick Leave-Sugar) found for active employees of the selected Company and Plant."));

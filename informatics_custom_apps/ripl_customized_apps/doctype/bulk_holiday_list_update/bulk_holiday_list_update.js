@@ -2,11 +2,22 @@
 // For license information, please see license.txt
 
 frappe.ui.form.on("Bulk Holiday List Update", {
+
+
+    setup(frm) {
+        frm.set_query("branch", function () {
+            return {
+                filters: {
+                    company: frm.doc.company
+                }
+            };
+        });
+    },
+
+
   refresh(frm) {
-    // Hide default Save button
     frm.disable_save();
 
-    // Add Update button
     if (!frm.custom_update_button_added) {
       frm
         .add_custom_button(__("Update"), () => {
@@ -17,7 +28,6 @@ frappe.ui.form.on("Bulk Holiday List Update", {
       frm.custom_update_button_added = true;
     }
 
-    // Clear fields only when page is opened first time
     if (!frm.__islocal && !frm.__initialized) {
       frm.trigger("reset_form");
       frm.__initialized = true;
@@ -68,16 +78,24 @@ frappe.ui.form.on("Bulk Holiday List Update", {
       });
   },
 
-  old_holiday_list(frm) {
+old_holiday_list(frm) {
     frm.set_value("selected_employees", "[]");
     frm.fields_dict.employee_html.$wrapper.empty();
 
     if (!frm.doc.old_holiday_list) {
-      return;
+        return;
+    }
+
+    if (!frm.doc.company) {
+        frappe.throw(__("Please select Company first"));
+    }
+
+    if (!frm.doc.branch) {
+        frappe.throw(__("Please select Plant first"));
     }
 
     frm.trigger("get_employee_data");
-  },
+},
 
 //   new_holiday_list(frm) {
 //     frm.set_value("selected_employees", "[]");
@@ -92,6 +110,25 @@ new_holiday_list(frm) {
         frappe.throw(
             __("Old Holiday List and New Holiday List cannot be same")
         );
+    }
+},
+
+company(frm) {
+    frm.set_value("branch", "");
+    frm.set_value("selected_employees", "[]");
+    frm.fields_dict.employee_html.$wrapper.empty();
+
+    if (frm.doc.old_holiday_list) {
+        frm.trigger("get_employee_data");
+    }
+},
+
+branch(frm) {
+    frm.set_value("selected_employees", "[]");
+    frm.fields_dict.employee_html.$wrapper.empty();
+
+    if (frm.doc.old_holiday_list) {
+        frm.trigger("get_employee_data");
     }
 },
 
@@ -197,7 +234,7 @@ new_holiday_list(frm) {
       let val = $(this).val().toLowerCase();
 
       $("#emp-table tbody tr").each(function () {
-        let cell = $(this).find("td").eq(col);
+        let cell = $(this).find("td").eq(col).text().toLowerCase();
         text().toLowerCase();
 
         $(this).toggle(cell.includes(val));

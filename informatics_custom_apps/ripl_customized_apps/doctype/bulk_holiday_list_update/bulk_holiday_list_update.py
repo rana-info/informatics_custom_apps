@@ -17,12 +17,16 @@ class BulkHolidayListUpdate(Document):
 			"Employee",
 			filters={
 				"holiday_list": self.old_holiday_list,
+				"company": self.company,
+				"branch": self.branch,
 				"status": "Active"
 			},
 			fields=[
 				"name as employee",
 				"employee_name",
-				"holiday_list"
+				"holiday_list",
+				"branch",
+				"company"
 			],
 			order_by="name"
 		)

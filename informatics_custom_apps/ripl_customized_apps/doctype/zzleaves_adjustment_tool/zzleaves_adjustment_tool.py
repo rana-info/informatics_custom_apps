@@ -6,9 +6,55 @@ from frappe.utils import nowdate, getdate, flt, formatdate
 from hrms.hr.doctype.leave_ledger_entry.leave_ledger_entry import (
     create_leave_ledger_entry
 )
+from hrms.hr.doctype.leave_application.leave_application import get_leave_balance_on
 
 
 class zzLeavesAdjustmentTool(Document):
+
+    def before_save(self):
+        """Auto-populate and correct current_leave_balance for each row using HRMS get_leave_balance_on."""
+        today = nowdate()
+        corrected_rows = []
+        precision = int(frappe.db.get_single_value("System Settings", "float_precision") or 2)
+
+        for row in self.leaves_data:
+            if not row.employee or not row.leave_type:
+                continue
+
+            try:
+                balance = get_leave_balance_on(
+                    employee=row.employee,
+                    leave_type=row.leave_type,
+                    date=today,
+                    to_date=today,
+                    consider_all_leaves_in_the_allocation_period=True,
+                    for_consumption=False
+                )
+                actual_balance = flt(balance or 0)
+            except Exception:
+                actual_balance = flt(0)
+
+            # Format as string so "0" explicitly shows in the Data field
+            balance_str = f"{actual_balance:.{precision}f}".rstrip("0").rstrip(".")
+            if not balance_str or balance_str == "-":
+                balance_str = "0"
+
+            old_balance = row.current_leave_balance or "0"
+            if old_balance != balance_str:
+                corrected_rows.append(
+                    f"Row {row.idx}: {row.employee} / {row.leave_type} — "
+                    f"corrected from <b>{old_balance}</b> to <b>{balance_str}</b>"
+                )
+            row.current_leave_balance = balance_str
+
+        if corrected_rows:
+            frappe.msgprint(
+                _("Current Leave Balance has been corrected for the following rows:<br><br>{0}").format(
+                    "<br>".join(corrected_rows)
+                ),
+                title=_("Leave Balance Corrected"),
+                indicator="orange"
+            )
 
     def validate(self):
         if self.docstatus == 0:
@@ -266,15 +312,39 @@ def get_employee_leave_data(company, branch, leave_period=None, from_date=None, 
 
     seen = set()
     result = []
+    today = frappe.utils.nowdate()
+
     for alloc in allocations:
         key = (alloc.employee, alloc.leave_type)
         if key not in seen:
             seen.add(key)
+
+            # Fetch current leave balance using HRMS core function
+            try:
+                balance = get_leave_balance_on(
+                    employee=alloc.employee,
+                    leave_type=alloc.leave_type,
+                    date=today,
+                    to_date=today,
+                    consider_all_leaves_in_the_allocation_period=True,
+                    for_consumption=False
+                )
+                current_leave_balance = frappe.utils.flt(balance or 0)
+            except Exception:
+                current_leave_balance = 0
+
+            # Format as string so "0" explicitly shows in the grid (Data field, not Float)
+            precision = frappe.db.get_single_value("System Settings", "float_precision") or 2
+            balance_str = f"{current_leave_balance:.{int(precision)}f}".rstrip("0").rstrip(".")
+            if not balance_str or balance_str == "-":
+                balance_str = "0"
+
             result.append({
                 "employee": alloc.employee,
                 "employee_name": emp_name_map.get(alloc.employee),
                 "leave_type": alloc.leave_type,
-                "leave_allocation": alloc.name
+                "leave_allocation": alloc.name,
+                "current_leave_balance": balance_str
             })
 
     return result
