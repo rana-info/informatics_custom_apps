@@ -64,17 +64,14 @@ frappe.query_reports["Cost Analysis"] = {
 
         if (!data) return value;
 
-        // 1. QUANTITATIVE HEADERS
         if (data.is_quant_header) {
             return `<div style="font-size: 13px; font-weight: 700; color: #1e293b; text-transform: uppercase; padding: 4px 0;">${value}</div>`;
         }
 
-        // 2. QUANTITATIVE SUBTOTALS
         if (data.is_quant_subtotal) {
             return `<span style="font-weight: 700; color: #0f172a; border-top: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; display: block; padding: 2px 0;">${value}</span>`;
         }
 
-        // 3. FINANCIAL HEADERS
         if (data.is_header) {
             if (column.fieldname === "expense_category") {
                 return `<div style="font-size: 13px; font-weight: 700; color: #1e293b; text-transform: uppercase; letter-spacing: 0.5px; padding: 4px 0;">${value}</div>`;
@@ -82,30 +79,30 @@ frappe.query_reports["Cost Analysis"] = {
                 return "";
             }
         }
-
-        // 4. ITEM CODE / GL CODE BADGE
         if (column.fieldname === "gl_code" && value) {
-            return `<span style="background-color: #f1f5f9; color: #475569; font-family: monospace; font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 4px; border: 1px solid #e2e8f0;">${value}</span>`;
+            value = `<span style="background-color: #f1f5f9; color: #475569; font-family: monospace; font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 4px; border: 1px solid #e2e8f0;">${value}</span>`;
         }
 
-        // 5. HIGHLIGHT PER BL COLUMNS
         if (column.fieldname.startsWith("per_bl_") || column.fieldname === "total_per_bl") {
             value = `<span style="color: #0369a1; font-weight: 600;">${value}</span>`;
         }
 
-        // 6. FINANCIAL SUBTOTAL ROWS
         if (data.is_subtotal) {
-            return `<span style="font-weight: 700; color: #334155; border-bottom: 1px dashed #cbd5e1; display: block; padding: 2px 0;">${value}</span>`;
+            value = `<span style="font-weight: 700; color: #334155; border-bottom: 1px dashed #cbd5e1; display: block; padding: 2px 0;">${value}</span>`;
         }
 
-        // 7. MAJOR TOTAL ROWS
         if (data.is_total_row) {
-            return `<span style="font-size: 12px; font-weight: 800; color: #0f172a; border-top: 1.5px solid #0f172a; border-bottom: 1.5px solid #0f172a; display: block; padding: 3px 0;">${value}</span>`;
+            value = `<span style="font-size: 12px; font-weight: 800; color: #0f172a; border-top: 1.5px solid #0f172a; border-bottom: 1.5px solid #0f172a; display: block; padding: 3px 0;">${value}</span>`;
         }
 
-        // 8. GRAND TOTAL COST
         if (data.is_grand_total) {
-            return `<span style="font-size: 13px; font-weight: 800; color: #0f172a; background-color: #f8fafc; border-top: 2px solid #0f172a; border-bottom: 2px double #0f172a; display: block; padding: 4px 6px; border-radius: 2px;">${value}</span>`;
+            value = `<span style="font-size: 13px; font-weight: 800; color: #0f172a; background-color: #f8fafc; border-top: 2px solid #0f172a; border-bottom: 2px double #0f172a; display: block; padding: 4px 6px; border-radius: 2px;">${value}</span>`;
+        }
+
+        if (data.variance_color === "red") {
+            value = `<div style="background-color: #fde2e2; border-radius: 2px; padding: 1px 4px;">${value}</div>`;
+        } else if (data.variance_color === "green") {
+            value = `<div style="background-color: #ddf5e2; border-radius: 2px; padding: 1px 4px;">${value}</div>`;
         }
 
         return value;
