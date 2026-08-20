@@ -198,62 +198,73 @@ class zzLeavesAdjustmentTool(Document):
         )
 
     def on_cancel(self):
-        cancelled_count = 0
-        for row in self.leaves_data:
-            if not row.employee or not row.leave_allocation:
-                continue
-
-            entries_to_delete = []
-
-            lle_name = getattr(row, "leave_ledger_entry", None)
-            if lle_name and frappe.db.exists("Leave Ledger Entry", lle_name):
-                entries_to_delete.append(lle_name)
-            else:
-                entries_to_delete = frappe.get_all(
-                    "Leave Ledger Entry",
-                    filters={
-                        "employee": row.employee,
-                        "leave_type": row.leave_type,
-                        "transaction_type": "Leave Allocation",
-                        "transaction_name": row.leave_allocation,
-                        "is_carry_forward": 1,
-                        "is_expired": 0,
-                        "from_date": self.from_date,
-                        "to_date": self.to_date,
-                        "leaves": row.additional_leaves,
-                        "docstatus": 1
-                    },
-                    pluck="name"
-                )
-
-            for entry_name in entries_to_delete:
-                frappe.db.set_value("Leave Ledger Entry", entry_name, "docstatus", 2)
-                frappe.delete_doc("Leave Ledger Entry", entry_name, force=1, ignore_permissions=True)
-                cancelled_count += 1
-
-            # Post a reversal comment on the linked Leave Allocation document
-            if frappe.db.exists("Leave Allocation", row.leave_allocation):
-                alloc_doc = frappe.get_doc("Leave Allocation", row.leave_allocation)
-                cancel_text = _("{0} leaves were reversed because Leave Adjustment Tool {1} was cancelled on {2}").format(
-                    frappe.bold(row.additional_leaves or 0),
-                    frappe.bold(self.name),
-                    frappe.bold(formatdate(nowdate()))
-                )
-                alloc_doc.add_comment(comment_type="Info", text=cancel_text)
-
-            row.db_set("status", "Cancelled")
-            row.db_set("remarks", "Allocation reversed on cancellation")
-
         self.status = "Cancelled"
         self.db_set("status", self.status)
 
-        # frappe.msgprint(
-        #     _("Document cancelled successfully. Reversed/Deleted {0} Leave Ledger Entry record(s).").format(
-        #         frappe.bold(cancelled_count)
-        #     ),
-        #     title=_("Cancellation Summary"),
-        #     indicator="orange"
-        # )
+        frappe.enqueue(
+            "informatics_custom_apps.ripl_customized_apps.doctype.zzleaves_adjustment_tool.zzleaves_adjustment_tool.process_cancellation",
+            docname=self.name,
+            queue="long",
+            timeout=3000
+        )
+
+        frappe.msgprint(
+            _("Cancellation for document {0} has been queued in the background.").format(
+                frappe.bold(self.name)
+            ),
+            title=_("Cancellation Enqueued"),
+            indicator="orange"
+        )
+
+
+def process_cancellation(docname):
+    doc = frappe.get_doc("zzLeaves Adjustment Tool", docname)
+    cancelled_count = 0
+
+    for row in doc.leaves_data:
+        if not row.employee or not row.leave_allocation:
+            continue
+
+        entries_to_delete = []
+
+        lle_name = getattr(row, "leave_ledger_entry", None)
+        if lle_name and frappe.db.exists("Leave Ledger Entry", lle_name):
+            entries_to_delete.append(lle_name)
+        else:
+            entries_to_delete = frappe.get_all(
+                "Leave Ledger Entry",
+                filters={
+                    "employee": row.employee,
+                    "leave_type": row.leave_type,
+                    "transaction_type": "Leave Allocation",
+                    "transaction_name": row.leave_allocation,
+                    "is_carry_forward": 1,
+                    "is_expired": 0,
+                    "from_date": doc.from_date,
+                    "to_date": doc.to_date,
+                    "leaves": row.additional_leaves,
+                    "docstatus": 1
+                },
+                pluck="name"
+            )
+
+        for entry_name in entries_to_delete:
+            frappe.db.set_value("Leave Ledger Entry", entry_name, "docstatus", 2)
+            frappe.delete_doc("Leave Ledger Entry", entry_name, force=1, ignore_permissions=True)
+            cancelled_count += 1
+
+        # Post a reversal comment on the linked Leave Allocation document
+        if frappe.db.exists("Leave Allocation", row.leave_allocation):
+            alloc_doc = frappe.get_doc("Leave Allocation", row.leave_allocation)
+            cancel_text = _("{0} leaves were reversed because Leave Adjustment Tool {1} was cancelled on {2}").format(
+                frappe.bold(row.additional_leaves or 0),
+                frappe.bold(doc.name),
+                frappe.bold(formatdate(nowdate()))
+            )
+            alloc_doc.add_comment(comment_type="Info", text=cancel_text)
+
+        row.db_set("status", "Cancelled")
+        row.db_set("remarks", "Allocation reversed on cancellation")
 
 
 @frappe.whitelist()
