@@ -73,12 +73,12 @@ def get_columns(filters, months):
     for m in months:
         columns.extend([
             {"fieldname": f"actual_{m['key']}", "label": _(f"{m['label']} (Act)"), "fieldtype": "Currency", "width": 125},
-            {"fieldname": f"per_bl_{m['key']}", "label": _(f"Per BL ({m['label']})"), "fieldtype": "Float", "precision": 4, "width": 115}
+            {"fieldname": f"per_bl_{m['key']}", "label": _(f"Per BL ({m['label']})"), "fieldtype": "Float", "precision": 2, "width": 115}
         ])
 
     columns.extend([
         {"fieldname": "total_actual", "label": _("YTD Actual"), "fieldtype": "Currency", "width": 140},
-        {"fieldname": "total_per_bl", "label": _("YTD Per BL"), "fieldtype": "Float", "precision": 4, "width": 120}
+        {"fieldname": "total_per_bl", "label": _("YTD Per BL"), "fieldtype": "Float", "precision": 2, "width": 120}
     ])
 
     return columns
@@ -693,7 +693,7 @@ def get_cost_data(filters, months, FIXED_CODES, monthly_prod_map, total_ytd_prod
                     m_key = m["key"]
                     m_act = c_data.get(m_key, 0.0)
                     m_prod = monthly_prod_map.get(m_key, 0.0)
-                    m_per_bl = round(m_act / m_prod, 4) if m_prod else 0.0
+                    m_per_bl = round(m_act / m_prod, 2) if m_prod else 0.0
 
                     row_data[f"actual_{m_key}"] = m_act
                     row_data[f"per_bl_{m_key}"] = m_per_bl
@@ -701,7 +701,7 @@ def get_cost_data(filters, months, FIXED_CODES, monthly_prod_map, total_ytd_prod
                     row_tot_act += m_act
                     cat_totals["months"][m_key] += m_act
 
-                row_tot_per_bl = round(row_tot_act / total_ytd_production, 4) if total_ytd_production else 0.0
+                row_tot_per_bl = round(row_tot_act / total_ytd_production, 2) if total_ytd_production else 0.0
                 cat_totals["total_actual"] += row_tot_act
 
                 if hide_zero and row_tot_act == 0:
@@ -728,14 +728,14 @@ def get_cost_data(filters, months, FIXED_CODES, monthly_prod_map, total_ytd_prod
                     "gl_code": "",
                     "indent": 0,
                     "total_actual": cat_totals["total_actual"],
-                    "total_per_bl": round(cat_totals["total_actual"] / total_ytd_production, 4) if total_ytd_production else 0.0
+                    "total_per_bl": round(cat_totals["total_actual"] / total_ytd_production, 2) if total_ytd_production else 0.0
                 }
                 for m in months:
                     m_key = m["key"]
                     m_tot = cat_totals["months"][m_key]
                     m_prod = monthly_prod_map.get(m_key, 0.0)
                     summary_row[f"actual_{m_key}"] = m_tot
-                    summary_row[f"per_bl_{m_key}"] = round(m_tot / m_prod, 4) if m_prod else 0.0
+                    summary_row[f"per_bl_{m_key}"] = round(m_tot / m_prod, 2) if m_prod else 0.0
 
                 group_rows.append(summary_row)
             else:
@@ -752,7 +752,7 @@ def get_cost_data(filters, months, FIXED_CODES, monthly_prod_map, total_ytd_prod
                     "gl_code": "",
                     "indent": 1,
                     "total_actual": cat_totals["total_actual"],
-                    "total_per_bl": round(cat_totals["total_actual"] / total_ytd_production, 4) if total_ytd_production else 0.0,
+                    "total_per_bl": round(cat_totals["total_actual"] / total_ytd_production, 2) if total_ytd_production else 0.0,
                     "is_subtotal": 1
                 }
                 for m in months:
@@ -760,7 +760,7 @@ def get_cost_data(filters, months, FIXED_CODES, monthly_prod_map, total_ytd_prod
                     m_tot = cat_totals["months"][m_key]
                     m_prod = monthly_prod_map.get(m_key, 0.0)
                     subtotal_row[f"actual_{m_key}"] = m_tot
-                    subtotal_row[f"per_bl_{m_key}"] = round(m_tot / m_prod, 4) if m_prod else 0.0
+                    subtotal_row[f"per_bl_{m_key}"] = round(m_tot / m_prod, 2) if m_prod else 0.0
 
                 group_rows.append(subtotal_row)
 
@@ -779,7 +779,7 @@ def get_cost_data(filters, months, FIXED_CODES, monthly_prod_map, total_ytd_prod
             "gl_code": "",
             "indent": 0,
             "total_actual": tot_act,
-            "total_per_bl": round(tot_act / total_ytd_production, 4) if total_ytd_production else 0.0,
+            "total_per_bl": round(tot_act / total_ytd_production, 2) if total_ytd_production else 0.0,
             flag_key: 1
         }
         for m in months:
@@ -787,7 +787,7 @@ def get_cost_data(filters, months, FIXED_CODES, monthly_prod_map, total_ytd_prod
             m_tot = totals_dict["months"][m_key]
             m_prod = monthly_prod_map.get(m_key, 0.0)
             row[f"actual_{m_key}"] = m_tot
-            row[f"per_bl_{m_key}"] = round(m_tot / m_prod, 4) if m_prod else 0.0
+            row[f"per_bl_{m_key}"] = round(m_tot / m_prod, 2) if m_prod else 0.0
 
         return row
 
@@ -836,9 +836,9 @@ def build_profitability_section(months, FIXED_CODES, monthly_prod_map, total_ytd
         m_key = m["key"]
         m_tot_qty = sum(sales_qty_map.get(c, {}).get(m_key, 0.0) for c in FIXED_CODES)
         m_tot_val = sum(sales_val_map.get(c, {}).get(m_key, 0.0) for c in FIXED_CODES)
-        m_selling_price = round(m_tot_val / m_tot_qty, 4) if m_tot_qty else 0.0
+        m_selling_price = round(m_tot_val / m_tot_qty, 2) if m_tot_qty else 0.0
         m_cop = grand_total_row.get(f"per_bl_{m_key}", 0.0)
-        m_net_profit = round(m_selling_price - m_cop, 4)
+        m_net_profit = round(m_selling_price - m_cop, 2)
         m_prod = monthly_prod_map.get(m_key, 0.0)
 
         monthly_snapshot[m_key] = {
@@ -853,9 +853,9 @@ def build_profitability_section(months, FIXED_CODES, monthly_prod_map, total_ytd
     tot_sales_qty = sum(v["qty"] for v in monthly_snapshot.values())
     tot_sales_val = sum(v["val"] for v in monthly_snapshot.values())
 
-    wgt_selling_price = round(tot_sales_val / tot_sales_qty, 4) if tot_sales_qty else 0.0
+    wgt_selling_price = round(tot_sales_val / tot_sales_qty, 2) if tot_sales_qty else 0.0
     wgt_cop = grand_total_row["total_per_bl"]
-    net_profit_per_litre = round(wgt_selling_price - wgt_cop, 4)
+    net_profit_per_litre = round(wgt_selling_price - wgt_cop, 2)
 
     profit_loss_production = round(net_profit_per_litre * total_ytd_production, 2)
     profit_loss_sales = round(net_profit_per_litre * tot_sales_qty, 2)
