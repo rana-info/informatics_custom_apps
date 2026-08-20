@@ -3,9 +3,6 @@ from frappe.model.document import Document
 from frappe import _
 from frappe.utils import nowdate, getdate, flt, formatdate
 
-from hrms.hr.doctype.leave_ledger_entry.leave_ledger_entry import (
-    create_leave_ledger_entry
-)
 from hrms.hr.doctype.leave_application.leave_application import get_leave_balance_on
 
 
