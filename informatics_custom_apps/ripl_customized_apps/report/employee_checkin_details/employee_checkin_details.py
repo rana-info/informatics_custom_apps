@@ -12,12 +12,6 @@ def execute(filters=None):
 
 def get_columns(filters):
     columns = [
-        # {
-        #     "fieldname": "department_name",
-        #     "label": "Department",
-        #     "fieldtype": "Data",
-        #     "width": 170
-        # },
         {
             "fieldname": "emp_code",
             "label": "Employee",
@@ -38,17 +32,23 @@ def get_columns(filters):
             "width": 150
         },
         {
+			"fieldname": "department_name",
+			"label": "Department",
+			"fieldtype": "Data",
+			"width": 170
+		},
+        {
             "fieldname": "status",
             "label": "Status",
             "fieldtype": "Data",
             "width": 120
         },
-        {
-            "fieldname": "shift",
-            "label": "Shift",
-            "fieldtype": "Data",
-            "width": 200
-        },
+        # {
+        #     "fieldname": "shift",
+        #     "label": "Shift",
+        #     "fieldtype": "Data",
+        #     "width": 200
+        # },
         # {
         #     "fieldname": "attendance_device_id",
         #     "label": "Biometric ID",
@@ -76,7 +76,6 @@ def get_data(filters):
     worklocation = filters.get("worklocation")
     report_date = filters.get("date")
 
-    # 1. Get all active employees for the work location
     employees = frappe.db.sql("""
         SELECT
             e.name AS emp_code,
@@ -93,10 +92,21 @@ def get_data(filters):
         WHERE
             e.status = 'Active'
             AND e.worklocation = %(worklocation)s
+            AND (
+                NOT(
+                    e.worklocation = 'Head Office'
+                    AND e.branch = 'Head Office-Residence'
+                )
+                OR EXISTS (
+                    SELECT 1
+                    FROM `tabEmployee Checkin` ec
+                    WHERE ec.employee = e.name
+                    AND DATE(ec.time) = %(date)s
+                )
+            )
         ORDER BY e.employee_name
-    """, {"worklocation": worklocation}, as_dict=True)
+    """, {"worklocation": worklocation, "date": report_date}, as_dict=True)
 
-    # 2. Fetch all attendance records for these employees on the date in one go
     attendance_map = {}
     if employees:
         emp_codes = [e.emp_code for e in employees]
@@ -116,7 +126,6 @@ def get_data(filters):
         """, {"employees": emp_codes, "date": report_date}, as_dict=True)
 
         for att in attendance_records:
-            # Keep the first (latest) attendance per employee
             if att.employee not in attendance_map:
                 attendance_map[att.employee] = att
 

@@ -16,6 +16,7 @@ frappe.ui.form.on("zzLeaves Adjustment Tool", {
         });
     },
     refresh(frm) {
+        frm.set_intro();
         frm.set_intro(__("Note: This tool is only used for Leave Allocations, not for Expiry."), "orange");
 
         if(frm.doc.docstatus !== 1 && frm.doc.docstatus !== 2) {

@@ -1,8 +1,4 @@
-// Copyright (c) 2023, Dexciss Technology Pvt Ltd and contributors
-// For license information, please see license.txt
-/* eslint-disable */
-
-frappe.query_reports["zzDaily Absent"] = {
+frappe.query_reports["Employee Checkin Details"] = {
 	"filters": [
 		{
 			"fieldname": "worklocation",

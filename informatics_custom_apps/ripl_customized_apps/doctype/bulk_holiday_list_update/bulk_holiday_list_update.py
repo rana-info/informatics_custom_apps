@@ -2,16 +2,17 @@
 # For license information, please see license.txt
 
 import frappe
+from frappe import _
 from frappe.model.document import Document
 
 
 class BulkHolidayListUpdate(Document):
-    
-	def before_save(self):
-		self.update_holiday_list()
 
 	@frappe.whitelist()
 	def get_employee_data(self):
+		if not self.old_holiday_list:
+			return []
+
 		return frappe.get_all(
 			"Employee",
 			filters={
@@ -22,16 +23,52 @@ class BulkHolidayListUpdate(Document):
 				"name as employee",
 				"employee_name",
 				"holiday_list"
-			]
+			],
+			order_by="name"
 		)
-	
-	def update_holiday_list(self):
-		if not self.selected_employees:
-			frappe.throw("Please select at least one employee to update the holiday list.")
-		selected = frappe.parse_json(self.selected_employees)
-		if not selected:
-			frappe.throw("Please select at least one employee to update the holiday list.")
 
-		for e in selected:
-			emp_doc = frappe.get_doc("Employee", e)
-			emp_doc.db_set("holiday_list", self.new_holiday_list)
+	@frappe.whitelist()
+	def update_holiday_list(self):
+		if not self.old_holiday_list:
+			frappe.throw(_("Please select Old Holiday List"))
+
+		if not self.new_holiday_list:
+			frappe.throw(_("Please select New Holiday List"))
+
+		if self.old_holiday_list == self.new_holiday_list:
+			frappe.throw(
+				_("Old Holiday List and New Holiday List cannot be same")
+			)
+
+		if not self.selected_employees:
+			frappe.throw(
+				_("Please select at least one employee")
+			)
+
+		selected_employees = frappe.parse_json(
+			self.selected_employees
+		)
+
+		if not selected_employees:
+			frappe.throw(
+				_("Please select at least one employee")
+			)
+
+		for employee in selected_employees:
+			frappe.db.set_value(
+				"Employee",
+				employee,
+				"holiday_list",
+				self.new_holiday_list,
+			)
+
+		frappe.db.commit()
+
+		# frappe.msgprint(
+		# 	_("Holiday List updated successfully for {0} employee(s)")
+		# 	.format(len(selected_employees))
+		# )
+
+		return {
+			"updated_count": len(selected_employees)
+		}
