@@ -372,7 +372,7 @@ def warehouse_query(doctype, txt, searchfield, start, page_len, filters):
         if allowed:
             warehouse_filters["name"] = ["in", list(allowed)]
 
-    return frappe.get_list(
+    return frappe.get_all(
         "Warehouse",
         filters=warehouse_filters,
         or_filters={

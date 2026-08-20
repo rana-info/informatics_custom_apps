@@ -13,8 +13,22 @@ def execute(filters=None):
 def get_columns():
     return [
         {
-            "label": "Rej.Qty",
+            "label": "Total Rej.Qty",
             "fieldname": "rejected_qty",
+            "fieldtype": "Float",
+            "width": 100
+        },
+        
+         {
+            "label": " Short Qty",
+            "fieldname": "short_qty",
+            "fieldtype": "Float",
+            "width": 100
+        },
+         
+         {
+            "label": " Quality Rej. Qty",
+            "fieldname": "quality_rejected_qty",
             "fieldtype": "Float",
             "width": 100
         },
@@ -158,6 +172,8 @@ def get_data(filters):
 
             qi.name AS quality_inspection,
             qi.status AS inspection_status,
+            qi.custom_pr_rejected_quantity as short_qty,
+            qi.custom_rejected_reading_value as quality_rejected_qty,
 
             pr.company AS company
 

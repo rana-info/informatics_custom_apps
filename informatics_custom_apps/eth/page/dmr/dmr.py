@@ -41,7 +41,8 @@ def get_production_item_groups():
             "Item",
             filters={
                 "item_group": item_group,
-                "disabled": 0
+                "disabled": 0,
+                "has_variants":0
             },
             pluck="name"
         )
@@ -73,7 +74,8 @@ def get_ena_consumption_rows():
             "Item",
             filters={
                 "item_group": item_group,
-                "disabled": 0
+                "disabled": 0,
+                "has_variants":0
             },
             pluck="name"
         )

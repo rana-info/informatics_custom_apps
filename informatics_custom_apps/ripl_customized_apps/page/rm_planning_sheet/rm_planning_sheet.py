@@ -6,12 +6,23 @@ from frappe.utils.xlsxutils import make_xlsx
 
 
 ITEM_MAP = {
-    "DFG": {"fg": "100112", "rm": "100474"},
+    "DFG": {"fg": "100112", "rm": "106446"},
     "Maize": {"fg": "100114", "rm": "106444"},
     "FCI": {"fg": "100113", "rm": "106448"},
 }
 
 PRODUCTS = ["DFG", "Maize", "FCI"]
+
+# UOM codes that should be displayed under a friendlier / corrected label.
+# The underlying quantities are unaffected - this only changes what label
+# is shown to the user (e.g. system UOM "KLR" is shown as "KL").
+UOM_DISPLAY_MAP = {
+    "KLR": "KL",
+}
+
+
+def display_uom(uom):
+    return UOM_DISPLAY_MAP.get(uom, uom)
 
 
 def pos(value):
@@ -121,7 +132,25 @@ def get_avg_rate(item_code, warehouses, to_date=None):
     return flt(total_value / total_qty) if total_qty else 0
 
 
-def get_ro_in_hand(item_code, warehouses):
+def get_sauda_in_hand(item_code, warehouses):
+    """Total contracted (Sauda / Purchase Order) quantity, regardless of
+    how much of it has already been delivered."""
+    if not warehouses:
+        return 0
+    return flt(frappe.db.sql("""
+        select sum(poi.stock_qty)
+        from `tabPurchase Order Item` poi
+        inner join `tabPurchase Order` po on po.name = poi.parent
+        where po.docstatus = 1
+            and po.status not in ('Closed', 'Completed')
+            and poi.item_code = %(item_code)s
+            and poi.warehouse in %(warehouses)s
+    """, {"item_code": item_code, "warehouses": warehouses})[0][0] or 0)
+
+
+def get_sauda_not_delivered(item_code, warehouses):
+    """Portion of contracted (Sauda / Purchase Order) quantity that is
+    still pending delivery."""
     if not warehouses:
         return 0
     return flt(frappe.db.sql("""
@@ -135,7 +164,7 @@ def get_ro_in_hand(item_code, warehouses):
     """, {"item_code": item_code, "warehouses": warehouses})[0][0] or 0)
 
 
-def _compute_for_plant(plant, ethanol_supply_year):
+def _compute_for_plant(plant, ethanol_supply_year, daily_capacity):
     filters = {"plant": plant}
     if ethanol_supply_year:
         filters["ethanol_supply_year"] = ethanol_supply_year
@@ -152,8 +181,8 @@ def _compute_for_plant(plant, ethanol_supply_year):
 
     fg_uom_factor = {p: get_highest_uom_and_factor(ITEM_MAP[p]["fg"]) for p in PRODUCTS}
     rm_uom_factor = {p: get_highest_uom_and_factor(ITEM_MAP[p]["rm"]) for p in PRODUCTS}
-    fg_uom = fg_uom_factor["DFG"][0]
-    rm_uom = rm_uom_factor["DFG"][0]
+    fg_uom = display_uom(fg_uom_factor["DFG"][0])
+    rm_uom = display_uom(rm_uom_factor["DFG"][0])
 
     quarters = {}
     for row in alloc_doc.allocation:
@@ -169,8 +198,11 @@ def _compute_for_plant(plant, ethanol_supply_year):
         r = alloc_doc.recovery[0]
         recovery = {"DFG": flt(r.dfg), "Maize": flt(r.maize), "FCI": flt(r.fci)}
 
-    def conv(d, factor_map):
-        return {p: flt(d[p] / factor_map[p][1], 3) if factor_map[p][1] else d[p] for p in PRODUCTS}
+    def conv(d, factor_map, precision=3):
+        return {
+            p: flt(d[p] / factor_map[p][1], precision) if factor_map[p][1] else flt(d[p], precision)
+            for p in PRODUCTS
+        }
 
     def conv_quarterdict(qd, factor_map):
         return {q: conv(vals, factor_map) for q, vals in qd.items()}
@@ -202,19 +234,22 @@ def _compute_for_plant(plant, ethanol_supply_year):
         p: pos(total_allocation[p] - total_dispatch[p]) for p in PRODUCTS
     }
 
-    qty_rm_required_klr = {
+    # "Qty of RM required" expressed in the ethanol (FG) highest-UOM scale
+    # (previously labelled "KLR" - now shown/treated as plain "KL").
+    qty_rm_required_kl = {
         p: flt(net_pending[p] / recovery[p], 0) if recovery[p] else 0 for p in PRODUCTS
     }
     qty_rm_required = {
-        p: flt(qty_rm_required_klr[p] * rm_uom_factor[p][1], 3) for p in PRODUCTS
+        p: flt(qty_rm_required_kl[p] * rm_uom_factor[p][1], 3) for p in PRODUCTS
     }
 
     rm_at_factory = {p: get_stock_qty(ITEM_MAP[p]["rm"], warehouses, today) for p in PRODUCTS}
 
-    ro_in_hand = {p: get_ro_in_hand(ITEM_MAP[p]["rm"], warehouses) for p in PRODUCTS}
+    sauda_in_hand = {p: get_sauda_in_hand(ITEM_MAP[p]["rm"], warehouses) for p in PRODUCTS}
+    sauda_not_delivered = {p: get_sauda_not_delivered(ITEM_MAP[p]["rm"], warehouses) for p in PRODUCTS}
 
     net_qty_purchase = {
-        p: pos(qty_rm_required[p] - rm_at_factory[p] - ro_in_hand[p]) for p in PRODUCTS
+        p: pos(qty_rm_required[p] - rm_at_factory[p] - sauda_not_delivered[p]) for p in PRODUCTS
     }
 
     rate_rm = {p: get_avg_rate(ITEM_MAP[p]["rm"], warehouses, today) for p in PRODUCTS}
@@ -226,24 +261,36 @@ def _compute_for_plant(plant, ethanol_supply_year):
 
     value_rm_total = total_row(value_rm)
 
-    rm_at_factory = conv(rm_at_factory, rm_uom_factor)
-    ro_in_hand = conv(ro_in_hand, rm_uom_factor)
-    net_qty_purchase = conv(net_qty_purchase, rm_uom_factor)
-    qty_rm_required = conv(qty_rm_required, rm_uom_factor)
+    # RM quantities are rounded off to the nearest Quintal (whole number),
+    # rather than carrying decimal precision.
+    rm_at_factory = conv(rm_at_factory, rm_uom_factor, precision=0)
+    sauda_in_hand = conv(sauda_in_hand, rm_uom_factor, precision=0)
+    sauda_not_delivered = conv(sauda_not_delivered, rm_uom_factor, precision=0)
+    net_qty_purchase = conv(net_qty_purchase, rm_uom_factor, precision=0)
+    qty_rm_required = conv(qty_rm_required, rm_uom_factor, precision=0)
 
     rate_rm = {p: flt(rate_rm[p] * rm_uom_factor[p][1], 2) for p in PRODUCTS}
+
+    # No. of days of finished-goods stock in hand, covered at full plant
+    # production capacity. Daily capacity is a mandatory user-entered
+    # figure (KL/day) - no historical auto-calculation is used.
+    daily_capacity = flt(daily_capacity)
+    stock_in_hand_total = total_row(stock_in_hand)
+    days_in_hand = flt(stock_in_hand_total / daily_capacity, 1) if daily_capacity else 0
 
     totals = {
         "total_allocation": total_row(total_allocation),
         "total_dispatch": total_row(total_dispatch),
-        "stock_in_hand": total_row(stock_in_hand),
+        "stock_in_hand": stock_in_hand_total,
         "pending_dispatch": total_row(pending_dispatch),
         "net_pending": total_row(net_pending),
         "qty_rm_required": total_row(qty_rm_required),
         "rm_at_factory": total_row(rm_at_factory),
-        "ro_in_hand": total_row(ro_in_hand),
+        "sauda_in_hand": total_row(sauda_in_hand),
+        "sauda_not_delivered": total_row(sauda_not_delivered),
         "net_qty_purchase": total_row(net_qty_purchase),
         "value_rm": value_rm_total,
+        "days_in_hand": days_in_hand,
     }
 
     return {
@@ -261,10 +308,13 @@ def _compute_for_plant(plant, ethanol_supply_year):
         "recovery": recovery,
         "qty_rm_required": qty_rm_required,
         "rm_at_factory": rm_at_factory,
-        "ro_in_hand": ro_in_hand,
+        "sauda_in_hand": sauda_in_hand,
+        "sauda_not_delivered": sauda_not_delivered,
         "net_qty_purchase": net_qty_purchase,
         "rate_rm": rate_rm,
         "value_rm": value_rm,
+        "daily_capacity": daily_capacity,
+        "days_in_hand": days_in_hand,
         "totals": totals,
     }
 
@@ -285,16 +335,22 @@ def get_active_supply_year():
 
 
 @frappe.whitelist()
-def get_planning_data(plants, ethanol_supply_year=None):
+def get_planning_data(plants, ethanol_supply_year=None, daily_capacity=None):
     if isinstance(plants, str):
         plants = json.loads(plants)
+
+    if daily_capacity in (None, ""):
+        frappe.throw("Daily Capacity is mandatory. Please enter the plant's full production capacity.")
+    daily_capacity = flt(daily_capacity)
+    if daily_capacity <= 0:
+        frappe.throw("Daily Capacity must be a positive number.")
 
     if not ethanol_supply_year:
         ethanol_supply_year = get_active_supply_year()
 
     results = []
     for plant in plants:
-        data = _compute_for_plant(plant, ethanol_supply_year)
+        data = _compute_for_plant(plant, ethanol_supply_year, daily_capacity)
         if data:
             results.append(data)
         else:
@@ -312,11 +368,11 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 
 @frappe.whitelist()
-def export_planning_excel(plants, ethanol_supply_year=None):
+def export_planning_excel(plants, ethanol_supply_year=None, daily_capacity=None):
 	if isinstance(plants, str):
 		plants = json.loads(plants)
 
-	data = get_planning_data(plants=plants, ethanol_supply_year=ethanol_supply_year)
+	data = get_planning_data(plants=plants, ethanol_supply_year=ethanol_supply_year, daily_capacity=daily_capacity)
 
 	wb = Workbook()
 	wb.remove(wb.active)
@@ -373,6 +429,22 @@ def export_planning_excel(plants, ethanol_supply_year=None):
 			if bold:
 				cell.font = Font(bold=True)
 
+	def write_single_row(ws, row_idx, label, value, uom="", fill=None, bold=False, number_format="#,##0.0"):
+		row_values = [label, uom, "", "", "", value]
+		for col_idx, val in enumerate(row_values, start=1):
+			cell = ws.cell(row=row_idx, column=col_idx, value=val)
+			cell.border = border
+			if col_idx in (1, 2):
+				cell.alignment = Alignment(horizontal="left")
+			else:
+				cell.alignment = Alignment(horizontal="right")
+				if val != "":
+					cell.number_format = number_format
+			if fill:
+				cell.fill = fill
+			if bold:
+				cell.font = Font(bold=True)
+
 	for plant_data in data.get("plants", []):
 		plant = plant_data.get("plant") or "Plant"
 		ws = wb.create_sheet(sheet_name_for(plant))
@@ -393,8 +465,8 @@ def export_planning_excel(plants, ethanol_supply_year=None):
 			ws.column_dimensions["A"].width = 55
 			continue
 
-		fg_uom = plant_data.get("fg_uom") or "LTR"
-		rm_uom = plant_data.get("rm_uom") or "LTR"
+		fg_uom = plant_data.get("fg_uom") or "KL"
+		rm_uom = plant_data.get("rm_uom") or "Quintal"
 
 		for col_idx, col_name in enumerate(columns, start=1):
 			cell = ws.cell(row=2, column=col_idx, value=col_name)
@@ -424,12 +496,15 @@ def export_planning_excel(plants, ethanol_supply_year=None):
 		write_row(ws, row_idx, "Pending Dispatch (A-B)", plant_data.get("pending_dispatch"),
 			uom=fg_uom, fill=net_fill, bold=True)
 		row_idx += 1
-  
-  
+
+
 		write_row(ws, row_idx, "Total stock in hand (C)", plant_data.get("stock_in_hand"),
 			uom=fg_uom, fill=total_fill, bold=True)
 		row_idx += 1
 
+		write_single_row(ws, row_idx, "No. of Days in Hand (Full Capacity)",
+			plant_data.get("days_in_hand", 0), uom="Days", fill=net_fill, bold=True)
+		row_idx += 1
 
 		write_row(ws, row_idx, "Net pending production (A-B-C)", plant_data.get("net_pending"),
 			uom=fg_uom, fill=net_fill, bold=True)
@@ -446,7 +521,10 @@ def export_planning_excel(plants, ethanol_supply_year=None):
 		write_row(ws, row_idx, "RM at factory", plant_data.get("rm_at_factory"), uom=rm_uom)
 		row_idx += 1
 
-		write_row(ws, row_idx, "RO in hand", plant_data.get("ro_in_hand"), uom=rm_uom)
+		write_row(ws, row_idx, "Sauda in hand", plant_data.get("sauda_in_hand"), uom=rm_uom)
+		row_idx += 1
+
+		write_row(ws, row_idx, "Sauda not delivered", plant_data.get("sauda_not_delivered"), uom=rm_uom)
 		row_idx += 1
 
 		write_row(ws, row_idx, "Net qty need to purchase", plant_data.get("net_qty_purchase"),
@@ -468,11 +546,11 @@ def export_planning_excel(plants, ethanol_supply_year=None):
 		ws.freeze_panes = "A3"
 
 	if not wb.sheetnames:
-		wb.create_sheet("RM Planning Sheet")
+		wb.create_sheet("RM Planning - Ethanol Tender")
 
 	buffer = io.BytesIO()
 	wb.save(buffer)
 
-	frappe.response["filename"] = "RM_Planning_Sheet.xlsx"
+	frappe.response["filename"] = "RM_Planning_Ethanol_Tender.xlsx"
 	frappe.response["filecontent"] = buffer.getvalue()
 	frappe.response["type"] = "binary"

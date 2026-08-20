@@ -26,7 +26,9 @@
   "column_break_hkhn",
   "maize_closing_balance",
   "dfg_closing_balance",
-  "fci_closing_balance"
+  "fci_closing_balance",
+  "gcv_for_fuel_tab",
+  "table_wqwx"
  ],
  "fields": [
   {
@@ -146,12 +148,22 @@
    "fieldname": "fci_closing_balance",
    "fieldtype": "Float",
    "label": "FCI Closing Balance"
+  },
+  {
+   "fieldname": "gcv_for_fuel_tab",
+   "fieldtype": "Tab Break",
+   "label": "GCV for Fuel"
+  },
+  {
+   "fieldname": "table_wqwx",
+   "fieldtype": "Table",
+   "options": "GCV"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-27 12:18:11.061323",
+ "modified": "2026-08-18 10:46:02.610071",
  "modified_by": "Administrator",
  "module": "ETH",
  "name": "DMR Technical Lab Parameters",
