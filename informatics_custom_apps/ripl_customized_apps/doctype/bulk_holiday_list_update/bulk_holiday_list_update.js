@@ -34,15 +34,35 @@ frappe.ui.form.on("Bulk Holiday List Update", {
     }
   },
 
-  reset_form(frm) {
+// reset_form(frm) {
+//     frm.set_value("old_holiday_list", "");
+//     frm.set_value("new_holiday_list", "");
+//     frm.set_value("selected_employees", "[]");
+
+//     frm.fields_dict.employee_html.$wrapper.empty();
+
+//     frm.refresh_fields();
+// },
+
+reset_form(frm) {
+    frm.set_value("company", "");
+    frm.set_value("branch", "");
+
     frm.set_value("old_holiday_list", "");
     frm.set_value("new_holiday_list", "");
+
+    frm.set_value("old_holiday_list_from_date", "");
+    frm.set_value("old_holiday_list_to_date", "");
+
+    frm.set_value("new_holiday_list_from_date", "");
+    frm.set_value("new_holiday_list_to_date", "");
+
     frm.set_value("selected_employees", "[]");
 
     frm.fields_dict.employee_html.$wrapper.empty();
 
     frm.refresh_fields();
-  },
+},
 
   update_holiday_list(frm) {
     if (!frm.doc.old_holiday_list) {
