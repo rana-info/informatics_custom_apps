@@ -68,16 +68,16 @@ class zzLeavesAdjustmentTool(Document):
                     row.leave_ledger_entry = None
                     row.comment = None
 
-        # Filter out rows with 0 or empty leave_count on save
+        # Filter out rows with 0 or empty additional_leaves on save
         valid_rows = []
         for row in self.leaves_data:
-            count = abs(flt(row.leave_count or 0))
+            count = abs(flt(row.additional_leaves or 0))
             if count > 0:
-                row.leave_count = count
+                row.additional_leaves = count
                 valid_rows.append(row)
 
         if not valid_rows and self.leaves_data:
-            frappe.throw(_("Cannot save document with 0 leave count. Please enter a leave count greater than 0 for at least one employee."))
+            frappe.throw(_("Cannot save document with 0 additional leaves."))
 
         self.leaves_data = valid_rows
 
@@ -109,11 +109,11 @@ class zzLeavesAdjustmentTool(Document):
             leave_type = row.leave_type
             start = getattr(row, "from_date", None) or self.from_date
             end = getattr(row, "to_date", None) or self.to_date
-            count = abs(flt(row.leave_count or 0))
+            count = abs(flt(row.additional_leaves or 0))
 
-            # Normalize leave_count to positive value on child row and persist it
-            row.leave_count = count
-            row.db_set("leave_count", count)
+            # Normalize additional_leaves to positive value on child row and persist it
+            row.additional_leaves = count
+            row.db_set("additional_leaves", count)
 
             emp_doc = frappe.get_doc("Employee", emp)
 
@@ -223,7 +223,7 @@ class zzLeavesAdjustmentTool(Document):
                         "is_expired": 0,
                         "from_date": self.from_date,
                         "to_date": self.to_date,
-                        "leaves": row.leave_count,
+                        "leaves": row.additional_leaves,
                         "docstatus": 1
                     },
                     pluck="name"
@@ -238,7 +238,7 @@ class zzLeavesAdjustmentTool(Document):
             if frappe.db.exists("Leave Allocation", row.leave_allocation):
                 alloc_doc = frappe.get_doc("Leave Allocation", row.leave_allocation)
                 cancel_text = _("{0} leaves were reversed because Leave Adjustment Tool {1} was cancelled on {2}").format(
-                    frappe.bold(row.leave_count or 0),
+                    frappe.bold(row.additional_leaves or 0),
                     frappe.bold(self.name),
                     frappe.bold(formatdate(nowdate()))
                 )
