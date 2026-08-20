@@ -73,18 +73,29 @@ def get_columns(filters, months):
     for m in months:
         columns.extend([
             {"fieldname": f"actual_{m['key']}", "label": _(f"{m['label']} (Act)"), "fieldtype": "Currency", "width": 125},
-            {"fieldname": f"per_bl_{m['key']}", "label": _(f"Per BL ({m['label']})"), "fieldtype": "Float", "precision": 2, "width": 115}
+            {"fieldname": f"per_bl_{m['key']}", "label": _(f"Per BL ({m['label']})"), "fieldtype": "Float", "precision": 2, "width": 115},
+            {"fieldname": f"budget_{m['key']}", "label": _(f"Budget ({m['label']})"), "fieldtype": "Currency", "width": 125}
         ])
 
     columns.extend([
         {"fieldname": "total_actual", "label": _("YTD Actual"), "fieldtype": "Currency", "width": 140},
-        {"fieldname": "total_per_bl", "label": _("YTD Per BL"), "fieldtype": "Float", "precision": 2, "width": 120}
+        {"fieldname": "total_per_bl", "label": _("YTD Per BL"), "fieldtype": "Float", "precision": 2, "width": 120},
+        {"fieldname": "total_budget", "label": _("YTD Budget"), "fieldtype": "Currency", "width": 140}
     ])
 
     return columns
 
 
 def get_category_maps():
+    """
+    Returns a single list of sections in EXACTLY the order they appear in
+    the "Cost Analysis GL Grouping" single doc's section_name child table
+    (Requirement 1). Each entry carries its own cost_type so totals can
+    still be rolled up correctly even though sections of different cost
+    types may be interleaved in the doc's order.
+
+    [{"section_name": ..., "codes": [...], "cost_type": "Direct Cost" | "By Product Credit" | "Indirect Cost"}, ...]
+    """
     grouping = frappe.get_single("Cost Analysis GL Grouping")
 
     section_cost_type = {}
@@ -102,28 +113,57 @@ def get_category_maps():
         if row.account_number not in section_codes[row.section_name]:
             section_codes[row.section_name].append(row.account_number)
 
-    direct_cost_map = {}
-    by_product_map = {}
-    below_cost_map = {}
+    # Sections that have GL rows but no entry in section_name (no defined
+    # order/cost_type) are appended at the end, in the order encountered,
+    # defaulting to Direct Cost - same fallback behaviour as before.
+    for section in section_codes:
+        if section not in section_cost_type:
+            section_cost_type[section] = "Direct Cost"
+            section_order.append(section)
 
+    ordered_sections = []
     for section in section_order:
         codes = section_codes.get(section)
         if not codes:
             continue
-        cost_type = section_cost_type.get(section, "Direct Cost")
-        if cost_type == "By Product Credit":
-            by_product_map[section] = codes
-        elif cost_type == "Indirect Cost":
-            below_cost_map[section] = codes
-        else:
-            direct_cost_map[section] = codes
+        ordered_sections.append({
+            "section_name": section,
+            "codes": codes,
+            "cost_type": section_cost_type.get(section, "Direct Cost")
+        })
 
-    for section, codes in section_codes.items():
-        if section in section_cost_type:
-            continue
-        direct_cost_map[section] = codes
+    return ordered_sections
 
-    return direct_cost_map, by_product_map, below_cost_map
+
+def is_by_product_section(section_name, cost_type):
+    """Requirement 3: sections whose name mentions 'By Product' (or whose
+    cost_type is explicitly 'By Product Credit') get reversed variance
+    coloring. Normalized (case/hyphen/whitespace-insensitive) so small
+    variations in how cost_type was entered still match."""
+    name_l = (section_name or "").lower()
+    type_l = (cost_type or "").lower().replace("-", " ").strip()
+    type_l = " ".join(type_l.split())  # collapse repeated whitespace
+    return "by product" in name_l or "by-product" in name_l or type_l == "by product credit"
+
+
+def get_variance_color(actual, budget, reverse=False):
+    """
+    Requirement 2 & 3: row-level Actual vs Budget variance coloring.
+    - actual/budget > 110% -> RED   (over budget)          -> GREEN if reversed
+    - actual/budget < 90%  -> GREEN (under budget)          -> RED if reversed
+    - 90%-110%              -> no color
+    Uses absolute values so credit/debit sign doesn't distort the ratio.
+    """
+    if not budget:
+        return ""
+
+    pct = (abs(actual) / abs(budget)) * 100
+
+    if pct > 110:
+        return "green" if reverse else "red"
+    if pct < 90:
+        return "red" if reverse else "green"
+    return ""
 
 
 CONSUMPTION_ITEMS = [
@@ -339,6 +379,108 @@ def build_recovery_section(item_month_prod, consumed_by_item, months):
     return rows
 
 
+# ---------------------------------------------------------------------------
+# Per BL Budget
+# ---------------------------------------------------------------------------
+# Assumption: the "Branch" doctype (used as "plant"/"branch" throughout this
+# report) has a "company" link field. This is used to resolve "all plants
+# belonging to the selected company" when no Plant filter is applied. If your
+# Branch doctype does not have a company field, update get_plants_for_company
+# to match however plants are actually tied to companies in your setup.
+def get_plants_for_company(company_val):
+    if not company_val:
+        return []
+    return frappe.get_all("Branch", filters={"company": company_val}, pluck="name")
+
+
+def get_target_plants(company_val, branch_val):
+    if branch_val:
+        return [branch_val]
+    return get_plants_for_company(company_val)
+
+
+def get_per_bl_budget_data(company_val, branch_val, months, overall_from, overall_to):
+    """
+    Returns {(account_number, month_key): budget_amount}
+
+    Each "Per BL Budget" record covers a plant + a from/to date range and
+    holds a per_bl_budget value per GL account for that range. To get a
+    month-wise figure we prorate the value by day across the record's date
+    range, then sum the days that overlap each report month. If no Plant
+    filter is selected, budgets from every plant belonging to the selected
+    company are summed together for each account/month.
+    """
+    if not months or not overall_from or not overall_to:
+        return {}
+
+    plants = get_target_plants(company_val, branch_val)
+    if not plants:
+        return {}
+
+    budget_docs = frappe.get_all(
+        "Per BL Budget",
+        filters={
+            "plant": ["in", plants],
+            "from": ["<=", overall_to],
+            "to": [">=", overall_from]
+        },
+        fields=["name", "plant", "from", "to"]
+    )
+
+    if not budget_docs:
+        return {}
+
+    doc_map = {d.name: d for d in budget_docs}
+    doc_names = list(doc_map.keys())
+
+    budget_rows = frappe.get_all(
+        "GL Budget",
+        filters={"parent": ["in", doc_names], "parenttype": "Per BL Budget"},
+        fields=["parent", "account_number", "per_bl_budget"]
+    )
+
+    budget_rows_by_parent = {}
+    for row in budget_rows:
+        budget_rows_by_parent.setdefault(row.parent, []).append(row)
+
+    budget_lookup = {}
+
+    for m in months:
+        m_key = m["key"]
+        month_start, month_end = get_month_boundaries(m_key, overall_from, overall_to)
+
+        for doc_name, doc in doc_map.items():
+            doc_from = getdate(doc["from"])
+            doc_to = getdate(doc["to"])
+
+            if not doc_from or not doc_to or doc_to < doc_from:
+                continue
+
+            overlap_start = max(month_start, doc_from)
+            overlap_end = min(month_end, doc_to)
+
+            if overlap_start > overlap_end:
+                continue
+
+            overlap_days = (overlap_end - overlap_start).days + 1
+            total_range_days = (doc_to - doc_from).days + 1
+
+            if total_range_days <= 0:
+                continue
+
+            for row in budget_rows_by_parent.get(doc_name, []):
+                if not row.account_number:
+                    continue
+
+                daily_rate = flt(row.per_bl_budget) / total_range_days
+                month_budget = daily_rate * overlap_days
+
+                key = (row.account_number, m_key)
+                budget_lookup[key] = budget_lookup.get(key, 0.0) + month_budget
+
+    return budget_lookup
+
+
 def get_data(filters, months):
     show_summary = filters.get("show_summary", 0)
     hide_zero = filters.get("hide_zero_amounts", 0)
@@ -461,9 +603,14 @@ def get_data(filters, months):
             company_val, branch_val, segment_val
         )
 
+    overall_from = filters.get("from_date")
+    overall_to = filters.get("to_date")
+    budget_lookup = get_per_bl_budget_data(company_val, branch_val, months, overall_from, overall_to)
+
     return get_cost_data(
         filters, months, FIXED_CODES, monthly_prod_map, total_ytd_production,
-        sales_qty_map, sales_val_map, show_summary, hide_zero, company_val, branch_val, segment_val
+        sales_qty_map, sales_val_map, show_summary, hide_zero, company_val, branch_val, segment_val,
+        budget_lookup
     )
 
 
@@ -587,7 +734,8 @@ def get_quant_data(filters, months, FIXED_PROD_ITEMS_MAP, FIXED_SALES_ITEMS_MAP,
 
 def get_cost_data(filters, months, FIXED_CODES, monthly_prod_map, total_ytd_production,
                    sales_qty_map, sales_val_map, show_summary, hide_zero,
-                   company_val, branch_val, segment_val):
+                   company_val, branch_val, segment_val, budget_lookup=None):
+    budget_lookup = budget_lookup or {}
     data = []
 
     prod_qty_row = {
@@ -607,12 +755,11 @@ def get_cost_data(filters, months, FIXED_CODES, monthly_prod_map, total_ytd_prod
     data.append(prod_qty_row)
     data.append({"expense_category": "", "gl_code": "", "indent": 0})
 
-    direct_cost_map, by_product_map, below_cost_map = get_category_maps()
+    ordered_sections = get_category_maps()
 
     all_codes = set()
-    for cat_map in (direct_cost_map, by_product_map, below_cost_map):
-        for codes in cat_map.values():
-            all_codes.update(codes)
+    for section in ordered_sections:
+        all_codes.update(section["codes"])
 
     accounts = []
     if all_codes:
@@ -676,17 +823,47 @@ def get_cost_data(filters, months, FIXED_CODES, monthly_prod_map, total_ytd_prod
             for m in months
         }
 
-    def process_category_group(category_map):
-        group_rows = []
-        group_totals = {"months": zero_month_dict(months), "total_actual": 0.0}
+    def new_type_totals():
+        return {
+            "months": zero_month_dict(months),
+            "total_actual": 0.0,
+            "budget_months": zero_month_dict(months),
+            "total_budget": 0.0
+        }
 
-        for category_name, gl_codes in category_map.items():
-            cat_totals = {"months": zero_month_dict(months), "total_actual": 0.0}
+    def process_sections(sections):
+        """
+        Renders every section in `sections` in the exact order given
+        (Requirement 1 - this order comes straight from Cost Analysis GL
+        Grouping's section_name table). Cost-type totals (Direct Cost /
+        By Product Credit / Indirect Cost) are accumulated separately as
+        we go so the summary rows below can still be computed correctly
+        even if types are interleaved in the doc's order.
+        """
+        rows = []
+        totals_by_type = {
+            "Direct Cost": new_type_totals(),
+            "By Product Credit": new_type_totals(),
+            "Indirect Cost": new_type_totals()
+        }
+
+        for section in sections:
+            category_name = section["section_name"]
+            gl_codes = section["codes"]
+            raw_cost_type = section["cost_type"]
+            # Reversal check uses the RAW cost_type straight from the doctype -
+            # not the bucket-safe fallback below - so minor variations (extra
+            # whitespace, hyphen, casing) still get detected correctly.
+            reverse_color = is_by_product_section(category_name, raw_cost_type)
+            cost_type = raw_cost_type if raw_cost_type in totals_by_type else "Direct Cost"
+
+            cat_totals = new_type_totals()
             category_rows = []
 
             for code in gl_codes:
                 row_data = {}
                 row_tot_act = 0.0
+                row_tot_budget = 0.0
                 c_data = code_data_cache.get(code, {})
 
                 for m in months:
@@ -694,15 +871,20 @@ def get_cost_data(filters, months, FIXED_CODES, monthly_prod_map, total_ytd_prod
                     m_act = c_data.get(m_key, 0.0)
                     m_prod = monthly_prod_map.get(m_key, 0.0)
                     m_per_bl = round(m_act / m_prod, 2) if m_prod else 0.0
+                    m_budget = budget_lookup.get((code, m_key), 0.0)
 
                     row_data[f"actual_{m_key}"] = m_act
                     row_data[f"per_bl_{m_key}"] = m_per_bl
+                    row_data[f"budget_{m_key}"] = m_budget
 
                     row_tot_act += m_act
+                    row_tot_budget += m_budget
                     cat_totals["months"][m_key] += m_act
+                    cat_totals["budget_months"][m_key] += m_budget
 
                 row_tot_per_bl = round(row_tot_act / total_ytd_production, 2) if total_ytd_production else 0.0
                 cat_totals["total_actual"] += row_tot_act
+                cat_totals["total_budget"] += row_tot_budget
 
                 if hide_zero and row_tot_act == 0:
                     continue
@@ -714,7 +896,9 @@ def get_cost_data(filters, months, FIXED_CODES, monthly_prod_map, total_ytd_prod
                     "gl_code": code,
                     "indent": 1,
                     "total_actual": row_tot_act,
-                    "total_per_bl": row_tot_per_bl
+                    "total_per_bl": row_tot_per_bl,
+                    "total_budget": row_tot_budget,
+                    "variance_color": get_variance_color(row_tot_act, row_tot_budget, reverse_color)
                 }
                 detail_row.update(row_data)
                 category_rows.append(detail_row)
@@ -728,7 +912,9 @@ def get_cost_data(filters, months, FIXED_CODES, monthly_prod_map, total_ytd_prod
                     "gl_code": "",
                     "indent": 0,
                     "total_actual": cat_totals["total_actual"],
-                    "total_per_bl": round(cat_totals["total_actual"] / total_ytd_production, 2) if total_ytd_production else 0.0
+                    "total_per_bl": round(cat_totals["total_actual"] / total_ytd_production, 2) if total_ytd_production else 0.0,
+                    "total_budget": cat_totals["total_budget"],
+                    "variance_color": get_variance_color(cat_totals["total_actual"], cat_totals["total_budget"], reverse_color)
                 }
                 for m in months:
                     m_key = m["key"]
@@ -736,16 +922,17 @@ def get_cost_data(filters, months, FIXED_CODES, monthly_prod_map, total_ytd_prod
                     m_prod = monthly_prod_map.get(m_key, 0.0)
                     summary_row[f"actual_{m_key}"] = m_tot
                     summary_row[f"per_bl_{m_key}"] = round(m_tot / m_prod, 2) if m_prod else 0.0
+                    summary_row[f"budget_{m_key}"] = cat_totals["budget_months"][m_key]
 
-                group_rows.append(summary_row)
+                rows.append(summary_row)
             else:
-                group_rows.append({
+                rows.append({
                     "expense_category": category_name,
                     "gl_code": "",
                     "indent": 0,
                     "is_header": 1
                 })
-                group_rows.extend(category_rows)
+                rows.extend(category_rows)
 
                 subtotal_row = {
                     "expense_category": "Sub Total",
@@ -753,7 +940,9 @@ def get_cost_data(filters, months, FIXED_CODES, monthly_prod_map, total_ytd_prod
                     "indent": 1,
                     "total_actual": cat_totals["total_actual"],
                     "total_per_bl": round(cat_totals["total_actual"] / total_ytd_production, 2) if total_ytd_production else 0.0,
-                    "is_subtotal": 1
+                    "total_budget": cat_totals["total_budget"],
+                    "is_subtotal": 1,
+                    "variance_color": get_variance_color(cat_totals["total_actual"], cat_totals["total_budget"], reverse_color)
                 }
                 for m in months:
                     m_key = m["key"]
@@ -761,25 +950,32 @@ def get_cost_data(filters, months, FIXED_CODES, monthly_prod_map, total_ytd_prod
                     m_prod = monthly_prod_map.get(m_key, 0.0)
                     subtotal_row[f"actual_{m_key}"] = m_tot
                     subtotal_row[f"per_bl_{m_key}"] = round(m_tot / m_prod, 2) if m_prod else 0.0
+                    subtotal_row[f"budget_{m_key}"] = cat_totals["budget_months"][m_key]
 
-                group_rows.append(subtotal_row)
+                rows.append(subtotal_row)
 
             for m in months:
                 m_key = m["key"]
-                group_totals["months"][m_key] += cat_totals["months"][m_key]
+                totals_by_type[cost_type]["months"][m_key] += cat_totals["months"][m_key]
+                totals_by_type[cost_type]["budget_months"][m_key] += cat_totals["budget_months"][m_key]
 
-            group_totals["total_actual"] += cat_totals["total_actual"]
+            totals_by_type[cost_type]["total_actual"] += cat_totals["total_actual"]
+            totals_by_type[cost_type]["total_budget"] += cat_totals["total_budget"]
 
-        return group_rows, group_totals
+        return rows, totals_by_type["Direct Cost"], totals_by_type["By Product Credit"], totals_by_type["Indirect Cost"]
 
-    def build_summary_totals_row(label, totals_dict, flag_key):
+    def build_summary_totals_row(label, totals_dict, flag_key, reverse_color=False):
         tot_act = totals_dict["total_actual"]
+        tot_budget = totals_dict.get("total_budget", 0.0)
+        budget_months = totals_dict.get("budget_months", zero_month_dict(months))
         row = {
             "expense_category": label,
             "gl_code": "",
             "indent": 0,
             "total_actual": tot_act,
             "total_per_bl": round(tot_act / total_ytd_production, 2) if total_ytd_production else 0.0,
+            "total_budget": tot_budget,
+            "variance_color": get_variance_color(tot_act, tot_budget, reverse_color),
             flag_key: 1
         }
         for m in months:
@@ -788,30 +984,30 @@ def get_cost_data(filters, months, FIXED_CODES, monthly_prod_map, total_ytd_prod
             m_prod = monthly_prod_map.get(m_key, 0.0)
             row[f"actual_{m_key}"] = m_tot
             row[f"per_bl_{m_key}"] = round(m_tot / m_prod, 2) if m_prod else 0.0
+            row[f"budget_{m_key}"] = budget_months.get(m_key, 0.0)
 
         return row
 
-    direct_rows, total_cost_sum = process_category_group(direct_cost_map)
-    data.extend(direct_rows)
-    data.append(build_summary_totals_row("TOTAL DIRECT COST", total_cost_sum, "is_total_row"))
+    section_rows, total_cost_sum, by_product_sum, below_cost_sum = process_sections(ordered_sections)
+    data.extend(section_rows)
 
-    by_product_rows, by_product_sum = process_category_group(by_product_map)
-    data.extend(by_product_rows)
+    data.append(build_summary_totals_row("TOTAL DIRECT COST", total_cost_sum, "is_total_row"))
 
     net_cost_sum = {
         "months": {m["key"]: total_cost_sum["months"][m["key"]] - abs(by_product_sum["months"][m["key"]]) for m in months},
-        "total_actual": total_cost_sum["total_actual"] - abs(by_product_sum["total_actual"])
+        "total_actual": total_cost_sum["total_actual"] - abs(by_product_sum["total_actual"]),
+        "budget_months": {m["key"]: total_cost_sum["budget_months"][m["key"]] - abs(by_product_sum["budget_months"][m["key"]]) for m in months},
+        "total_budget": total_cost_sum["total_budget"] - abs(by_product_sum["total_budget"])
     }
     data.append(build_summary_totals_row("NET DIRECT COST", net_cost_sum, "is_total_row"))
-
-    below_rows, below_cost_sum = process_category_group(below_cost_map)
-    data.extend(below_rows)
 
     data.append(build_summary_totals_row("TOTAL INDIRECT COST", below_cost_sum, "is_subtotal"))
 
     final_total_cost = {
         "months": {m["key"]: net_cost_sum["months"][m["key"]] + below_cost_sum["months"][m["key"]] for m in months},
-        "total_actual": net_cost_sum["total_actual"] + below_cost_sum["total_actual"]
+        "total_actual": net_cost_sum["total_actual"] + below_cost_sum["total_actual"],
+        "budget_months": {m["key"]: net_cost_sum["budget_months"][m["key"]] + below_cost_sum["budget_months"][m["key"]] for m in months},
+        "total_budget": net_cost_sum["total_budget"] + below_cost_sum["total_budget"]
     }
     grand_total_row = build_summary_totals_row("GRAND TOTAL COST", final_total_cost, "is_grand_total")
     data.append(grand_total_row)

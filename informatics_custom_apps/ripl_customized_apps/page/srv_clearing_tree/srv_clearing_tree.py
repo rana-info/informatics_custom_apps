@@ -241,6 +241,13 @@ def get_non_gl_docs(filters, existing_docs):
 
 
 def get_gl_entries(filters, precision):
+    """Filter conditions match the working Script Report exactly:
+    company + account + is_cancelled=0 + date range, plus optional
+    plant/segment. Deliberately NO is_opening exclusion, NO finance_book
+    restriction, and NO account-tree expansion -- those were extra
+    conditions this report doesn't need and were pulling totals out of
+    tie-out with the reference report."""
+
     conditions = """
         company = %(company)s
         AND account = %(account)s
@@ -248,17 +255,12 @@ def get_gl_entries(filters, precision):
         AND posting_date BETWEEN %(from_date)s AND %(to_date)s
     """
 
-    if not filters.get("show_opening_entries"):
-        conditions += " AND (is_opening != 'Yes' OR is_opening IS NULL)"
-
-    if not filters.get("finance_book"):
-        conditions += " AND (finance_book IS NULL OR finance_book = '')"
-    else:
-        conditions += " AND (finance_book = %(finance_book)s OR finance_book IS NULL OR finance_book = '')"
-
     # Optional filters
     if filters.get("plant"):
         conditions += " AND branch = %(plant)s"
+
+    if filters.get("segment"):
+        conditions += " AND segment = %(segment)s"
 
     rows = frappe.db.sql(f"""
         SELECT voucher_type, voucher_no,
@@ -703,6 +705,13 @@ def build_flows(gl_entries, graph, edges, valid_docs, supplier_map, precision, f
         parent_id = f"comp-{comp_counter}"
 
         pis, prs, rpis, rprs, lcvs = set(), set(), set(), set(), set()
+        # Any voucher type that isn't PI/PR/LCV but still posted a real GL
+        # entry to this account (e.g. Payment Entry, Stock Entry) -- these
+        # used to get silently dropped below because they never joined a
+        # PI/PR/LCV chain, which is why totals under-counted vs the GL
+        # report.
+        other_docs = set()
+        voucher_type_by_doc = {}
 
         total_debit = Decimal(0)
         total_credit = Decimal(0)
@@ -797,12 +806,19 @@ def build_flows(gl_entries, graph, edges, valid_docs, supplier_map, precision, f
 
                 excluded_docs.append(doc)
 
+            voucher_type_by_doc[doc] = voucher_type
+
             if voucher_type == "Purchase Invoice":
                 (rpis if is_return else pis).add(doc)
             elif voucher_type == "Purchase Receipt":
                 (rprs if is_return else prs).add(doc)
             elif voucher_type == "Landed Cost Voucher":
                 lcvs.add(doc)
+            elif not no_gl_impact:
+                # Real GL entry (has_real_entry branch), but not a
+                # PI/PR/LCV -- e.g. Payment Entry, Stock Entry. Keep it
+                # so its debit/credit isn't dropped from the total.
+                other_docs.add(doc)
 
     
             lcv_info = lcv_details.get(doc) if voucher_type == "Landed Cost Voucher" else None
@@ -839,7 +855,7 @@ def build_flows(gl_entries, graph, edges, valid_docs, supplier_map, precision, f
             })
             child_by_doc[doc] = children[-1]
 
-        if not (pis or prs or rpis or rprs or lcvs):
+        if not (pis or prs or rpis or rprs or lcvs or other_docs):
             continue
 
         rate_diff_prs = get_rate_difference_prs(prs)
@@ -939,10 +955,26 @@ def build_flows(gl_entries, graph, edges, valid_docs, supplier_map, precision, f
                 pr_child["remarks"] = remark
             chain_remarks_all.append(remark)
 
+        for other_doc in other_docs:
+            other_child = child_by_doc.get(other_doc)
+            other_net = (
+                Decimal(str(other_child["gl_debit"])) - Decimal(str(other_child["gl_credit"]))
+                if other_child else Decimal(0)
+            )
+            vt_label = voucher_type_by_doc.get(other_doc) or "Voucher"
+            remark = (
+                f"{vt_label} {other_doc}: posted directly to the SRV account "
+                f"({float(other_net):,.2f}) — not a Purchase Invoice/Receipt/LCV, "
+                f"so it isn't part of a PI-PR chain."
+            )
+            if other_child:
+                other_child["remarks"] = remark
+            chain_remarks_all.append(remark)
+
         supplier = None
         supplier_name = None
 
-        for doc in pis | prs | rpis | rprs | lcvs:
+        for doc in pis | prs | rpis | rprs | lcvs | other_docs:
             info = supplier_map.get(doc)
             if info:
                 supplier = info.get("supplier")
@@ -1030,6 +1062,8 @@ def append_journal_entries(flows, gl_entries, precision):
             "remarks": "",
             "is_rounding_only": False,
             "has_srv_impact": True,
+            "_raw_debit": val["debit"],
+            "_raw_credit": val["credit"],
         })
 
     return flows
