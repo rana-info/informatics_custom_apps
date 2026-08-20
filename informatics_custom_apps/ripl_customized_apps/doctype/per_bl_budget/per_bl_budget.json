@@ -1,0 +1,80 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "allow_rename": 1,
+ "creation": "2026-08-20 13:08:10.853762",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "from",
+  "plant",
+  "column_break_zbxa",
+  "to",
+  "section_break_sdxg",
+  "per_bl_budget_amount"
+ ],
+ "fields": [
+  {
+   "fieldname": "plant",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Plant",
+   "options": "Branch"
+  },
+  {
+   "fieldname": "from",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Applicable From"
+  },
+  {
+   "fieldname": "column_break_zbxa",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "to",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Applicable Till"
+  },
+  {
+   "fieldname": "section_break_sdxg",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "per_bl_budget_amount",
+   "fieldtype": "Table",
+   "label": "Per BL Budget Amount",
+   "options": "GL Budget"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-20 15:59:38.863426",
+ "modified_by": "Administrator",
+ "module": "RIPL Customized Apps",
+ "name": "Per BL Budget",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "search_fields": "plant",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

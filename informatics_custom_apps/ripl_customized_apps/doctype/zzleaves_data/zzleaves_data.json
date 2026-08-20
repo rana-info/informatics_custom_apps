@@ -10,7 +10,7 @@
   "employee_name",
   "leave_type",
   "current_leave_balance",
-  "leave_count",
+  "additional_leaves",
   "leave_allocation",
   "status",
   "remarks",
@@ -35,17 +35,11 @@
    "read_only": 1
   },
   {
-   "fieldname": "leave_count",
-   "fieldtype": "Float",
-   "in_list_view": 1,
-   "label": "Leave Count"
-  },
-  {
    "allow_on_submit": 1,
    "fieldname": "status",
    "fieldtype": "Select",
    "label": "Status",
-   "options": "\nDraft\nFailed\nUpdated\nCancelled",
+   "options": "\nDraft\nFailed\nUpdated",
    "read_only": 1
   },
   {
@@ -88,15 +82,20 @@
    "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Current Leave Balance",
-   "read_only": 1,
-   "allow_on_submit": 1
+   "read_only": 1
+  },
+  {
+   "fieldname": "additional_leaves",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Additional Leaves"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-08-20 12:31:24.097016",
+ "modified": "2026-08-20 15:01:47.393424",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "zzLeaves Data",

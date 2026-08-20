@@ -160,10 +160,10 @@ frappe.ui.form.on("zzLeaves Adjustment Tool", {
 });
 
 frappe.ui.form.on("zzLeaves Data", {
-    leave_count(frm, cdt, cdn) {
+    additional_leaves(frm, cdt, cdn) {
         let row = locals[cdt][cdn];
-        if (row.leave_count && row.leave_count < 0) {
-            frappe.model.set_value(cdt, cdn, "leave_count", Math.abs(row.leave_count));
+        if (row.additional_leaves && row.additional_leaves < 0) {
+            frappe.model.set_value(cdt, cdn, "additional_leaves", Math.abs(row.additional_leaves));
             frappe.show_alert({
                 message: __("Negative leave are not allowed"),
                 indicator: "red"
