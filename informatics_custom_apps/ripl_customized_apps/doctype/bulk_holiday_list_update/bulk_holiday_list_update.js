@@ -2,118 +2,206 @@
 // For license information, please see license.txt
 
 frappe.ui.form.on("Bulk Holiday List Update", {
-	refresh(frm) {
+  refresh(frm) {
+    // Hide default Save button
+    frm.disable_save();
 
-        if(frm.doc.old_holiday_list && frm.doc.new_holiday_list && frm.doc.old_holiday_list === frm.doc.new_holiday_list){
-            frappe.throw("New Holiday List and Old Holiday List cant be same");
-        }
+    // Add Update button
+    if (!frm.custom_update_button_added) {
+      frm
+        .add_custom_button(__("Update"), () => {
+          frm.trigger("update_holiday_list");
+        })
+        .addClass("btn-primary");
 
-        frm.set_value("old_holiday_list", null);
-        frm.set_value("new_holiday_list", null);
-        frm.set_value("old_holiday_list_from_date", null);
-        frm.set_value("old_holiday_list_to_date", null);
-        frm.set_value("new_holiday_list_from_date", null);
-        frm.set_value("new_holiday_list_to_date", null);
-        frm.set_value("selected_employees","[]")
+      frm.custom_update_button_added = true;
+    }
 
-        frm.refresh_fields();
-	},
-    before_save(frm){
-        if (!frm.doc.selected_employees || frm.doc.selected_employees === "[]") {
-            frappe.throw("Please select at least one employee");
-        }
-    },
-    after_save(frm){
-        frm.set_value("old_holiday_list", null);
-        frm.set_value("new_holiday_list", null);
+    // Clear fields only when page is opened first time
+    if (!frm.__islocal && !frm.__initialized) {
+      frm.trigger("reset_form");
+      frm.__initialized = true;
+    }
+  },
 
-        frm.refresh_fields();
-    },
+  reset_form(frm) {
+    frm.set_value("old_holiday_list", "");
+    frm.set_value("new_holiday_list", "");
+    frm.set_value("selected_employees", "[]");
 
-    old_holiday_list(frm) {
-        frm.set_value("selected_employees", "[]"); 
-        frm.fields_dict.employee_html.$wrapper.empty();
-        if (!frm.doc.old_holiday_list) {
-            return;
-        }
-        frm.trigger("get_employee_data");
-    },
-    new_holiday_list(){
-        frm.set_value("selected_employees", "[]");  
-    },
+    frm.fields_dict.employee_html.$wrapper.empty();
 
-    get_employee_data(frm) {
-        frappe.call({
-            method: "get_employee_data",
-            doc: frm.doc
-        }).then(r => {
-            frm.events.render_table(frm, r.message || []);
+    frm.refresh_fields();
+  },
+
+  update_holiday_list(frm) {
+    if (!frm.doc.old_holiday_list) {
+      frappe.throw(__("Please select Old Holiday List"));
+    }
+
+    if (!frm.doc.new_holiday_list) {
+      frappe.throw(__("Please select New Holiday List"));
+    }
+
+    if (frm.doc.old_holiday_list === frm.doc.new_holiday_list) {
+      frappe.throw(__("Old Holiday List and New Holiday List cannot be same"));
+    }
+
+    if (!frm.doc.selected_employees || frm.doc.selected_employees === "[]") {
+      frappe.throw(__("Please select at least one employee"));
+    }
+
+    frappe
+      .call({
+        method: "update_holiday_list",
+        doc: frm.doc,
+        freeze: true,
+        freeze_message: __("Updating Holiday List..."),
+      })
+      .then(() => {
+        frappe.show_alert({
+          message: __("Holiday List Updated Successfully"),
+          indicator: "green",
         });
-    },
 
-    render_table(frm, data) {
+        frm.trigger("reset_form");
+      });
+  },
+
+  old_holiday_list(frm) {
+    frm.set_value("selected_employees", "[]");
+    frm.fields_dict.employee_html.$wrapper.empty();
+
+    if (!frm.doc.old_holiday_list) {
+      return;
+    }
+
+    frm.trigger("get_employee_data");
+  },
+
+//   new_holiday_list(frm) {
+//     frm.set_value("selected_employees", "[]");
+//   },
+
+new_holiday_list(frm) {
+    if (
+        frm.doc.old_holiday_list &&
+        frm.doc.new_holiday_list &&
+        frm.doc.old_holiday_list === frm.doc.new_holiday_list
+    ) {
+        frappe.throw(
+            __("Old Holiday List and New Holiday List cannot be same")
+        );
+    }
+},
+
+  get_employee_data(frm) {
+    frappe
+      .call({
+        method: "get_employee_data",
+        doc: frm.doc,
+      })
+      .then((r) => {
+        frm.events.render_table(frm, r.message || []);
+      });
+  },
+
+  render_table(frm, data) {
     let wrapper = frm.fields_dict.employee_html.$wrapper;
     wrapper.empty();
 
     if (!data.length) {
-        wrapper.html("<p>No employees found.</p>");
-        return;
+      wrapper.html(
+        `<div class="text-muted">
+					No active employees found for the selected Holiday List.
+				</div>`,
+      );
+      return;
     }
 
     let html = `
-        <table class="table table-bordered" id="emp-table">
-            <thead>
-                <tr>
-                    <th><input type="checkbox" id="select-all"></th>
-                    <th>Employee</th>
-                    <th>Name</th>
-                    <th>Holiday List</th>
-                </tr>
-                <tr>
-                    <th></th>
-                    <th><input type="text" class="col-filter" data-col="1"></th>
-                    <th><input type="text" class="col-filter" data-col="2"></th>
-                    <th><input type="text" class="col-filter" data-col="3"></th>
-                </tr>
-            </thead>
-            <tbody>
-    `;
+			<table class="table table-bordered" id="emp-table">
+				<thead>
+					<tr>
+						<th style="width:50px">
+							<input type="checkbox" id="select-all">
+						</th>
+						<th>Employee</th>
+						<th>Employee Name</th>
+						<th>Holiday List</th>
+					</tr>
+					<tr>
+						<th></th>
+						<th>
+							<input type="text"
+								   class="form-control col-filter"
+								   data-col="1"
+								   placeholder="Search Employee">
+						</th>
+						<th>
+							<input type="text"
+								   class="form-control col-filter"
+								   data-col="2"
+								   placeholder="Search Name">
+						</th>
+						<th>
+							<input type="text"
+								   class="form-control col-filter"
+								   data-col="3"
+								   placeholder="Search Holiday List">
+						</th>
+					</tr>
+				</thead>
+				<tbody>
+		`;
 
-    data.forEach(row => {
-        html += `
-            <tr>
-                <td><input type="checkbox" class="emp-check" data-emp="${row.employee}"></td>
-                <td>${row.employee}</td>
-                <td>${row.employee_name}</td>
-                <td>${row.holiday_list}</td>
-            </tr>
-        `;
+    data.forEach((row) => {
+      html += `
+				<tr>
+					<td>
+						<input
+							type="checkbox"
+							class="emp-check"
+							data-emp="${row.employee}">
+					</td>
+					<td>${row.employee}</td>
+					<td>${row.employee_name || ""}</td>
+					<td>${row.holiday_list || ""}</td>
+				</tr>
+			`;
     });
 
-    html += "</tbody></table>";
+    html += `
+				</tbody>
+			</table>
+		`;
+
     wrapper.html(html);
 
     $("#select-all").on("change", function () {
-        $(".emp-check").prop("checked", this.checked).trigger("change");
+      $(".emp-check").prop("checked", this.checked).trigger("change");
     });
 
     $(".emp-check").on("change", function () {
-        let selected = [];
-        $(".emp-check:checked").each(function () {
-            selected.push($(this).attr("data-emp"));
-        });
-        frm.set_value("selected_employees", JSON.stringify(selected));
+      let selected = [];
+
+      $(".emp-check:checked").each(function () {
+        selected.push($(this).data("emp"));
+      });
+
+      frm.set_value("selected_employees", JSON.stringify(selected));
     });
 
     $(".col-filter").on("keyup", function () {
-        let col = $(this).data("col");
-        let val = $(this).val().toLowerCase();
+      let col = $(this).data("col");
+      let val = $(this).val().toLowerCase();
 
-        $("#emp-table tbody tr").each(function () {
-            let cell = $(this).find("td").eq(col).text().toLowerCase();
-            $(this).toggle(cell.includes(val));
-        });
+      $("#emp-table tbody tr").each(function () {
+        let cell = $(this).find("td").eq(col);
+        text().toLowerCase();
+
+        $(this).toggle(cell.includes(val));
+      });
     });
-}
-
+  },
 });

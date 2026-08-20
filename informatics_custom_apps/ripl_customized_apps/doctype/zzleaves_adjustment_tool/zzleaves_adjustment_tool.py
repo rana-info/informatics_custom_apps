@@ -22,9 +22,34 @@ class zzLeavesAdjustmentTool(Document):
                     row.leave_ledger_entry = None
                     row.comment = None
 
+        # Filter out rows with 0 or empty leave_count on save
+        valid_rows = []
         for row in self.leaves_data:
-            if row.leave_count:
-                row.leave_count = abs(flt(row.leave_count))
+            count = abs(flt(row.leave_count or 0))
+            if count > 0:
+                row.leave_count = count
+                valid_rows.append(row)
+
+        if not valid_rows and self.leaves_data:
+            frappe.throw(_("Cannot save document with 0 leave count. Please enter a leave count greater than 0 for at least one employee."))
+
+        self.leaves_data = valid_rows
+
+        # Validate that all rows have a Leave Allocation linked
+        missing_alloc = []
+        for row in self.leaves_data:
+            if not getattr(row, "leave_allocation", None):
+                missing_alloc.append(
+                    f"Row {row.idx}: {row.employee} ({row.leave_type})"
+                )
+
+        if missing_alloc:
+            frappe.throw(
+                _("Leave Allocation is missing for the following rows. Please use 'Get Employees' to auto-populate data, or ensure your CSV file includes the Leave Allocation ID column:<br><br>{0}").format(
+                    "<br>".join(missing_alloc)
+                ),
+                title=_("Missing Leave Allocation")
+            )
 
     def on_submit(self):
 
