@@ -10,6 +10,7 @@
   "plant",
   "column_break_zbxa",
   "to",
+  "target_production",
   "section_break_sdxg",
   "per_bl_budget_amount"
  ],
@@ -47,12 +48,18 @@
    "fieldtype": "Table",
    "label": "Per BL Budget Amount",
    "options": "GL Budget"
+  },
+  {
+   "fieldname": "target_production",
+   "fieldtype": "Float",
+   "label": "Target Production",
+   "precision": "2"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-08-20 15:59:38.863426",
+ "modified": "2026-08-21 10:59:22.565559",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "Per BL Budget",

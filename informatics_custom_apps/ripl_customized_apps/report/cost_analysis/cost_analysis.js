@@ -59,8 +59,12 @@ frappe.query_reports["Cost Analysis"] = {
         }
     ],
 
-    "formatter": function(value, row, column, data, default_formatter) {
-        value = default_formatter(value, row, column, data);
+   "formatter": function(value, row, column, data, default_formatter) {
+    if (data && data.is_blank_row) {
+        return "";
+    }
+
+    value = default_formatter(value, row, column, data);
 
         if (!data) return value;
 
@@ -83,6 +87,10 @@ frappe.query_reports["Cost Analysis"] = {
             value = `<span style="background-color: #f1f5f9; color: #475569; font-family: monospace; font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 4px; border: 1px solid #e2e8f0;">${value}</span>`;
         }
 
+        if (column.fieldname === "budget_amount" || column.fieldname === "budget_per_bl") {
+            value = `<span style="color: #7c3aed; font-weight: 600;">${value}</span>`;
+        }
+
         if (column.fieldname.startsWith("per_bl_") || column.fieldname === "total_per_bl") {
             value = `<span style="color: #0369a1; font-weight: 600;">${value}</span>`;
         }
@@ -99,9 +107,20 @@ frappe.query_reports["Cost Analysis"] = {
             value = `<span style="font-size: 13px; font-weight: 800; color: #0f172a; background-color: #f8fafc; border-top: 2px solid #0f172a; border-bottom: 2px double #0f172a; display: block; padding: 4px 6px; border-radius: 2px;">${value}</span>`;
         }
 
-        if (data.variance_color === "red") {
+        // Cell-level Per BL vs Budget Per BL coloring (Requirement: color
+        // only the Per BL cell that was actually compared to budget, not
+        // the whole row). Each per_bl_<month> and total_per_bl cell carries
+        // its own <fieldname>_color computed server-side in the report.py.
+        var cell_color = null;
+        if (column.fieldname === "total_per_bl") {
+            cell_color = data.total_per_bl_color;
+        } else if (column.fieldname.startsWith("per_bl_")) {
+            cell_color = data[column.fieldname + "_color"];
+        }
+
+        if (cell_color === "red") {
             value = `<div style="background-color: #fde2e2; border-radius: 2px; padding: 1px 4px;">${value}</div>`;
-        } else if (data.variance_color === "green") {
+        } else if (cell_color === "green") {
             value = `<div style="background-color: #ddf5e2; border-radius: 2px; padding: 1px 4px;">${value}</div>`;
         }
 
