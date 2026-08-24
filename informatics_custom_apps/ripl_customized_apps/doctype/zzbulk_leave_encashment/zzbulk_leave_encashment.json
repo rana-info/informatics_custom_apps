@@ -1,0 +1,182 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "BE.YY.#####",
+ "creation": "2026-08-24 14:34:26.844972",
+ "default_view": "List",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "section_break_debw",
+  "season",
+  "branch",
+  "company",
+  "work_location",
+  "column_break_svsx",
+  "from_date",
+  "to_date",
+  "payroll_date",
+  "based_on",
+  "section_break_dslv",
+  "bulk_leave_encashment_details",
+  "is_updated",
+  "section_break_njpp",
+  "amended_from",
+  "connections_tab"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_break_debw",
+   "fieldtype": "Section Break",
+   "label": "Details"
+  },
+  {
+   "fieldname": "season",
+   "fieldtype": "Link",
+   "label": "Season",
+   "options": "Season"
+  },
+  {
+   "fetch_from": "season.plant",
+   "fieldname": "branch",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Branch",
+   "options": "Branch",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "branch.company",
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "fieldname": "work_location",
+   "fieldtype": "Link",
+   "label": "Work Location",
+   "options": "Location",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_svsx",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fetch_from": "season.year_start_date",
+   "fieldname": "from_date",
+   "fieldtype": "Date",
+   "label": "From Date"
+  },
+  {
+   "fetch_from": "season.year_end_date",
+   "fieldname": "to_date",
+   "fieldtype": "Date",
+   "label": "To Date"
+  },
+  {
+   "fieldname": "payroll_date",
+   "fieldtype": "Date",
+   "label": "Payroll Date",
+   "reqd": 1
+  },
+  {
+   "default": "Custom",
+   "fieldname": "based_on",
+   "fieldtype": "Autocomplete",
+   "label": "Based On",
+   "options": "Custom\nStandard",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_dslv",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "bulk_leave_encashment_details",
+   "fieldtype": "Table",
+   "label": "Bulk Leave Encashment Details",
+   "options": "zzBulk Leave Encashment Details",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "is_updated",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Is Updated",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_njpp",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "zzBulk Leave Encashment",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "connections_tab",
+   "fieldtype": "Tab Break",
+   "label": "Connections",
+   "show_dashboard": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "zzBulk Leave Encashment",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [
+  {
+   "group": "Payments",
+   "link_doctype": "Leave Encashment",
+   "link_fieldname": "custom_bulk_leave_encashment"
+  }
+ ],
+ "modified": "2026-08-24 14:37:15.756872",
+ "modified_by": "Administrator",
+ "module": "RIPL Customized Apps",
+ "name": "zzBulk Leave Encashment",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "queue_in_background": 1,
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

@@ -1,0 +1,237 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-08-24 14:33:21.089841",
+ "default_view": "List",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "employee",
+  "employee_name",
+  "designation",
+  "leave_type",
+  "column_break_smvn",
+  "payroll_cost_center",
+  "available_balance",
+  "leave_allocation",
+  "leave_application",
+  "encashable_days",
+  "section_break_bszj",
+  "department",
+  "salary_structure_assignment",
+  "salary_structure",
+  "earning_component",
+  "column_break_ohkv",
+  "formula",
+  "section_break_tkyh",
+  "season",
+  "branch",
+  "work_location",
+  "remarks",
+  "column_break_ieue",
+  "from_date",
+  "to_date",
+  "payroll_date"
+ ],
+ "fields": [
+  {
+   "fieldname": "employee",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Employee",
+   "options": "Employee",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fetch_from": "employee.employee_name",
+   "fieldname": "employee_name",
+   "fieldtype": "Data",
+   "label": "Employee Name",
+   "read_only": 1
+  },
+  {
+   "columns": 1,
+   "fetch_from": "employee.designation",
+   "fieldname": "designation",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Designation",
+   "options": "Designation",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "columns": 1,
+   "fieldname": "leave_type",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "leave Type",
+   "options": "Leave Type",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_smvn",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fetch_from": "employee.payroll_cost_center",
+   "fieldname": "payroll_cost_center",
+   "fieldtype": "Link",
+   "label": "Payroll Cost Center",
+   "options": "Cost Center",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "columns": 1,
+   "fieldname": "available_balance",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Available Balance",
+   "no_copy": 1,
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "columns": 1,
+   "fieldname": "leave_allocation",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Leave Allocation",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "columns": 1,
+   "fieldname": "leave_application",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Leave Application",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "columns": 1,
+   "fieldname": "encashable_days",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Encashable Days",
+   "precision": "2",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_bszj",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "department",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Department",
+   "options": "Department",
+   "read_only": 1
+  },
+  {
+   "fieldname": "salary_structure_assignment",
+   "fieldtype": "Link",
+   "label": "Salary Structure Assignment",
+   "options": "Salary Structure Assignment",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "salary_structure_assignment.salary_structure",
+   "fieldname": "salary_structure",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Salary Structure",
+   "options": "Salary Structure",
+   "read_only": 1
+  },
+  {
+   "fieldname": "earning_component",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Earning Component",
+   "options": "Salary Component",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_ohkv",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "formula",
+   "fieldtype": "Code",
+   "in_list_view": 1,
+   "label": "Formula",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_tkyh",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "season",
+   "fieldtype": "Data",
+   "label": "Season",
+   "read_only": 1
+  },
+  {
+   "fieldname": "branch",
+   "fieldtype": "Data",
+   "label": "Branch",
+   "read_only": 1
+  },
+  {
+   "fieldname": "work_location",
+   "fieldtype": "Data",
+   "label": "Work Location",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_ieue",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "from_date",
+   "fieldtype": "Date",
+   "label": "From Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "to_date",
+   "fieldtype": "Date",
+   "label": "To Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "payroll_date",
+   "fieldtype": "Date",
+   "label": "Payroll Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Data",
+   "label": "Remarks",
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-08-24 14:50:42.102329",
+ "modified_by": "Administrator",
+ "module": "RIPL Customized Apps",
+ "name": "zzBulk Leave Encashment Details",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
