@@ -8,6 +8,8 @@ frappe.ui.form.on("zzBulk Leave Encashment", {
 	refresh: function(frm) {
 		highlight_rows(frm);
 		
+		frm.ignore_doctypes_on_cancel_all = ["Leave Encashment", "Additional Salary", "Leave Ledger Entry", "GL Entry", "Payment Ledger Entry", "Advance Payment Ledger Entry"];
+
 		frm.set_df_property('bulk_leave_encashment_details', 'cannot_add_rows', true);
 		if(frm.doc.docstatus != 2 && frm.doc.docstatus != 1){
 			frm.add_custom_button(__("Get Selected Employees"), function() {
@@ -121,9 +123,9 @@ frappe.ui.form.on("zzBulk Leave Encashment Details", {
 	encashable_days: function(frm, cdt, cdn) {
 		let row = locals[cdt][cdn];
 		if (row.encashable_days !== undefined && row.encashable_days !== null) {
-			let max_allowed = flt(row.available_balance) - flt(row.leave_application);
+			let max_allowed = flt(row.available_balance);
 			if (flt(row.encashable_days) > max_allowed) {
-				frappe.msgprint(__("Row {0}: Encashable Days ({1}) cannot be greater than Available Balance minus Leave Application ({2}).", [row.idx, row.encashable_days, max_allowed]));
+				frappe.msgprint(__("Row {0}: Encashable Days ({1}) cannot be greater than Available Balance ({2}).", [row.idx, row.encashable_days, max_allowed]));
 				frappe.model.set_value(cdt, cdn, "encashable_days", max_allowed);
 			}
 		}
@@ -132,7 +134,7 @@ frappe.ui.form.on("zzBulk Leave Encashment Details", {
 
 function calculate_encashable_days(frm, cdt, cdn) {
 	let row = locals[cdt][cdn];
-	let encashable = flt(row.available_balance) - flt(row.leave_application);
+	let encashable = flt(row.available_balance);
 	frappe.model.set_value(cdt, cdn, "encashable_days", encashable);
 }
 
@@ -145,27 +147,36 @@ function highlight_rows(frm) {
 		grid.grid_rows.forEach(grid_row => {
 			if (!grid_row.row) return;
 			let remarks = (grid_row.doc && grid_row.doc.remarks) ? grid_row.doc.remarks.toString().toLowerCase() : "";
+			
+			$(grid_row.row).css({"background-color": "", "color": ""});
+			$(grid_row.row).find('.grid-static-col').css({"background-color": "", "color": ""});
+
+			let is_dark = $('html').attr('data-theme') === 'dark';
+			let bg_color = is_dark ? 'var(--error-bg, #450a0a)' : 'var(--error-bg, #fee2e2)';
+			let text_color = is_dark ? 'var(--text-color, #fca5a5)' : 'var(--text-color, #991b1b)';
+
 			if (remarks.includes("failed")) {
 				$(grid_row.row).css({
-					"background-color": "#fee2e2",
-					"color": "#991b1b"
+					"background-color": bg_color,
+					"color": text_color
 				});
 				$(grid_row.row).find('.grid-static-col').css({
-					"background-color": "#fee2e2",
-					"color": "#991b1b"
-				});
-			} else if (remarks.includes("successful")) {
-				$(grid_row.row).css({
-					"background-color": "#dcfce7",
-					"color": "#166534"
-				});
-				$(grid_row.row).find('.grid-static-col').css({
-					"background-color": "#dcfce7",
-					"color": "#166534"
+					"background-color": bg_color,
+					"color": text_color
 				});
 			}
 		});
 	}, 100);
 }
+
+frappe.realtime.on("update_row_highlight", function(data) {
+	if(cur_frm && cur_frm.doc.doctype === "zzBulk Leave Encashment") {
+		let row = frappe.get_doc("zzBulk Leave Encashment Details", data.row_name);
+		if(row) {
+			frappe.model.set_value(row.doctype, row.name, "remarks", data.remarks);
+			highlight_rows(cur_frm);
+		}
+	}
+});
 
 

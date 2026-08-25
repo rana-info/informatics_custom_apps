@@ -27,12 +27,16 @@ class zzBulkLeaveEncashment(Document):
 
 		if self.bulk_leave_encashment_details:
 			for d in self.bulk_leave_encashment_details:
+				if d.remarks and d.remarks.startswith("Failed"):
+					d.remarks = ""
+					
 				if d.employee:
 					relieving_date = frappe.db.get_value("Employee", d.employee, "relieving_date")
 					if relieving_date:
-						frappe.throw(_("Row {0}: Relieving date ({1}) is set for Employee {2} ({3}). Please remove the relieving date first.").format(
-							d.idx, formatdate(relieving_date), d.employee, d.employee_name or d.employee
-						))
+						d.remarks = f"Failed: Relieving date ({formatdate(relieving_date)}) is set. Please remove the relieving date first."
+						# frappe.throw(_("Row {0}: Relieving date ({1}) is set for Employee {2} ({3}). Please remove the relieving date first.").format(
+						# 	d.idx, formatdate(relieving_date), d.employee, d.employee_name or d.employee
+						# ))
 
 				if d.employee and d.leave_type:
 					try:
@@ -48,26 +52,32 @@ class zzBulkLeaveEncashment(Document):
 					except Exception:
 						pass
 
-					max_allowed = flt(d.available_balance) - flt(d.leave_application or 0)
+					max_allowed = flt(d.available_balance)
 					if flt(d.encashable_days) > max_allowed:
-						frappe.throw(_("Row {0}: Encashable Days ({1}) cannot be greater than Available Balance minus Leave Application ({2}) for Employee {3}.").format(
-							d.idx, d.encashable_days, max_allowed, d.employee
-						))
+						d.remarks = f"Failed: Encashable Days ({d.encashable_days}) cannot be greater than Available Balance ({max_allowed})."
+						# frappe.throw(_("Row {0}: Encashable Days ({1}) cannot be greater than Available Balance minus Leave Application ({2}) for Employee {3}.").format(
+						# 	d.idx, d.encashable_days, max_allowed, d.employee
+						# ))
 
-					if flt(d.encashable_days) <= 0:
-						frappe.throw(_("Row {0}: Encashable Days must be greater than 0 for Employee {1}.").format(
-							d.idx, d.employee
-						))
+					elif flt(d.encashable_days) <= 0:
+						d.remarks = "Failed: Encashable Days must be greater than 0."
+						# frappe.throw(_("Row {0}: Encashable Days must be greater than 0 for Employee {1}.").format(
+						# 	d.idx, d.employee
+						# ))
 
 				if not d.salary_structure_assignment:
-					frappe.throw(_("Row {0}: Active Salary Structure Assignment not found for Employee {1}.").format(
-						d.idx, d.employee
-					))
+					if not d.remarks or not d.remarks.startswith("Failed"):
+						d.remarks = "Failed: Active Salary Structure Assignment not found."
+					# frappe.throw(_("Row {0}: Active Salary Structure Assignment not found for Employee {1}.").format(
+					# 	d.idx, d.employee
+					# ))
 
 				if not d.formula:
-					frappe.throw(_("Row {0}: Formula not defined for Earning Component in Leave Type {1}.").format(
-						d.idx, d.leave_type
-					))
+					if not d.remarks or not d.remarks.startswith("Failed"):
+						d.remarks = f"Failed: Formula not defined for Earning Component in Leave Type {d.leave_type}."
+					# frappe.throw(_("Row {0}: Formula not defined for Earning Component in Leave Type {1}.").format(
+					# 	d.idx, d.leave_type
+					# ))
 
 				is_record_exist = frappe.db.sql("""select bd.name,bd.parent from `tabBulk Leave Encashment Details` bd
 									inner join `tabBulk Leave Encashment` b on bd.parent = b.name
@@ -76,9 +86,15 @@ class zzBulkLeaveEncashment(Document):
 									(self.name or "",self.season,self.branch,self.work_location,self.from_date,self.to_date,self.payroll_date,d.employee,d.leave_type),as_dict=1)
 				if is_record_exist:
 					rec = frappe.get_cached_doc("Bulk Leave Encashment Details",{"parent":is_record_exist[0]["parent"]})
-					frappe.throw(_("Row {0}: Existing record {1} already found for Employee {2}.").format(
-						d.idx, get_link_to_form('zzBulk Leave Encashment', rec.parent), d.employee
-					))
+					if not d.remarks or not d.remarks.startswith("Failed"):
+						d.remarks = f"Failed: Existing record {get_link_to_form('zzBulk Leave Encashment', rec.parent)} already found."
+					# 	d.idx, get_link_to_form('zzBulk Leave Encashment', rec.parent), d.employee
+					# ))
+
+	def before_submit(self):
+		for d in self.bulk_leave_encashment_details:
+			if d.remarks and d.remarks.startswith("Failed"):
+				frappe.throw(_("Cannot submit document. Row {0} for Employee {1} has an error. Please resolve the issue or remove the row.").format(d.idx, d.employee))
 	
 	@frappe.whitelist()
 	def get_all_employees(self,company,branch,work_location):
@@ -167,7 +183,7 @@ class zzBulkLeaveEncashment(Document):
 			except Exception:
 				avail_balance = 0.0
 
-			encashable_days = avail_balance - leave_application_taken
+			encashable_days = avail_balance
 
 			if d.employee not in existing_data_dict or existing_data_dict[d.employee] != d.leave_type:
 				self.append("bulk_leave_encashment_details",{
@@ -232,7 +248,22 @@ class zzBulkLeaveEncashment(Document):
 			enqueue_after_commit=True
 		)
 
+	def before_cancel(self):
+		self.ignore_linked_doctypes = [
+			"Leave Encashment",
+			"Additional Salary",
+			"Leave Ledger Entry",
+			"GL Entry",
+			"Payment Ledger Entry",
+			"Advance Payment Ledger Entry",
+		]
+		# Cancel all linked documents synchronously before the bulk doc is cancelled
+		self.cancel_leave_encashments()
+
 	def on_cancel(self):
+		for d in self.bulk_leave_encashment_details:
+			if d.remarks and d.remarks.startswith("Successful"):
+				d.db_set("remarks", "Cancelled: Leave encashment reversed")
 		frappe.msgprint(
 			title=_("Cancelling Leave Encashment"),
 			indicator="orange",
@@ -254,11 +285,13 @@ class zzBulkLeaveEncashment(Document):
 
 			if flt(d.encashable_days) <= 0:
 				d.db_set("remarks", "Failed: Encashable days must be greater than 0")
+				frappe.publish_realtime("update_row_highlight", {"row_name": d.name, "remarks": d.remarks}, user=frappe.session.user)
 				continue
 
-			max_allowed = flt(d.available_balance) - flt(d.leave_application or 0)
+			max_allowed = flt(d.available_balance)
 			if flt(d.encashable_days) > max_allowed:
-				d.db_set("remarks", f"Failed: Encashable days ({d.encashable_days}) cannot be greater than Available Balance minus Leave Application ({max_allowed})")
+				d.db_set("remarks", f"Failed: Encashable days ({d.encashable_days}) cannot be greater than Available Balance ({max_allowed})")
+				frappe.publish_realtime("update_row_highlight", {"row_name": d.name, "remarks": d.remarks}, user=frappe.session.user)
 				continue
 
 			try:
@@ -267,15 +300,18 @@ class zzBulkLeaveEncashment(Document):
 				leave_period = frappe.db.get_value("Leave Period", {"company": self.company, "is_active": 1})
 				if not leave_period:
 					d.db_set("remarks", f"Failed: No active leave period for company {self.company}")
+					frappe.publish_realtime("update_row_highlight", {"row_name": d.name, "remarks": d.remarks}, user=frappe.session.user)
 					continue
 
 				if not d.salary_structure_assignment:
 					d.db_set("remarks", "Failed: No active Salary Structure Assignment found")
+					frappe.publish_realtime("update_row_highlight", {"row_name": d.name, "remarks": d.remarks}, user=frappe.session.user)
 					continue
 
 				encashment_amount = flt(self.get_encashment_data(d))
 				if encashment_amount <= 0:
 					d.db_set("remarks", "Failed: Encashment amount must be greater than 0")
+					frappe.publish_realtime("update_row_highlight", {"row_name": d.name, "remarks": d.remarks}, user=frappe.session.user)
 					continue
 
 				le = frappe.new_doc("Leave Encashment")
@@ -290,15 +326,18 @@ class zzBulkLeaveEncashment(Document):
 				le.submit()
 
 				d.db_set("remarks", f"Successful: Created {le.name}")
+				frappe.publish_realtime("update_row_highlight", {"row_name": d.name, "remarks": d.remarks}, user=frappe.session.user)
 			except Exception as e:
 				frappe.db.rollback()
 				error_msg = str(e).replace("<br>", " ").strip()
 				if len(error_msg) > 140:
 					error_msg = error_msg[:137] + "..."
 				d.db_set("remarks", f"Failed: {error_msg}")
+				frappe.publish_realtime("update_row_highlight", {"row_name": d.name, "remarks": d.remarks}, user=frappe.session.user)
 				frappe.db.commit()
 
 	def cancel_leave_encashments(self):
+		"""Cancel all linked Leave Encashments, Additional Salaries and delete Leave Ledger Entries."""
 		encashments = frappe.get_all(
 			"Leave Encashment",
 			filters={
@@ -310,18 +349,53 @@ class zzBulkLeaveEncashment(Document):
 
 		for le_name in encashments:
 			try:
+				# Step 1: Cancel Additional Salaries linked to this Leave Encashment
+				additional_salaries = frappe.get_all(
+					"Additional Salary",
+					filters={
+						"ref_doctype": "Leave Encashment",
+						"ref_docname": le_name,
+						"docstatus": 1
+					},
+					pluck="name"
+				)
+				for ads_name in additional_salaries:
+					ads = frappe.get_doc("Additional Salary", ads_name)
+					if ads.salary_component in ["Leave Encashment", "Leave Encashment-Casual", "Leave Encashment-Sick"]:
+						ads.flags.ignore_permissions = True
+						ads.flags.from_bulk_cancellation = True
+						ads.cancel()
+
+				# Step 2: Cancel the Leave Encashment itself
 				le_doc = frappe.get_doc("Leave Encashment", le_name)
 				le_doc.flags.ignore_permissions = True
+				le_doc.flags.ignore_links = True
+				le_doc.flags.from_bulk_cancellation = True
 				le_doc.cancel()
+
+				# Step 3: Cancel and forcefully delete all associated Leave Ledger Entries
+				# This handles both the original entry and the reversal entry created by le_doc.cancel()
+				lle_list = frappe.get_all(
+					"Leave Ledger Entry",
+					filters={
+						"transaction_type": "Leave Encashment",
+						"transaction_name": le_name
+					},
+					fields=["name", "docstatus"]
+				)
+				for lle_row in lle_list:
+					lle = frappe.get_doc("Leave Ledger Entry", lle_row.name)
+					if lle.docstatus == 1:
+						lle.flags.ignore_permissions = True
+						lle.cancel()
+					frappe.delete_doc("Leave Ledger Entry", lle.name, force=True, ignore_permissions=True)
+
 			except Exception as e:
 				frappe.log_error(
 					message=f"Failed to cancel Leave Encashment {le_name}: {str(e)}",
 					title="Bulk Leave Encashment Cancellation Error"
 				)
-
-		for d in self.bulk_leave_encashment_details:
-			if d.remarks and d.remarks.startswith("Successful"):
-				d.db_set("remarks", "Cancelled: Leave encashment reversed")
+				raise
 
 	def get_encashment_data(self, d):
 		whitelisted_globals = {
@@ -393,6 +467,18 @@ def process_leave_encashment(docname):
 def process_cancellation(docname):
 	doc = frappe.get_doc("zzBulk Leave Encashment", docname)
 	doc.cancel_leave_encashments()
+
+def prevent_individual_cancellation(doc, method):
+	if getattr(doc.flags, "from_bulk_cancellation", False):
+		return
+		
+	if doc.doctype == "Leave Encashment" and doc.get("custom_bulk_leave_encashment"):
+		frappe.throw(_("Please cancel the associated zzBulk Leave Encashment ({0}) first.").format(doc.custom_bulk_leave_encashment))
+		
+	if doc.doctype == "Additional Salary" and doc.get("ref_doctype") == "Leave Encashment" and doc.get("ref_docname"):
+		parent_bulk = frappe.db.get_value("Leave Encashment", doc.ref_docname, "custom_bulk_leave_encashment")
+		if parent_bulk:
+			frappe.throw(_("Please cancel the associated zzBulk Leave Encashment ({0}) first.").format(parent_bulk))
 
 
 

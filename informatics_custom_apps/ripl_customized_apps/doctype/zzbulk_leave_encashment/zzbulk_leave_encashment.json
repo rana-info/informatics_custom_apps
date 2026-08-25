@@ -96,6 +96,7 @@
    "fieldtype": "Section Break"
   },
   {
+   "allow_bulk_edit": 1,
    "fieldname": "bulk_leave_encashment_details",
    "fieldtype": "Table",
    "label": "Bulk Leave Encashment Details",
@@ -151,7 +152,7 @@
    "link_fieldname": "custom_bulk_leave_encashment"
   }
  ],
- "modified": "2026-08-24 14:37:15.756872",
+ "modified": "2026-08-25 12:28:50.420614",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "zzBulk Leave Encashment",
@@ -168,7 +169,8 @@
    "print": 1,
    "read": 1,
    "report": 1,
-   "role": "System Manager",
+   "role": "Master Admin",
+   "select": 1,
    "share": 1,
    "submit": 1,
    "write": 1
