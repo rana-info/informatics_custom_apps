@@ -88,51 +88,91 @@ def get_columns(filters, months):
     return columns
 
 
-def get_category_maps():
-    grouping = frappe.get_single("Cost Analysis GL Grouping")
+def get_grouping_doc():
+    return frappe.get_single("Cost Analysis GL Grouping")
 
-    section_cost_type = {}
-    section_order = []
-    for row in grouping.section_name:
-        if row.section_name:
-            section_cost_type[row.section_name] = row.cost_type or "Direct Cost"
-            section_order.append(row.section_name)
 
+def get_section_definitions(grouping):
+    """Returns (section_name -> [account_number, ...], [section_name in first-seen order])."""
     section_codes = {}
+    section_seen_order = []
+
+    for row in grouping.section_name:
+        if row.section_name and row.section_name not in section_codes:
+            section_codes[row.section_name] = []
+            section_seen_order.append(row.section_name)
+
     for row in grouping.cost_analysis_gl:
         if not row.section_name or not row.account_number:
             continue
         section_codes.setdefault(row.section_name, [])
         if row.account_number not in section_codes[row.section_name]:
             section_codes[row.section_name].append(row.account_number)
+        if row.section_name not in section_seen_order:
+            section_seen_order.append(row.section_name)
 
-    # Sections that have GL rows but no entry in section_name (no defined
-    # order/cost_type) are appended at the end, in the order encountered,
-    # defaulting to Direct Cost - same fallback behaviour as before.
-    for section in section_codes:
-        if section not in section_cost_type:
-            section_cost_type[section] = "Direct Cost"
-            section_order.append(section)
+    # drop sections with no GL codes at all - nothing to compute
+    section_codes = {name: codes for name, codes in section_codes.items() if codes}
+    section_seen_order = [name for name in section_seen_order if name in section_codes]
 
-    ordered_sections = []
-    for section in section_order:
-        codes = section_codes.get(section)
-        if not codes:
+    return section_codes, section_seen_order
+
+
+def get_total_row_definitions(grouping):
+    """Returns row_label -> {components, row_style, reverse_color, is_cop_base}."""
+    total_rows = {}
+    total_row_seen_order = []
+
+    for row in grouping.total_row:
+        if not row.row_label:
             continue
-        ordered_sections.append({
-            "section_name": section,
-            "codes": codes,
-            "cost_type": section_cost_type.get(section, "Direct Cost")
-        })
+        total_rows[row.row_label] = {
+            "components": [],
+            "row_style": row.row_style or "Total",
+            "reverse_color": bool(row.reverse_variance_color),
+            "is_cop_base": bool(row.is_cop_base)
+        }
+        total_row_seen_order.append(row.row_label)
 
-    return ordered_sections
+    for row in grouping.total_row_components:
+        if not row.row_label or row.row_label not in total_rows:
+            continue
+        if not row.component_name or not row.component_type:
+            continue
+        total_rows[row.row_label]["components"].append((row.component_type, row.component_name))
+
+    return total_rows, total_row_seen_order
 
 
-def is_by_product_section(section_name, cost_type):
+def get_row_sequence(grouping, section_codes, section_seen_order, total_rows, total_row_seen_order):
+    """The single ordered list (Section / Total Row entries) that drives report + summary order."""
+    sequence = []
+    seen = set()
+
+    for row in grouping.row_sequence:
+        if row.row_type == "Section" and row.row_name in section_codes and row.row_name not in seen:
+            sequence.append(("Section", row.row_name))
+            seen.add(row.row_name)
+        elif row.row_type == "Total Row" and row.row_name in total_rows and row.row_name not in seen:
+            sequence.append(("Total Row", row.row_name))
+            seen.add(row.row_name)
+
+    for name in section_seen_order:
+        if name not in seen:
+            sequence.append(("Section", name))
+            seen.add(name)
+
+    for label in total_row_seen_order:
+        if label not in seen:
+            sequence.append(("Total Row", label))
+            seen.add(label)
+
+    return sequence
+
+
+def is_by_product_section(section_name):
     name_l = (section_name or "").lower()
-    type_l = (cost_type or "").lower().replace("-", " ").strip()
-    type_l = " ".join(type_l.split())  # collapse repeated whitespace
-    return "by product" in name_l or "by-product" in name_l or type_l == "by product credit"
+    return "by product" in name_l or "by-product" in name_l
 
 
 def get_variance_color(actual, budget, reverse=False):
@@ -654,6 +694,121 @@ def get_quant_data(filters, months, FIXED_PROD_ITEMS_MAP, FIXED_SALES_ITEMS_MAP,
     return data
 
 
+def new_type_totals(months):
+    return {
+        "months": zero_month_dict(months),
+        "total_actual": 0.0,
+        "budget_amount": 0.0,
+        "budget_per_bl": 0.0
+    }
+
+
+def build_summary_totals_row(label, totals_dict, months, monthly_prod_map, total_ytd_production, flag_key, reverse_color=False):
+    tot_act = totals_dict["total_actual"]
+    budget_amount = totals_dict.get("budget_amount", 0.0)
+    budget_per_bl = totals_dict.get("budget_per_bl", 0.0)
+    total_per_bl = round(tot_act / total_ytd_production, 2) if total_ytd_production else 0.0
+
+    row = {
+        "expense_category": label,
+        "gl_code": "",
+        "indent": 0,
+        "budget_amount": budget_amount,
+        "budget_per_bl": budget_per_bl,
+        "total_actual": tot_act,
+        "total_per_bl": total_per_bl,
+        "total_per_bl_color": get_variance_color(total_per_bl, budget_per_bl, reverse_color)
+    }
+    if flag_key:
+        row[flag_key] = 1
+    for m in months:
+        m_key = m["key"]
+        m_tot = totals_dict["months"][m_key]
+        m_prod = monthly_prod_map.get(m_key, 0.0)
+        m_per_bl = round(m_tot / m_prod, 2) if m_prod else 0.0
+        row[f"actual_{m_key}"] = m_tot
+        row[f"per_bl_{m_key}"] = m_per_bl
+        row[f"per_bl_{m_key}_color"] = get_variance_color(m_per_bl, budget_per_bl, reverse_color)
+
+    return row
+
+
+ROW_STYLE_FLAG = {
+    "Total": "is_total_row",
+    "Subtotal": "is_subtotal",
+    "Grand Total": "is_grand_total"
+}
+
+
+def build_section_rows(section_name, gl_codes, code_data_cache, code_to_title, budget_by_account,
+                        months, monthly_prod_map, total_ytd_production, hide_zero, show_summary):
+    """Returns (rows_to_display, cat_totals) for a single section."""
+    reverse_color = is_by_product_section(section_name)
+    cat_totals = new_type_totals(months)
+    category_rows = []
+
+    for code in gl_codes:
+        code_budget = budget_by_account.get(code, {})
+        row_budget_amount = code_budget.get("budget_amount", 0.0)
+        row_budget_per_bl = code_budget.get("budget_per_bl", 0.0)
+
+        row_data = {}
+        row_tot_act = 0.0
+        c_data = code_data_cache.get(code, {})
+
+        for m in months:
+            m_key = m["key"]
+            m_act = c_data.get(m_key, 0.0)
+            m_prod = monthly_prod_map.get(m_key, 0.0)
+            m_per_bl = round(m_act / m_prod, 2) if m_prod else 0.0
+
+            row_data[f"actual_{m_key}"] = m_act
+            row_data[f"per_bl_{m_key}"] = m_per_bl
+            row_data[f"per_bl_{m_key}_color"] = get_variance_color(m_per_bl, row_budget_per_bl, reverse_color)
+
+            row_tot_act += m_act
+            cat_totals["months"][m_key] += m_act
+
+        row_tot_per_bl = round(row_tot_act / total_ytd_production, 2) if total_ytd_production else 0.0
+        cat_totals["total_actual"] += row_tot_act
+        cat_totals["budget_amount"] += row_budget_amount
+        cat_totals["budget_per_bl"] += row_budget_per_bl
+
+        if hide_zero and row_tot_act == 0:
+            continue
+
+        detail_row = {
+            "expense_category": code_to_title.get(code, code),
+            "gl_code": code,
+            "indent": 1,
+            "budget_amount": row_budget_amount,
+            "budget_per_bl": row_budget_per_bl,
+            "total_actual": row_tot_act,
+            "total_per_bl": row_tot_per_bl,
+            "total_per_bl_color": get_variance_color(row_tot_per_bl, row_budget_per_bl, reverse_color)
+        }
+        detail_row.update(row_data)
+        category_rows.append(detail_row)
+
+    if hide_zero and not category_rows and cat_totals["total_actual"] == 0:
+        return [], cat_totals
+
+    display_rows = []
+
+    if show_summary:
+        summary_row = build_summary_totals_row(section_name, cat_totals, months, monthly_prod_map,
+                                                 total_ytd_production, None, reverse_color)
+        display_rows.append(summary_row)
+    else:
+        display_rows.append({"expense_category": section_name, "gl_code": "", "indent": 0, "is_header": 1})
+        display_rows.extend(category_rows)
+        subtotal_row = build_summary_totals_row("Sub Total", cat_totals, months, monthly_prod_map,
+                                                  total_ytd_production, "is_subtotal", reverse_color)
+        display_rows.append(subtotal_row)
+
+    return display_rows, cat_totals
+
+
 def get_cost_data(filters, months, FIXED_CODES, monthly_prod_map, total_ytd_production,
                    sales_qty_map, sales_val_map, show_summary, hide_zero,
                    company_val, branch_val, segment_val, budget_by_account=None, target_production=0.0):
@@ -675,15 +830,16 @@ def get_cost_data(filters, months, FIXED_CODES, monthly_prod_map, total_ytd_prod
         prod_qty_row[f"per_bl_{m_key}"] = 1.0 if p_qty else 0.0
 
     data.append(prod_qty_row)
-
-
     data.append({"expense_category": "", "gl_code": "", "indent": 0, "is_blank_row": 1})
 
-    ordered_sections = get_category_maps()
+    grouping = get_grouping_doc()
+    section_codes, section_seen_order = get_section_definitions(grouping)
+    total_row_defs, total_row_seen_order = get_total_row_definitions(grouping)
+    sequence = get_row_sequence(grouping, section_codes, section_seen_order, total_row_defs, total_row_seen_order)
 
     all_codes = set()
-    for section in ordered_sections:
-        all_codes.update(section["codes"])
+    for codes in section_codes.values():
+        all_codes.update(codes)
 
     accounts = []
     if all_codes:
@@ -747,198 +903,78 @@ def get_cost_data(filters, months, FIXED_CODES, monthly_prod_map, total_ytd_prod
             for m in months
         }
 
-    def new_type_totals():
-        return {
-            "months": zero_month_dict(months),
-            "total_actual": 0.0,
-            "budget_amount": 0.0,
-            "budget_per_bl": 0.0
-        }
+    computed_totals = {}
+    cop_base_row = None
+    cop_base_label = None
 
-    def process_sections(sections):
-        rows = []
-        totals_by_type = {
-            "Direct Cost": new_type_totals(),
-            "By Product Credit": new_type_totals(),
-            "Indirect Cost": new_type_totals()
-        }
+    for row_type, row_name in sequence:
+        if row_type == "Section":
+            display_rows, cat_totals = build_section_rows(
+                row_name, section_codes.get(row_name, []), code_data_cache, code_to_title,
+                budget_by_account, months, monthly_prod_map, total_ytd_production, hide_zero, show_summary
+            )
+            data.extend(display_rows)
+            computed_totals[row_name] = cat_totals
 
-        for section in sections:
-            category_name = section["section_name"]
-            gl_codes = section["codes"]
-            raw_cost_type = section["cost_type"]
-            reverse_color = is_by_product_section(category_name, raw_cost_type)
-            cost_type = raw_cost_type if raw_cost_type in totals_by_type else "Direct Cost"
+        elif row_type == "Total Row":
+            total_def = total_row_defs[row_name]
+            agg = new_type_totals(months)
 
-            cat_totals = new_type_totals()
-            category_rows = []
-
-            for code in gl_codes:
-                code_budget = budget_by_account.get(code, {})
-                row_budget_amount = code_budget.get("budget_amount", 0.0)
-                row_budget_per_bl = code_budget.get("budget_per_bl", 0.0)
-
-                row_data = {}
-                row_tot_act = 0.0
-                c_data = code_data_cache.get(code, {})
-
-                for m in months:
-                    m_key = m["key"]
-                    m_act = c_data.get(m_key, 0.0)
-                    m_prod = monthly_prod_map.get(m_key, 0.0)
-                    m_per_bl = round(m_act / m_prod, 2) if m_prod else 0.0
-
-                    row_data[f"actual_{m_key}"] = m_act
-                    row_data[f"per_bl_{m_key}"] = m_per_bl
-                    row_data[f"per_bl_{m_key}_color"] = get_variance_color(m_per_bl, row_budget_per_bl, reverse_color)
-
-                    row_tot_act += m_act
-                    cat_totals["months"][m_key] += m_act
-
-                row_tot_per_bl = round(row_tot_act / total_ytd_production, 2) if total_ytd_production else 0.0
-                cat_totals["total_actual"] += row_tot_act
-                cat_totals["budget_amount"] += row_budget_amount
-                cat_totals["budget_per_bl"] += row_budget_per_bl
-
-                if hide_zero and row_tot_act == 0:
+            for comp_type, comp_name in total_def["components"]:
+                src = computed_totals.get(comp_name)
+                if not src:
+                    # component not yet computed (wrong order) or fully hidden by
+                    # hide_zero - contributes nothing rather than erroring out
                     continue
-
-                exact_account_name = code_to_title.get(code, code)
-
-                detail_row = {
-                    "expense_category": exact_account_name,
-                    "gl_code": code,
-                    "indent": 1,
-                    "budget_amount": row_budget_amount,
-                    "budget_per_bl": row_budget_per_bl,
-                    "total_actual": row_tot_act,
-                    "total_per_bl": row_tot_per_bl,
-                    "total_per_bl_color": get_variance_color(row_tot_per_bl, row_budget_per_bl, reverse_color)
-                }
-                detail_row.update(row_data)
-                category_rows.append(detail_row)
-
-            if hide_zero and not category_rows and cat_totals["total_actual"] == 0:
-                continue
-
-            if show_summary:
-                total_per_bl = round(cat_totals["total_actual"] / total_ytd_production, 2) if total_ytd_production else 0.0
-                summary_row = {
-                    "expense_category": category_name,
-                    "gl_code": "",
-                    "indent": 0,
-                    "budget_amount": cat_totals["budget_amount"],
-                    "budget_per_bl": cat_totals["budget_per_bl"],
-                    "total_actual": cat_totals["total_actual"],
-                    "total_per_bl": total_per_bl,
-                    "total_per_bl_color": get_variance_color(total_per_bl, cat_totals["budget_per_bl"], reverse_color)
-                }
                 for m in months:
-                    m_key = m["key"]
-                    m_tot = cat_totals["months"][m_key]
-                    m_prod = monthly_prod_map.get(m_key, 0.0)
-                    m_per_bl = round(m_tot / m_prod, 2) if m_prod else 0.0
-                    summary_row[f"actual_{m_key}"] = m_tot
-                    summary_row[f"per_bl_{m_key}"] = m_per_bl
-                    summary_row[f"per_bl_{m_key}_color"] = get_variance_color(m_per_bl, cat_totals["budget_per_bl"], reverse_color)
+                    agg["months"][m["key"]] += src["months"][m["key"]]
+                agg["total_actual"] += src["total_actual"]
+                agg["budget_amount"] += src.get("budget_amount", 0.0)
+                agg["budget_per_bl"] += src.get("budget_per_bl", 0.0)
 
-                rows.append(summary_row)
-            else:
-                rows.append({
-                    "expense_category": category_name,
-                    "gl_code": "",
-                    "indent": 0,
-                    "is_header": 1
-                })
-                rows.extend(category_rows)
+            flag_key = ROW_STYLE_FLAG.get(total_def["row_style"], "is_total_row")
+            total_row_out = build_summary_totals_row(
+                row_name, agg, months, monthly_prod_map, total_ytd_production,
+                flag_key, total_def["reverse_color"]
+            )
+            data.append(total_row_out)
+            computed_totals[row_name] = agg
 
-                subtotal_total_per_bl = round(cat_totals["total_actual"] / total_ytd_production, 2) if total_ytd_production else 0.0
-                subtotal_row = {
-                    "expense_category": "Sub Total",
-                    "gl_code": "",
-                    "indent": 1,
-                    "budget_amount": cat_totals["budget_amount"],
-                    "budget_per_bl": cat_totals["budget_per_bl"],
-                    "total_actual": cat_totals["total_actual"],
-                    "total_per_bl": subtotal_total_per_bl,
-                    "total_per_bl_color": get_variance_color(subtotal_total_per_bl, cat_totals["budget_per_bl"], reverse_color),
-                    "is_subtotal": 1
-                }
+            if total_def["is_cop_base"]:
+                cop_base_row = total_row_out
+                cop_base_label = row_name
+
+    if cop_base_row is None:
+        for row_type, row_name in reversed(sequence):
+            if row_type == "Total Row" and row_name in computed_totals:
+                cop_base_row = build_summary_totals_row(
+                    row_name, computed_totals[row_name], months, monthly_prod_map,
+                    total_ytd_production, "is_total_row"
+                )
+                break
+
+    if cop_base_row is None:
+        all_sections_agg = new_type_totals(months)
+        has_any_section = False
+        for row_type, row_name in sequence:
+            if row_type == "Section" and row_name in computed_totals:
+                has_any_section = True
+                src = computed_totals[row_name]
                 for m in months:
-                    m_key = m["key"]
-                    m_tot = cat_totals["months"][m_key]
-                    m_prod = monthly_prod_map.get(m_key, 0.0)
-                    m_per_bl = round(m_tot / m_prod, 2) if m_prod else 0.0
-                    subtotal_row[f"actual_{m_key}"] = m_tot
-                    subtotal_row[f"per_bl_{m_key}"] = m_per_bl
-                    subtotal_row[f"per_bl_{m_key}_color"] = get_variance_color(m_per_bl, cat_totals["budget_per_bl"], reverse_color)
+                    all_sections_agg["months"][m["key"]] += src["months"][m["key"]]
+                all_sections_agg["total_actual"] += src["total_actual"]
+                all_sections_agg["budget_amount"] += src.get("budget_amount", 0.0)
+                all_sections_agg["budget_per_bl"] += src.get("budget_per_bl", 0.0)
 
-                rows.append(subtotal_row)
+        if has_any_section:
+            cop_base_row = build_summary_totals_row(
+                "TOTAL COST", all_sections_agg, months, monthly_prod_map,
+                total_ytd_production, "is_total_row"
+            )
 
-            for m in months:
-                m_key = m["key"]
-                totals_by_type[cost_type]["months"][m_key] += cat_totals["months"][m_key]
-
-            totals_by_type[cost_type]["total_actual"] += cat_totals["total_actual"]
-            totals_by_type[cost_type]["budget_amount"] += cat_totals["budget_amount"]
-            totals_by_type[cost_type]["budget_per_bl"] += cat_totals["budget_per_bl"]
-
-        return rows, totals_by_type["Direct Cost"], totals_by_type["By Product Credit"], totals_by_type["Indirect Cost"]
-
-    def build_summary_totals_row(label, totals_dict, flag_key, reverse_color=False):
-        tot_act = totals_dict["total_actual"]
-        budget_amount = totals_dict.get("budget_amount", 0.0)
-        budget_per_bl = totals_dict.get("budget_per_bl", 0.0)
-        total_per_bl = round(tot_act / total_ytd_production, 2) if total_ytd_production else 0.0
-
-        row = {
-            "expense_category": label,
-            "gl_code": "",
-            "indent": 0,
-            "budget_amount": budget_amount,
-            "budget_per_bl": budget_per_bl,
-            "total_actual": tot_act,
-            "total_per_bl": total_per_bl,
-            "total_per_bl_color": get_variance_color(total_per_bl, budget_per_bl, reverse_color),
-            flag_key: 1
-        }
-        for m in months:
-            m_key = m["key"]
-            m_tot = totals_dict["months"][m_key]
-            m_prod = monthly_prod_map.get(m_key, 0.0)
-            m_per_bl = round(m_tot / m_prod, 2) if m_prod else 0.0
-            row[f"actual_{m_key}"] = m_tot
-            row[f"per_bl_{m_key}"] = m_per_bl
-            row[f"per_bl_{m_key}_color"] = get_variance_color(m_per_bl, budget_per_bl, reverse_color)
-
-        return row
-
-    section_rows, total_cost_sum, by_product_sum, below_cost_sum = process_sections(ordered_sections)
-    data.extend(section_rows)
-
-    data.append(build_summary_totals_row("TOTAL DIRECT COST", total_cost_sum, "is_total_row"))
-
-    net_cost_sum = {
-        "months": {m["key"]: total_cost_sum["months"][m["key"]] - abs(by_product_sum["months"][m["key"]]) for m in months},
-        "total_actual": total_cost_sum["total_actual"] - abs(by_product_sum["total_actual"]),
-        "budget_amount": total_cost_sum["budget_amount"] - abs(by_product_sum["budget_amount"]),
-        "budget_per_bl": total_cost_sum["budget_per_bl"] - abs(by_product_sum["budget_per_bl"])
-    }
-    data.append(build_summary_totals_row("NET DIRECT COST", net_cost_sum, "is_total_row"))
-
-    data.append(build_summary_totals_row("TOTAL INDIRECT COST", below_cost_sum, "is_subtotal"))
-
-    final_total_cost = {
-        "months": {m["key"]: net_cost_sum["months"][m["key"]] + below_cost_sum["months"][m["key"]] for m in months},
-        "total_actual": net_cost_sum["total_actual"] + below_cost_sum["total_actual"],
-        "budget_amount": net_cost_sum["budget_amount"] + below_cost_sum["budget_amount"],
-        "budget_per_bl": net_cost_sum["budget_per_bl"] + below_cost_sum["budget_per_bl"]
-    }
-    grand_total_row = build_summary_totals_row("GRAND TOTAL COST", final_total_cost, "is_grand_total")
-    data.append(grand_total_row)
-
-    data.extend(build_profitability_section(months, FIXED_CODES, monthly_prod_map, total_ytd_production,
-                                             sales_qty_map, sales_val_map, grand_total_row))
+    if cop_base_row is not None:
+        data.extend(build_profitability_section(months, FIXED_CODES, monthly_prod_map, total_ytd_production,
+                                                 sales_qty_map, sales_val_map, cop_base_row))
 
     return data
 

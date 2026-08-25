@@ -25,9 +25,14 @@ function handle_attach_change(frm, fieldname) {
 	} else if (!frm.is_new()) {
 		parse_hplc_pdf(frm, fieldname);
 	} else {
-		frappe.msgprint(
-			__("Please save the document once before attaching the PDF, so the file gets linked to this record and can be parsed.")
-		);
+		frappe.dom.freeze(__("Saving document so the PDF can be linked..."));
+		frm.save().then(() => {
+			frappe.dom.unfreeze();
+			parse_hplc_pdf(frm, fieldname);
+		}).catch(() => {
+			frappe.dom.unfreeze();
+			frappe.msgprint(__("Could not save the document automatically. Please save manually and re-attach the file."));
+		});
 	}
 
 	frm._hplc_last_urls = frm._hplc_last_urls || {};

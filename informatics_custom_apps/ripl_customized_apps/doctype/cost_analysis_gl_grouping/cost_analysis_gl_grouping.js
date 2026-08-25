@@ -1,6 +1,7 @@
 frappe.ui.form.on('Cost Analysis GL Grouping', {
     refresh(frm) {
         set_section_options(frm);
+        set_dynamic_row_options(frm);
         load_account_numbers(frm);
         add_create_per_bl_budget_button(frm);
     }
@@ -9,12 +10,27 @@ frappe.ui.form.on('Cost Analysis GL Grouping', {
 frappe.ui.form.on('Cost Analysis Section', {
     section_name(frm) {
         set_section_options(frm);
+        set_dynamic_row_options(frm);
     },
     section_name_add(frm) {
         set_section_options(frm);
+        set_dynamic_row_options(frm);
     },
     section_name_remove(frm) {
         set_section_options(frm);
+        set_dynamic_row_options(frm);
+    }
+});
+
+frappe.ui.form.on('Cost Analysis Total Row', {
+    row_label(frm) {
+        set_dynamic_row_options(frm);
+    },
+    total_row_add(frm) {
+        set_dynamic_row_options(frm);
+    },
+    total_row_remove(frm) {
+        set_dynamic_row_options(frm);
     }
 });
 
@@ -26,6 +42,29 @@ function set_section_options(frm) {
         "section_name", "options", sections.join("\n")
     );
     frm.fields_dict["cost_analysis_gl"].grid.refresh();
+}
+
+function set_dynamic_row_options(frm) {
+    let sections = (frm.doc.section_name || [])
+        .map(row => row.section_name)
+        .filter(Boolean);
+    let total_rows = (frm.doc.total_row || [])
+        .map(row => row.row_label)
+        .filter(Boolean);
+    let combined = sections.concat(total_rows);
+
+    if (frm.fields_dict["total_row_components"]) {
+        let grid = frm.fields_dict["total_row_components"].grid;
+        grid.update_docfield_property("row_label", "options", total_rows.join("\n"));
+        grid.update_docfield_property("component_name", "options", combined.join("\n"));
+        grid.refresh();
+    }
+
+    if (frm.fields_dict["row_sequence"]) {
+        let grid = frm.fields_dict["row_sequence"].grid;
+        grid.update_docfield_property("row_name", "options", combined.join("\n"));
+        grid.refresh();
+    }
 }
 
 function load_account_numbers(frm) {
