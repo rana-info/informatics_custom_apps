@@ -1,52 +1,58 @@
 {
  "actions": [],
- "creation": "2026-08-25 00:00:00.000000",
+ "creation": "2026-08-25 00:00:00",
  "doctype": "DocType",
  "editable_grid": 1,
  "engine": "InnoDB",
  "field_order": [
   "row_label",
-  "component_type",
-  "component_name"
+  "row_style",
+  "reverse_variance_color",
+  "is_cop_base"
  ],
  "fields": [
   {
-   "description": "Must exactly match a Row Label in the Total Row table above.",
    "fieldname": "row_label",
-   "fieldtype": "Select",
+   "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Total Row",
-   "options": "",
-   "reqd": 1
+   "label": "Row Label",
+   "reqd": 1,
+   "unique": 1
   },
   {
-   "default": "Section",
-   "fieldname": "component_type",
+   "default": "Total",
+   "fieldname": "row_style",
    "fieldtype": "Select",
    "in_list_view": 1,
-   "label": "Component Type",
-   "options": "Section\nTotal Row",
-   "reqd": 1
+   "label": "Row Style",
+   "options": "Total\nSubtotal\nGrand Total"
   },
   {
-   "description": "Must exactly match a Section Name (if Component Type = Section) or the Row Label of an earlier Total Row (if Component Type = Total Row). Components are simply added together, so a credit/by-product section should already carry a negative GL balance.",
-   "fieldname": "component_name",
-   "fieldtype": "Select",
+   "default": "0",
+   "description": "Colors this row's per-BL variance green when actual is worse than budget (use for credit/by-product style totals).",
+   "fieldname": "reverse_variance_color",
+   "fieldtype": "Check",
+   "label": "Reverse Variance Color"
+  },
+  {
+   "default": "0",
+   "description": "The report's Profitability section (Wgt Avg COP, Net Profit/Loss) is computed off whichever Total Row has this checked. Only one should be checked.",
+   "fieldname": "is_cop_base",
+   "fieldtype": "Check",
    "in_list_view": 1,
-   "label": "Component Name",
-   "options": "",
-   "reqd": 1
+   "label": "Use as Cost of Production Base"
   }
  ],
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-08-25 00:00:00.000000",
+ "modified": "2026-08-25 13:13:37.987252",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
- "name": "Cost Analysis Total Row Component",
+ "name": "Cost Analysis Total Row",
  "owner": "Administrator",
  "permissions": [],
+ "row_format": "Dynamic",
  "sort_field": "modified",
  "sort_order": "DESC",
  "states": []
