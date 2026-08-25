@@ -7,8 +7,114 @@ from frappe.model.document import Document
 
 
 class CostAnalysisGLGrouping(Document):
-	pass
+	def validate(self):
+		self.validate_total_row_setup()
 
+	def validate_total_row_setup(self):
+		section_names = {row.section_name for row in self.section_name if row.section_name}
+
+		total_row_labels = []
+		cop_base_count = 0
+		for row in self.total_row:
+			if not row.row_label:
+				continue
+			if row.row_label in total_row_labels:
+				frappe.throw(_("Total Row: duplicate Row Label {0}").format(frappe.bold(row.row_label)))
+			total_row_labels.append(row.row_label)
+			if row.is_cop_base:
+				cop_base_count += 1
+
+		if cop_base_count > 1:
+			frappe.throw(_("Only one Total Row can be marked \"Use as Cost of Production Base\""))
+
+		total_row_label_set = set(total_row_labels)
+
+		# component_graph: total_row_label -> [other total_row_labels it depends on]
+		component_graph = {label: [] for label in total_row_labels}
+
+		for row in self.total_row_components:
+			if not row.row_label and not row.component_name:
+				continue
+
+			if row.row_label not in total_row_label_set:
+				frappe.throw(
+					_("Total Row Components, row {0}: {1} does not match any Row Label in the Total Row table").format(
+						row.idx, frappe.bold(row.row_label)
+					)
+				)
+
+			if row.component_type == "Section":
+				if row.component_name not in section_names:
+					frappe.throw(
+						_("Total Row Components, row {0}: {1} does not match any Section Name").format(
+							row.idx, frappe.bold(row.component_name)
+						)
+					)
+			elif row.component_type == "Total Row":
+				if row.component_name not in total_row_label_set:
+					frappe.throw(
+						_("Total Row Components, row {0}: {1} does not match any Total Row Label").format(
+							row.idx, frappe.bold(row.component_name)
+						)
+					)
+				if row.component_name == row.row_label:
+					frappe.throw(
+						_("Total Row Components, row {0}: {1} cannot include itself as a component").format(
+							row.idx, frappe.bold(row.row_label)
+						)
+					)
+				component_graph[row.row_label].append(row.component_name)
+
+		self.check_total_row_cycles(component_graph)
+
+		section_or_total_names = section_names | total_row_label_set
+		seen_sequence_entries = set()
+		for row in self.row_sequence:
+			if not row.row_name:
+				continue
+
+			key = (row.row_type, row.row_name)
+			if key in seen_sequence_entries:
+				frappe.throw(
+					_("Row Sequence, row {0}: duplicate entry for {1} {2}").format(
+						row.idx, row.row_type, frappe.bold(row.row_name)
+					)
+				)
+			seen_sequence_entries.add(key)
+
+			if row.row_type == "Section" and row.row_name not in section_names:
+				frappe.throw(
+					_("Row Sequence, row {0}: {1} does not match any Section Name").format(
+						row.idx, frappe.bold(row.row_name)
+					)
+				)
+			if row.row_type == "Total Row" and row.row_name not in total_row_label_set:
+				frappe.throw(
+					_("Row Sequence, row {0}: {1} does not match any Total Row Label").format(
+						row.idx, frappe.bold(row.row_name)
+					)
+				)
+
+	def check_total_row_cycles(self, component_graph):
+		"""Depth-first search over Total Row -> Total Row dependencies to catch
+		circular references (e.g. A sums B, B sums A) before they cause an
+		infinite loop or silently-zero row in the report."""
+		WHITE, GRAY, BLACK = 0, 1, 2
+		state = {label: WHITE for label in component_graph}
+
+		def visit(label, path):
+			state[label] = GRAY
+			for dep in component_graph.get(label, []):
+				if state.get(dep) == GRAY:
+					cycle = " -> ".join(path + [dep])
+					frappe.throw(_("Circular reference between Total Rows: {0}").format(frappe.bold(cycle)))
+				if state.get(dep) == WHITE:
+					visit(dep, path + [dep])
+			state[label] = BLACK
+
+		for label in component_graph:
+			if state[label] == WHITE:
+				visit(label, [label])
 
 
 @frappe.whitelist()
@@ -20,6 +126,23 @@ def get_all_account_numbers():
         ORDER BY account_number
     """, as_dict=True)
     return [a.account_number for a in accounts]
+
+
+@frappe.whitelist()
+def get_section_names():
+    """Section Names currently defined in this doc's Cost Analysis Section table.
+    Useful for client-side autocomplete on Total Row Component / Row Sequence rows,
+    since those match by plain string rather than a Link field."""
+    gl_grouping = frappe.get_single("Cost Analysis GL Grouping")
+    return sorted({row.section_name for row in gl_grouping.section_name if row.section_name})
+
+
+@frappe.whitelist()
+def get_total_row_labels():
+    """Total Row Labels currently defined in this doc's Total Row table.
+    Useful for client-side autocomplete on Total Row Component / Row Sequence rows."""
+    gl_grouping = frappe.get_single("Cost Analysis GL Grouping")
+    return sorted({row.row_label for row in gl_grouping.total_row if row.row_label})
 
 
 @frappe.whitelist()

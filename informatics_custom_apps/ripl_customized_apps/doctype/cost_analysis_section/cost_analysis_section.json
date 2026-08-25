@@ -15,13 +15,6 @@
    "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Section Name"
-  },
-  {
-   "fieldname": "cost_type",
-   "fieldtype": "Select",
-   "in_list_view": 1,
-   "label": "Cost Type",
-   "options": "Direct Cost\nBy Product Credit\nIndirect Cost"
   }
  ],
  "grid_page_length": 50,

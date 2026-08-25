@@ -1,0 +1,43 @@
+{
+ "actions": [],
+ "creation": "2026-08-25 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "row_type",
+  "row_name"
+ ],
+ "fields": [
+  {
+   "default": "Section",
+   "fieldname": "row_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Row Type",
+   "options": "Section\nTotal Row",
+   "reqd": 1
+  },
+  {
+   "description": "Must exactly match a Section Name or a Total Row Label.",
+   "fieldname": "row_name",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Row Name",
+   "options": "",
+   "reqd": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-08-25 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "RIPL Customized Apps",
+ "name": "Cost Analysis Row Sequence",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
