@@ -19,6 +19,11 @@ from hrms.hr.doctype.leave_application.leave_application import get_leave_balanc
 class zzBulkLeaveEncashment(Document):
 	def validate(self):
 		today = nowdate()
+		
+		balance_date = today
+		if self.from_date and self.to_date:
+			if not (getdate(self.from_date) <= getdate(today) <= getdate(self.to_date)):
+				balance_date = self.to_date
 
 		if self.payroll_date and getdate(self.payroll_date) > getdate(today):
 			frappe.throw(_("Payroll Date ({0}) cannot be greater than Today's Date ({1}).").format(
@@ -43,8 +48,8 @@ class zzBulkLeaveEncashment(Document):
 						bal = get_leave_balance_on(
 							employee=d.employee,
 							leave_type=d.leave_type,
-							date=today,
-							to_date=today,
+							date=balance_date,
+							to_date=balance_date,
 							consider_all_leaves_in_the_allocation_period=True,
 							for_consumption=False
 						)
@@ -165,6 +170,11 @@ class zzBulkLeaveEncashment(Document):
 			frappe.throw("No Data Found")
 
 		today = nowdate()
+		balance_date = today
+		if self.from_date and self.to_date:
+			if not (getdate(self.from_date) <= getdate(today) <= getdate(self.to_date)):
+				balance_date = self.to_date
+
 		self.bulk_leave_encashment_details = []
 		for d in data:
 			salary_details = self.get_salary_details(d)
@@ -174,8 +184,8 @@ class zzBulkLeaveEncashment(Document):
 				bal = get_leave_balance_on(
 					employee=d.employee,
 					leave_type=d.leave_type,
-					date=today,
-					to_date=today,
+					date=balance_date,
+					to_date=balance_date,
 					consider_all_leaves_in_the_allocation_period=True,
 					for_consumption=False
 				)
