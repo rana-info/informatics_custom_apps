@@ -189,6 +189,18 @@ doc_events["Stock Entry"]["on_submit"] = (
     "informatics_custom_apps.customizations.segment_reallocation.on_stock_entry_submit"
 )
 
+PREVENT_INDIVIDUAL_CANCEL = (
+    "informatics_custom_apps.ripl_customized_apps.doctype.zzbulk_leave_encashment.zzbulk_leave_encashment.prevent_individual_cancellation"
+)
+
+doc_events["Leave Encashment"] = {
+    "before_cancel": PREVENT_INDIVIDUAL_CANCEL
+}
+
+doc_events["Additional Salary"] = {
+    "before_cancel": PREVENT_INDIVIDUAL_CANCEL
+}
+
 
 scheduler_events = {
 "daily_long": [

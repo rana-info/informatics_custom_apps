@@ -6,7 +6,12 @@
  "engine": "InnoDB",
  "field_order": [
   "section_name",
-  "cost_analysis_gl"
+  "cost_analysis_gl",
+  "section_break_total_rows",
+  "total_row",
+  "total_row_components",
+  "section_break_sequence",
+  "row_sequence"
  ],
  "fields": [
   {
@@ -20,13 +25,43 @@
    "fieldtype": "Table",
    "label": "Cost Analysis GL",
    "options": "Cost Analysis GL"
+  },
+  {
+   "fieldname": "section_break_total_rows",
+   "fieldtype": "Section Break",
+   "label": "Dynamic Total Rows"
+  },
+  {
+   "description": "Define a computed total/subtotal row (e.g. \"Net Cost of Production\", \"Total Cost Incld Sales Exp + Finance Cost\"). Each row here is the sum of whatever Sections and/or other Total Rows you list against it in Total Row Components below.",
+   "fieldname": "total_row",
+   "fieldtype": "Table",
+   "label": "Total Row",
+   "options": "Cost Analysis Total Row"
+  },
+  {
+   "fieldname": "total_row_components",
+   "fieldtype": "Table",
+   "label": "Total Row Components",
+   "options": "Cost Analysis Total Row Component"
+  },
+  {
+   "fieldname": "section_break_sequence",
+   "fieldtype": "Section Break",
+   "label": "Report Row Order"
+  },
+  {
+   "description": "Defines the exact display order of Sections and Total Rows in both the full Cost Analysis report and the Summary view. Anything defined above but left out here is appended automatically at the end, in the order it was defined, so nothing is silently dropped.",
+   "fieldname": "row_sequence",
+   "fieldtype": "Table",
+   "label": "Row Sequence",
+   "options": "Cost Analysis Row Sequence"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-08-13 16:29:35.094595",
+ "modified": "2026-08-25 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "Cost Analysis GL Grouping",

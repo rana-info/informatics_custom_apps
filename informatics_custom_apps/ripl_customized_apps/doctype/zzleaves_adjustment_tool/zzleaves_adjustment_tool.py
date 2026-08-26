@@ -146,6 +146,39 @@ class zzLeavesAdjustmentTool(Document):
 
             allocation_doc = frappe.get_doc("Leave Allocation", allocation_name)
 
+            max_leaves_allowed = flt(frappe.db.get_value("Leave Type", leave_type, "max_leaves_allowed") or 0)
+            if max_leaves_allowed > 0:
+                today = nowdate()
+                try:
+                    current_bal = get_leave_balance_on(
+                        employee=emp,
+                        leave_type=leave_type,
+                        date=today,
+                        to_date=today,
+                        consider_all_leaves_in_the_allocation_period=True,
+                        for_consumption=False
+                    )
+                    current_bal = flt(current_bal or 0)
+                except Exception:
+                    current_bal = flt(row.current_leave_balance or 0)
+
+                projected_total = current_bal + count
+                if projected_total > max_leaves_allowed:
+                    exceeded_by = projected_total - max_leaves_allowed
+                    precision = int(frappe.db.get_single_value("System Settings", "float_precision") or 2)
+                    exceeded_str = f"{exceeded_by:.{precision}f}".rstrip("0").rstrip(".")
+                    max_str = f"{max_leaves_allowed:.{precision}f}".rstrip("0").rstrip(".")
+                    cur_str = f"{current_bal:.{precision}f}".rstrip("0").rstrip(".")
+                    add_str = f"{count:.{precision}f}".rstrip("0").rstrip(".")
+
+                    row.status = "Failed"
+                    row.remarks = f"Exceeds max allowed leaves ({max_str}) by {exceeded_str} leaves (Current: {cur_str}, Additional: {add_str})"
+                    row.db_set("status", row.status)
+                    row.db_set("remarks", row.remarks)
+                    any_partial = True
+                    failed_count += 1
+                    continue
+
             ledger_dict = dict(
                 doctype="Leave Ledger Entry",
                 employee=allocation_doc.employee,
@@ -208,13 +241,13 @@ class zzLeavesAdjustmentTool(Document):
             timeout=3000
         )
 
-        frappe.msgprint(
-            _("Cancellation for document {0} has been queued in the background.").format(
-                frappe.bold(self.name)
-            ),
-            title=_("Cancellation Enqueued"),
-            indicator="orange"
-        )
+        # frappe.msgprint(
+        #     _("Cancellation for document {0} has been queued in the background.").format(
+        #         frappe.bold(self.name)
+        #     ),
+        #     title=_("Cancellation Enqueued"),
+        #     indicator="orange"
+        # )
 
 
 def process_cancellation(docname):
@@ -223,6 +256,10 @@ def process_cancellation(docname):
 
     for row in doc.leaves_data:
         if not row.employee or not row.leave_allocation:
+            continue
+
+        if row.status != "Updated":
+            row.db_set("status", "Cancelled")
             continue
 
         entries_to_delete = []

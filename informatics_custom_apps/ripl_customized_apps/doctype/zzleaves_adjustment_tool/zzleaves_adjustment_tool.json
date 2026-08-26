@@ -96,7 +96,7 @@
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-08-20 15:37:02.332070",
+ "modified": "2026-08-21 14:50:18.901421",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "zzLeaves Adjustment Tool",
@@ -104,6 +104,7 @@
  "owner": "Administrator",
  "permissions": [
   {
+   "amend": 1,
    "cancel": 1,
    "create": 1,
    "delete": 1,
@@ -112,7 +113,8 @@
    "print": 1,
    "read": 1,
    "report": 1,
-   "role": "System Manager",
+   "role": "Master Admin",
+   "select": 1,
    "share": 1,
    "submit": 1,
    "write": 1
