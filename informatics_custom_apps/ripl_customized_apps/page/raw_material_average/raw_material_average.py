@@ -6,12 +6,12 @@ PLANT_FIELD = "branch"
 HISTORY_MONTHS = 6
 PRICE_UOM = "Quintal"
 
-RICE_ITEM_CODE = "106441"
+RICE_ITEM_CODE = "106446"
 
 RAW_MATERIALS = [
-	{"item_code": "106444", "label": "Maize", "uom": "Quintal"},
-	{"item_code": RICE_ITEM_CODE, "label": "Rice", "uom": "Quintal"},
-	{"item_code": "106448", "label": "FCI", "uom": "Quintal"},
+	{"item_code": "106444", "label": "Maize (106444)", "uom": "Quintal"},
+	{"item_code": RICE_ITEM_CODE, "label": "Rice (106446)", "uom": "Quintal"},
+	{"item_code": "106448", "label": "FCI (106448)", "uom": "Quintal"},
 ]
 
 
@@ -126,7 +126,7 @@ def _fetch_avg_purchase_prices(item_codes, start, end, plant=None, group_by_plan
 
 	if group_by_plant and has_branch:
 		plant_select = ", w.custom_branch as plant"
-		group_sql = ", plant"
+		group_sql = ", custom_branch"
 	elif plant and has_branch:
 		plant_sql = " and w.custom_branch = %(plant)s"
 		values["plant"] = plant
