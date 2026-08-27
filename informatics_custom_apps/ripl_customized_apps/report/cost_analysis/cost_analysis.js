@@ -73,7 +73,14 @@ frappe.query_reports["Cost Analysis"] = {
         }
 
         if (data.is_quant_subtotal) {
-            return `<span style="font-weight: 700; color: #0f172a; border-top: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; display: block; padding: 2px 0;">${value}</span>`;
+            // Total rows now carry indent: 0 (server-side) so the datatable's
+            // tree/collapse grouping never nests them under the section
+            // header - this is what keeps them visible when the header is
+            // collapsed. Since that also strips the native indent-1 padding
+            // the detail rows get, add it back manually on the description
+            // column so the Total row still looks nested under its header.
+            let extra_padding = column.fieldname === "expense_category" ? "padding-left: 22px;" : "";
+            return `<span style="font-weight: 700; color: #0f172a; border-top: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; display: block; padding: 2px 0; ${extra_padding}">${value}</span>`;
         }
 
         if (data.is_header) {
