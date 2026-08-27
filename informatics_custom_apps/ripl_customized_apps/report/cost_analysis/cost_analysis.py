@@ -190,7 +190,7 @@ def get_variance_color(actual, budget, reverse=False):
 
 CONSUMPTION_ITEMS = [
     ("106444", "Maize", "maize_opening_balance", "maize_closing_balance"),
-    ("100474", "DFG", "dfg_opening_balance", "dfg_closing_balance"),
+    ("106446", "DFG", "dfg_opening_balance", "dfg_closing_balance"),
     ("106448", "Rice", "fci_opening_balance", "fci_closing_balance"),
 ]
 
