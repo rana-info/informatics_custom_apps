@@ -41,6 +41,11 @@ def zero_month_dict(months):
     return {m["key"]: 0.0 for m in months}
 
 
+def fmt_num(value):
+    """Format a number for the quant table's Data-type month/total columns."""
+    return frappe.utils.fmt_money(flt(value), precision=2, currency="")
+
+
 def get_columns(filters, months):
     show_quant = filters.get("show_quantitative_data", 0)
 
@@ -54,24 +59,24 @@ def get_columns(filters, months):
             columns.append({
                 "fieldname": f"actual_{m['key']}",
                 "label": _(m['label']),
-                "fieldtype": "Float",
-                "precision": 2,
-                "width": 120
+                "fieldtype": "Data",
+                "width": 120,
+                "align": "right"
             })
         columns.append({
             "fieldname": "total_actual",
             "label": _("Total"),
-            "fieldtype": "Float",
-            "precision": 2,
-            "width": 130
+            "fieldtype": "Data",
+            "width": 130,
+            "align": "right"
         })
         return columns
 
     columns = [
         {"fieldname": "expense_category", "label": _("Expense Category / Description"), "fieldtype": "Data", "width": 320},
         {"fieldname": "gl_code", "label": _("GL Code"), "fieldtype": "Data", "width": 100, "align": "center"},
-        {"fieldname": "budget_amount", "label": _("Budget Amount"), "fieldtype": "Currency", "width": 130},
-        {"fieldname": "budget_per_bl", "label": _("Budget Per BL"), "fieldtype": "Float", "precision": 2, "width": 120}
+        {"fieldname": "budget_amount", "label": _("Budget Amount (Rs.)"), "fieldtype": "Currency", "width": 150},
+        {"fieldname": "budget_per_bl", "label": _("Budget Per BL (Rs/BL)"), "fieldtype": "Float", "precision": 2, "width": 140}
     ]
 
     for m in months:
@@ -195,6 +200,8 @@ CONSUMPTION_ITEMS = [
 ]
 
 CONSUMPTION_UOM = "Quintal"
+
+CONSUMPTION_ITEM_CODES = {label: item_code for item_code, label, _opening, _closing in CONSUMPTION_ITEMS}
 
 
 def get_stock_uom(item_code):
@@ -332,34 +339,45 @@ def compute_consumption_data(company_val, branch_val, segment_val, months, filte
     return consumed_by_item, opening_by_item, closing_by_item
 
 
-def build_quant_section_from_data(title, items, data_by_item, months, uom=CONSUMPTION_UOM):
-    rows = [{"expense_category": title, "gl_code": "QTY", "uom": "", "indent": 0, "is_quant_header": 1}]
+def build_quant_section_from_data(title, items, data_by_item, months, uom=CONSUMPTION_UOM, label_to_code=None, header_gl_code_label="ITEM CODE"):
+    header_row = {"expense_category": title, "gl_code": header_gl_code_label, "uom": "", "indent": 0, "is_quant_header": 1}
+    rows = [header_row]
     totals = zero_month_dict(months)
     grand_total = 0.0
+    label_to_code = label_to_code or {}
 
     for label in items:
-        row = {"expense_category": label, "gl_code": "", "uom": uom, "indent": 1}
+        row = {"expense_category": label, "gl_code": label_to_code.get(label, ""), "uom": uom, "indent": 1}
         row_total = 0.0
         for m in months:
             m_key = m["key"]
             val = flt(data_by_item.get(label, {}).get(m_key, 0.0))
-            row[f"actual_{m_key}"] = val
+            row[f"actual_{m_key}"] = fmt_num(val)
             row_total += val
             totals[m_key] += val
-        row["total_actual"] = row_total
+        row["total_actual"] = fmt_num(row_total)
         grand_total += row_total
         rows.append(row)
 
-    tot_row = {"expense_category": "Total", "gl_code": "", "uom": uom, "indent": 1, "total_actual": grand_total, "is_quant_subtotal": 1}
+    # header row is just a section title - show "Qty" instead of duplicating the Total row's numbers
     for m in months:
-        tot_row[f"actual_{m['key']}"] = totals[m['key']]
+        header_row[f"actual_{m['key']}"] = "Qty"
+    header_row["total_actual"] = "Qty"
+
+    # indent 0 (not 1) so the Total row sits alongside the header in the
+    # datatable's tree grouping instead of being nested under it - this is
+    # what keeps it visible when the section is collapsed.
+    tot_row = {"expense_category": "Total", "gl_code": "", "uom": uom, "indent": 0, "total_actual": fmt_num(grand_total), "is_quant_subtotal": 1}
+    for m in months:
+        tot_row[f"actual_{m['key']}"] = fmt_num(totals[m['key']])
     rows.append(tot_row)
 
     return rows
 
 
 def build_recovery_section(item_month_prod, consumed_by_item, months):
-    rows = [{"expense_category": "Recovery", "gl_code": "QTY", "uom": "%", "indent": 0, "is_quant_header": 1}]
+    header_row = {"expense_category": "Recovery", "gl_code": "", "uom": "%", "indent": 0, "is_quant_header": 1}
+    rows = [header_row]
 
     def div(a, b):
         return round(a / b, 2) if b else 0.0
@@ -383,19 +401,26 @@ def build_recovery_section(item_month_prod, consumed_by_item, months):
             m_key = m["key"]
             num = sum(flt(item_month_prod.get(code, {}).get(m_key, 0.0)) for code in prod_codes)
             den = flt(consumed_by_item.get(consume_label, {}).get(m_key, 0.0))
-            row[f"actual_{m_key}"] = div(num, den)
+            row[f"actual_{m_key}"] = fmt_num(div(num, den))
             row_num_total += num
             row_den_total += den
             totals_num[m_key] += num
             totals_den[m_key] += den
-        row["total_actual"] = div(row_num_total, row_den_total)
+        row["total_actual"] = fmt_num(div(row_num_total, row_den_total))
         grand_num += row_num_total
         grand_den += row_den_total
         rows.append(row)
 
-    tot_row = {"expense_category": "Total", "gl_code": "", "uom": "%", "indent": 1, "total_actual": div(grand_num, grand_den), "is_quant_subtotal": 1}
+    # header row is just a section title - same convention as every other
+    # quant section ("Qty", "Amount in Rs.", "Rs/LTR"); no numbers here.
     for m in months:
-        tot_row[f"actual_{m['key']}"] = div(totals_num[m['key']], totals_den[m['key']])
+        header_row[f"actual_{m['key']}"] = "%"
+    header_row["total_actual"] = "%"
+
+    # indent 0 (not 1) - see build_quant_section_from_data for why.
+    tot_row = {"expense_category": "Total", "gl_code": "", "uom": "%", "indent": 0, "total_actual": fmt_num(div(grand_num, grand_den)), "is_quant_subtotal": 1}
+    for m in months:
+        tot_row[f"actual_{m['key']}"] = fmt_num(div(totals_num[m['key']], totals_den[m['key']]))
     rows.append(tot_row)
 
     return rows
@@ -581,7 +606,8 @@ def get_quant_data(filters, months, FIXED_PROD_ITEMS_MAP, FIXED_SALES_ITEMS_MAP,
                     company_val, branch_val, segment_val):
     data = []
 
-    data.append({"expense_category": "Production of Finished Goods", "gl_code": "Item Code", "uom": "", "indent": 0, "is_quant_header": 1})
+    fg_header_row = {"expense_category": "Production of Finished Goods", "gl_code": "Item Code", "uom": "", "indent": 0, "is_quant_header": 1}
+    data.append(fg_header_row)
     quant_totals = zero_month_dict(months)
     quant_ytd_total = 0.0
 
@@ -593,28 +619,34 @@ def get_quant_data(filters, months, FIXED_PROD_ITEMS_MAP, FIXED_SALES_ITEMS_MAP,
         for m in months:
             m_key = m["key"]
             qty = flt(item_month_prod.get(icode, {}).get(m_key, 0.0))
-            row[f"actual_{m_key}"] = qty
+            row[f"actual_{m_key}"] = fmt_num(qty)
             row_ytd += qty
             quant_totals[m_key] += qty
-        row["total_actual"] = row_ytd
+        row["total_actual"] = fmt_num(row_ytd)
         quant_ytd_total += row_ytd
         data.append(row)
 
-    tot_fg_row = {"expense_category": "Total", "gl_code": "", "uom": "", "indent": 1, "total_actual": quant_ytd_total, "is_quant_subtotal": 1}
     for m in months:
-        tot_fg_row[f"actual_{m['key']}"] = quant_totals[m['key']]
+        fg_header_row[f"actual_{m['key']}"] = "Qty"
+    fg_header_row["total_actual"] = "Qty"
+
+    # indent 0 (not 1) - keeps this Total visible when the header is collapsed.
+    tot_fg_row = {"expense_category": "Total", "gl_code": "", "uom": "", "indent": 0, "total_actual": fmt_num(quant_ytd_total), "is_quant_subtotal": 1}
+    for m in months:
+        tot_fg_row[f"actual_{m['key']}"] = fmt_num(quant_totals[m['key']])
     data.append(tot_fg_row)
 
     consumed_by_item, opening_by_item, closing_by_item = compute_consumption_data(
         company_val, branch_val, segment_val, months, filters
     )
 
-    data.extend(build_quant_section_from_data("Raw Mat Consumed", ["Maize", "DFG", "Rice"], consumed_by_item, months))
-    data.extend(build_quant_section_from_data("Opening WIP", ["Maize", "DFG", "Rice"], opening_by_item, months))
-    data.extend(build_quant_section_from_data("Closing WIP", ["Maize", "DFG", "Rice"], closing_by_item, months))
+    data.extend(build_quant_section_from_data("Raw Mat Consumed", ["Maize", "DFG", "Rice"], consumed_by_item, months, label_to_code=CONSUMPTION_ITEM_CODES))
+    data.extend(build_quant_section_from_data("Opening WIP", ["Maize", "DFG", "Rice"], opening_by_item, months, label_to_code=CONSUMPTION_ITEM_CODES))
+    data.extend(build_quant_section_from_data("Closing WIP", ["Maize", "DFG", "Rice"], closing_by_item, months, label_to_code=CONSUMPTION_ITEM_CODES))
     data.extend(build_recovery_section(item_month_prod, consumed_by_item, months))
 
-    data.append({"expense_category": "Sales QTY", "gl_code": "Item Code", "uom": "", "indent": 0, "is_quant_header": 1})
+    sqty_header_row = {"expense_category": "Sales QTY", "gl_code": "Item Code", "uom": "", "indent": 0, "is_quant_header": 1}
+    data.append(sqty_header_row)
     sqty_totals = zero_month_dict(months)
     sqty_ytd_total = 0.0
 
@@ -626,19 +658,24 @@ def get_quant_data(filters, months, FIXED_PROD_ITEMS_MAP, FIXED_SALES_ITEMS_MAP,
         for m in months:
             m_key = m["key"]
             qty = sales_qty_map.get(icode, {}).get(m_key, 0.0)
-            row[f"actual_{m_key}"] = qty
+            row[f"actual_{m_key}"] = fmt_num(qty)
             row_ytd += qty
             sqty_totals[m_key] += qty
-        row["total_actual"] = row_ytd
+        row["total_actual"] = fmt_num(row_ytd)
         sqty_ytd_total += row_ytd
         data.append(row)
 
-    tot_sqty_row = {"expense_category": "Total", "gl_code": "", "uom": "", "indent": 1, "total_actual": sqty_ytd_total, "is_quant_subtotal": 1}
     for m in months:
-        tot_sqty_row[f"actual_{m['key']}"] = sqty_totals[m['key']]
+        sqty_header_row[f"actual_{m['key']}"] = "Qty"
+    sqty_header_row["total_actual"] = "Qty"
+
+    tot_sqty_row = {"expense_category": "Total", "gl_code": "", "uom": "", "indent": 0, "total_actual": fmt_num(sqty_ytd_total), "is_quant_subtotal": 1}
+    for m in months:
+        tot_sqty_row[f"actual_{m['key']}"] = fmt_num(sqty_totals[m['key']])
     data.append(tot_sqty_row)
 
-    data.append({"expense_category": "Sales Value", "gl_code": "Item Code", "uom": "", "indent": 0, "is_quant_header": 1})
+    sval_header_row = {"expense_category": "Sales Amount", "gl_code": "Item Code", "uom": "", "indent": 0, "is_quant_header": 1}
+    data.append(sval_header_row)
     sval_totals = zero_month_dict(months)
     sval_ytd_total = 0.0
 
@@ -650,19 +687,24 @@ def get_quant_data(filters, months, FIXED_PROD_ITEMS_MAP, FIXED_SALES_ITEMS_MAP,
         for m in months:
             m_key = m["key"]
             val = sales_val_map.get(icode, {}).get(m_key, 0.0)
-            row[f"actual_{m_key}"] = val
+            row[f"actual_{m_key}"] = fmt_num(val)
             row_ytd += val
             sval_totals[m_key] += val
-        row["total_actual"] = row_ytd
+        row["total_actual"] = fmt_num(row_ytd)
         sval_ytd_total += row_ytd
         data.append(row)
 
-    tot_sval_row = {"expense_category": "Total", "gl_code": "", "uom": "", "indent": 1, "total_actual": sval_ytd_total, "is_quant_subtotal": 1}
     for m in months:
-        tot_sval_row[f"actual_{m['key']}"] = sval_totals[m['key']]
+        sval_header_row[f"actual_{m['key']}"] = "Amount in Rs."
+    sval_header_row["total_actual"] = "Amount in Rs."
+
+    tot_sval_row = {"expense_category": "Total", "gl_code": "", "uom": "", "indent": 0, "total_actual": fmt_num(sval_ytd_total), "is_quant_subtotal": 1}
+    for m in months:
+        tot_sval_row[f"actual_{m['key']}"] = fmt_num(sval_totals[m['key']])
     data.append(tot_sval_row)
 
-    data.append({"expense_category": "Sales Price", "gl_code": "Item Code", "uom": "", "indent": 0, "is_quant_header": 1})
+    sprice_header_row = {"expense_category": "Sales Price", "gl_code": "Item Code", "uom": "", "indent": 0, "is_quant_header": 1}
+    data.append(sprice_header_row)
     for item_info in FIXED_SALES_ITEMS_MAP:
         icode = item_info["code"]
         iname = item_info["name"]
@@ -674,22 +716,26 @@ def get_quant_data(filters, months, FIXED_PROD_ITEMS_MAP, FIXED_SALES_ITEMS_MAP,
             m_key = m["key"]
             m_qty = sales_qty_map.get(icode, {}).get(m_key, 0.0)
             m_val = sales_val_map.get(icode, {}).get(m_key, 0.0)
-            row[f"actual_{m_key}"] = round(m_val / m_qty, 2) if m_qty else 0.0
+            row[f"actual_{m_key}"] = fmt_num(round(m_val / m_qty, 2) if m_qty else 0.0)
 
-        row["total_actual"] = round(tot_item_val / tot_item_qty, 2) if tot_item_qty else 0.0
+        row["total_actual"] = fmt_num(round(tot_item_val / tot_item_qty, 2) if tot_item_qty else 0.0)
         data.append(row)
 
     wgt_avg_row = {
-        "expense_category": "WGT. AVG", "gl_code": "", "uom": "", "indent": 1,
-        "total_actual": round(sval_ytd_total / sqty_ytd_total, 2) if sqty_ytd_total else 0.0,
+        "expense_category": "WGT. AVG", "gl_code": "", "uom": "", "indent": 0,
+        "total_actual": fmt_num(round(sval_ytd_total / sqty_ytd_total, 2) if sqty_ytd_total else 0.0),
         "is_quant_subtotal": 1
     }
     for m in months:
         m_key = m["key"]
         m_tot_qty = sqty_totals[m_key]
         m_tot_val = sval_totals[m_key]
-        wgt_avg_row[f"actual_{m_key}"] = round(m_tot_val / m_tot_qty, 2) if m_tot_qty else 0.0
+        wgt_avg_row[f"actual_{m_key}"] = fmt_num(round(m_tot_val / m_tot_qty, 2) if m_tot_qty else 0.0)
     data.append(wgt_avg_row)
+
+    for m in months:
+        sprice_header_row[f"actual_{m['key']}"] = "Rs/LTR"
+    sprice_header_row["total_actual"] = "Rs/LTR"
 
     return data
 
@@ -923,8 +969,6 @@ def get_cost_data(filters, months, FIXED_CODES, monthly_prod_map, total_ytd_prod
             for comp_type, comp_name in total_def["components"]:
                 src = computed_totals.get(comp_name)
                 if not src:
-                    # component not yet computed (wrong order) or fully hidden by
-                    # hide_zero - contributes nothing rather than erroring out
                     continue
                 for m in months:
                     agg["months"][m["key"]] += src["months"][m["key"]]
