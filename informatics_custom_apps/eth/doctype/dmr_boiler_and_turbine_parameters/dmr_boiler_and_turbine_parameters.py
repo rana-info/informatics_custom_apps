@@ -91,7 +91,13 @@ PLANT_CONFIG = {
 				"next_day_start_col": None,
 				"next_day_end_col": None,
 				"field_tag_map": {
-					"float_zcpn": {"tag": "FT303", "label": "Steam Produced", "agg": "sum"}
+					"main_steam_pressure": {"tag": "PT302", "label": "Main Steam Pressure", "agg": "avg"},
+					"main_steam_temprature": {"tag": "TT306", "label": "Main Steam Temprature", "agg": "avg"},
+					"float_reke": {"tag": "TE415", "label": "ESP Outlet Temp", "agg": "avg"},
+					"oxygen__at_eco_ol": {"tag": "AT401", "label": "Oxygen % At Eco O/L", "agg": "avg"},
+					"boiler_feed_water_flow": {"tag": "FT301", "label": "Boiler Feed Water Flow", "agg": "sum"},
+					"float_zcpn": {"tag": "FT302", "label": "Steam Produced", "agg": "sum"},
+					"dm_flow_to_dearator": {"tag": "FI_2014", "label": "DM Flow To Dearator ", "agg": "sum"}
 				},
 			},
 		},
