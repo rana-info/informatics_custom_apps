@@ -89,8 +89,8 @@ def get_plant_options(company=None):
 def get_issued_qty_by_plant(company, from_date, to_date, item_codes, plants=None):
 	if not item_codes:
 		return {}
-	from_dt = f"{getdate(from_date)} 06:00:00"
-	to_dt = f"{add_days(getdate(to_date), 1)} 06:00:00"
+	from_dt = f"{getdate(from_date)} 09:00:00"
+	to_dt = f"{add_days(getdate(to_date), 1)} 09:00:00"
 
 	conditions = [
 		"se.docstatus = 1",
