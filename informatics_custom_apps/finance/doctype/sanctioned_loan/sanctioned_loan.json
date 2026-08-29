@@ -1,0 +1,157 @@
+{
+ "actions": [],
+ "autoname": "SLON.-.abbr.-.####",
+ "creation": "2026-08-27 12:13:19.297902",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "bank",
+  "loan_type",
+  "loan_description",
+  "amount_disbursed",
+  "repayment_amount",
+  "loan_interest",
+  "column_break_buil",
+  "company",
+  "plant",
+  "disbursement_date",
+  "repayment_interval",
+  "repayment_start_date",
+  "abbr",
+  "is_closed",
+  "is_active",
+  "section_break_nemh",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_break_nemh",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Sanctioned Loan",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "bank",
+   "fieldtype": "Link",
+   "label": "Bank",
+   "options": "Bank"
+  },
+  {
+   "fieldname": "loan_type",
+   "fieldtype": "Link",
+   "label": "Loan Type",
+   "options": "zzLoan Type"
+  },
+  {
+   "fieldname": "loan_description",
+   "fieldtype": "Data",
+   "label": "Loan Description"
+  },
+  {
+   "fieldname": "amount_disbursed",
+   "fieldtype": "Float",
+   "label": "Amount Disbursed"
+  },
+  {
+   "fieldname": "disbursement_date",
+   "fieldtype": "Date",
+   "label": "Disbursement Date"
+  },
+  {
+   "fieldname": "repayment_start_date",
+   "fieldtype": "Date",
+   "label": "Repayment Start Date"
+  },
+  {
+   "fieldname": "repayment_interval",
+   "fieldtype": "Select",
+   "label": "Repayment Interval",
+   "options": "\nMonthly\nQuarterly\nHalf-Yearly\nYearly"
+  },
+  {
+   "fieldname": "repayment_amount",
+   "fieldtype": "Float",
+   "label": "Repayment Amount"
+  },
+  {
+   "fieldname": "column_break_buil",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_closed",
+   "fieldtype": "Check",
+   "label": "Is Closed"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "label": "Is Active"
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company"
+  },
+  {
+   "fieldname": "plant",
+   "fieldtype": "Link",
+   "label": "Plant",
+   "options": "Branch"
+  },
+  {
+   "fetch_from": "plant.custom_invoice_abbr",
+   "fieldname": "abbr",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Abbr",
+   "read_only": 1
+  },
+  {
+   "fieldname": "loan_interest",
+   "fieldtype": "Percent",
+   "label": "Loan Interest",
+   "precision": "2"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-08-27 12:31:54.388738",
+ "modified_by": "Administrator",
+ "module": "Finance",
+ "name": "Sanctioned Loan",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

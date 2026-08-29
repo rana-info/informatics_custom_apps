@@ -24,6 +24,7 @@
   "treated_water_use_section",
   "treated_water",
   "treated_water1",
+  "dm_plant_cost_of_generation",
   "column_break_moed",
   "treated_water_transfer",
   "dmro_water_generation",
@@ -212,13 +213,18 @@
   {
    "fieldname": "cost_of_generation",
    "fieldtype": "Float",
-   "label": "Cost Of Generation"
+   "label": "CPU Cost Of Generation"
+  },
+  {
+   "fieldname": "dm_plant_cost_of_generation",
+   "fieldtype": "Float",
+   "label": "DM Plant Cost Of Generation"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-18 16:15:53.913910",
+ "modified": "2026-08-29 16:09:26.269430",
  "modified_by": "Administrator",
  "module": "ETH",
  "name": "Water Balance Log Book",
