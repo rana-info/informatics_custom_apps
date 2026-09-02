@@ -337,40 +337,65 @@ def warehouse_query(doctype, txt, searchfield, start, page_len, filters):
     branch = filters.get("branch")
     segment = filters.get("custom_segment") or filters.get("segment")
     item_code = filters.get("item_code")
-    is_capital = cint(filters.get("custom_is_capital"))
+    is_capital = filters.get("custom_is_capital")
 
-    warehouse_filters = {"disabled": 0}
+    warehouse_filters = {
+        "disabled": 0
+    }
+
     if company:
         warehouse_filters["company"] = company
+
     if branch:
         warehouse_filters["custom_branch"] = branch
+
     if segment:
         warehouse_filters["custom_segment"] = segment
-    if is_capital:
-        warehouse_filters["custom_is_capital"] = 1
+
+    if is_capital is not None and is_capital != "":
+        if cint(is_capital) == 1:
+            warehouse_filters["custom_is_capital"] = 1
+        else:
+            warehouse_filters["custom_is_capital"] = 0
 
     if item_code:
-        item_group = frappe.db.get_value("Item", item_code, "item_group")
+        item_group = frappe.db.get_value(
+            "Item",
+            item_code,
+            "item_group"
+        )
 
         mapping_names = frappe.get_all(
             "Item Group Warehouse Mapping",
-            filters={"company": company, "branch": branch},
+            filters={
+                "company": company,
+                "branch": branch
+            },
             pluck="name",
         )
 
         allowed = set()
+
         if mapping_names:
             matching_maps = frappe.get_all(
                 "Item Groups",
-                filters={"parent": ["in", mapping_names], "item_group": item_group},
+                filters={
+                    "parent": ["in", mapping_names],
+                    "item_group": item_group
+                },
                 pluck="parent",
             )
+
             if matching_maps:
-                allowed = set(frappe.get_all(
-                    "Warehouses",
-                    filters={"parent": ["in", matching_maps]},
-                    pluck="warehouse",
-                ))
+                allowed = set(
+                    frappe.get_all(
+                        "Warehouses",
+                        filters={
+                            "parent": ["in", matching_maps]
+                        },
+                        pluck="warehouse",
+                    )
+                )
 
         if allowed:
             warehouse_filters["name"] = ["in", list(allowed)]
