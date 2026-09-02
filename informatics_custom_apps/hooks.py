@@ -167,6 +167,9 @@ VALIDATE_WAREHOUSE = "informatics_custom_apps.utils.validate_item_warehouse"
 VALIDATE_PROCUREMENT_BUDGET = (
     "informatics_custom_apps.ripl_customized_apps.doctype.procurement_budget.utils.validate_procurement_budget"
 )
+CLEAR_CAPITAL_WAREHOUSE_CACHE = (
+    "informatics_custom_apps.utils.clear_capital_warehouse_cache"
+)
 
 doc_events = {
     **{
@@ -177,6 +180,9 @@ doc_events = {
         "validate": [
             VALIDATE_PROCUREMENT_BUDGET
         ]
+    },
+    "Warehouse": {
+        "on_update": CLEAR_CAPITAL_WAREHOUSE_CACHE
     },
 }
 
