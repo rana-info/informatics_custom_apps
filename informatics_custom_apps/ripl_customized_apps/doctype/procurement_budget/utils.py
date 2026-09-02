@@ -6,7 +6,8 @@ from collections import defaultdict
 def validate_procurement_budget(doc, method=None):
     if doc.doctype == "Material Request" and doc.material_request_type != "Purchase":
         return
-
+    if doc.get("custom_is_capital"):
+        return
     transaction_date = (
         doc.get("transaction_date") or doc.get("schedule_date") or doc.get("posting_date")
     )
