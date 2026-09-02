@@ -23,6 +23,8 @@ class ItemGroupWarehouseMapping(Document):
 
 	def before_save(self):
 		if not self.is_new():
-			old = frappe.db.get_value("Item Group Warehouse Mapping", self.name, ["company", "branch"], as_dict=True)
-			if old and (old.company != self.company or old.branch != self.branch):
-				frappe.cache().delete_value(f"igwm::{old.company}::{old.branch}")
+			old = frappe.db.get_value(
+				"Warehouse", self.name, ["company", "custom_branch"], as_dict=True
+			)
+			if old and (old.company != self.company or old.custom_branch != self.custom_branch):
+				frappe.cache().delete_value(f"capital_wh::{old.company}::{old.custom_branch}")
