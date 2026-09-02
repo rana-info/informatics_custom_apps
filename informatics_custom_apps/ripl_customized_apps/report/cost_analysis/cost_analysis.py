@@ -553,11 +553,11 @@ def get_data(filters, months):
     total_ytd_production = sum(monthly_prod_map.values())
 
     sales_conditions = [
-        "si.docstatus = 1",
-        "si.posting_date >= %(from_date)s",
-        "si.posting_date <= %(to_date)s",
-        "sii.item_code IN %(sales_items)s",
-        "si.company = %(company)s"
+        "dn.docstatus = 1",
+        "dn.posting_date >= %(from_date)s",
+        "dn.posting_date <= %(to_date)s",
+        "dni.item_code IN %(sales_items)s",
+        "dn.company = %(company)s"
     ]
     sales_args = {
         "from_date": filters.get("from_date"),
@@ -567,22 +567,22 @@ def get_data(filters, months):
     }
 
     if branch_val:
-        sales_conditions.append("si.branch = %(branch)s")
+        sales_conditions.append("dn.branch = %(branch)s")
         sales_args["branch"] = branch_val
     if segment_val:
-        sales_conditions.append("si.segment = %(segment)s")
+        sales_conditions.append("dn.segment = %(segment)s")
         sales_args["segment"] = segment_val
 
     sales_entries = frappe.db.sql(f"""
         SELECT
-            sii.item_code,
-            DATE_FORMAT(si.posting_date, '%%Y-%%m') AS month_key,
-            SUM(sii.stock_qty) AS sales_qty,
-            SUM(sii.base_amount) AS sales_val
-        FROM `tabSales Invoice Item` sii
-        INNER JOIN `tabSales Invoice` si ON si.name = sii.parent
+            dni.item_code,
+            DATE_FORMAT(dn.posting_date, '%%Y-%%m') AS month_key,
+            SUM(dni.stock_qty) AS sales_qty,
+            SUM(dni.base_amount) AS sales_val
+        FROM `tabDelivery Note Item` dni
+        INNER JOIN `tabDelivery Note` dn ON dn.name = dni.parent
         WHERE {" AND ".join(sales_conditions)}
-        GROUP BY sii.item_code, DATE_FORMAT(si.posting_date, '%%Y-%%m')
+        GROUP BY dni.item_code, DATE_FORMAT(dn.posting_date, '%%Y-%%m')
     """, sales_args, as_dict=True)
 
     sales_qty_map = {}

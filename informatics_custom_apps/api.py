@@ -1,7 +1,7 @@
 import frappe
 from frappe import _
 import json
-from frappe.utils import getdate, today
+from frappe.utils import getdate, today, cint
 
 
 @frappe.whitelist()
@@ -337,6 +337,7 @@ def warehouse_query(doctype, txt, searchfield, start, page_len, filters):
     branch = filters.get("branch")
     segment = filters.get("custom_segment") or filters.get("segment")
     item_code = filters.get("item_code")
+    is_capital = cint(filters.get("custom_is_capital"))
 
     warehouse_filters = {"disabled": 0}
     if company:
@@ -345,6 +346,8 @@ def warehouse_query(doctype, txt, searchfield, start, page_len, filters):
         warehouse_filters["custom_branch"] = branch
     if segment:
         warehouse_filters["custom_segment"] = segment
+    if is_capital:
+        warehouse_filters["custom_is_capital"] = 1
 
     if item_code:
         item_group = frappe.db.get_value("Item", item_code, "item_group")
