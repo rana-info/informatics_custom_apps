@@ -69,11 +69,11 @@ class SRVClearingTree {
 			}),
 		});
 
-		this.from_date_field = this.page.add_field({
+			this.from_date_field = this.page.add_field({
 			fieldname: "from_date",
 			label: "From Date",
 			fieldtype: "Date",
-			default: this.get_fy_start(),
+			default: frappe.datetime.month_start(),
 			reqd: 1,
 		});
 
@@ -81,7 +81,7 @@ class SRVClearingTree {
 			fieldname: "to_date",
 			label: "To Date",
 			fieldtype: "Date",
-			default: this.get_fy_end(),
+			default: frappe.datetime.month_end(),
 			reqd: 1,
 		});
 
