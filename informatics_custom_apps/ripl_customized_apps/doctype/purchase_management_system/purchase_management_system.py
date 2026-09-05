@@ -728,6 +728,57 @@ class PurchaseManagementSystem(Document):
                 after_commit=True,
             )
 
+    def build_po_item_sync_fields(self, new_po_item):
+        """Build the field map to sync onto a Purchase Details row (Gate Entry /
+        Weighment item) whenever its underlying PO Item is replaced — covers
+        rate, qty, amount, uom, tax, weight and warehouse/cost-center fields.
+
+        Deliberately excludes accepted_quantity / received_quantity /
+        rejected_quantity — those reflect actual weighed/accepted material and
+        must not be reset just because the PO reference changed.
+        """
+        item_master = frappe.get_cached_doc("Item", new_po_item.item_code)
+
+        qty = float(new_po_item.qty or 0)
+        conversion_factor = float(new_po_item.conversion_factor or 1)
+        stock_qty = qty * conversion_factor
+        rate = float(new_po_item.rate or 0)
+        amount = qty * rate
+
+        return {
+            "purchase_order": new_po_item.parent,
+            "purchase_order_item": new_po_item.name,
+            "item_code": new_po_item.item_code,
+            "item_name": new_po_item.item_name,
+            "description": new_po_item.description or new_po_item.item_name,
+            "item_group": getattr(item_master, "item_group", "") or "",
+            "is_weighable_item": getattr(item_master, "is_weighable_item", 0) or 0,
+
+            "qty": qty,
+            "uom": new_po_item.uom,
+            "stock_uom": new_po_item.stock_uom or new_po_item.uom,
+            "conversion_factor": conversion_factor,
+            "stock_qty": stock_qty,
+
+            "rate": rate,
+            "amount": amount,
+            "rate_company_currency": rate,
+            "amount_company_currency": amount,
+
+            "item_tax_template": getattr(new_po_item, "item_tax_template", "") or "",
+            "gst_treatment": getattr(new_po_item, "gst_treatment", "") or "",
+
+            "weight_per_unit": getattr(new_po_item, "weight_per_unit", 0) or 0,
+            "total_weight": getattr(new_po_item, "total_weight", 0) or 0,
+            "weight_uom": getattr(new_po_item, "weight_uom", "") or "",
+
+            "warehouse": new_po_item.warehouse or "",
+            "cost_center": new_po_item.cost_center or "",
+            "branch": getattr(new_po_item, "branch", "") or "",
+            "material_request": getattr(new_po_item, "material_request", "") or "",
+            "material_request_item": getattr(new_po_item, "material_request_item", "") or "",
+        }
+    
     def correct_accepted_quantity(self):
         """Update accepted quantities on Gate Entry, Weighment, and PO; then recreate PRs."""
 
@@ -926,33 +977,21 @@ class PurchaseManagementSystem(Document):
 
             affected_po_items.add(old_po_item.name)
             affected_po_items.add(new_po_item.name)
+            
+            sync_fields = self.build_po_item_sync_fields(new_po_item)
 
-            # Update PO reference + item details on GE Purchase Details row
+            # Update PO reference + full item details on GE Purchase Details row
             frappe.db.set_value(
-                "Purchase Details", row.gate_entry_item,
-                {
-                    "purchase_order": self.new_purchase_order,
-                    "purchase_order_item": new_po_item.name,
-                    "item_code": new_po_item.item_code,
-                    "item_name": new_po_item.item_name,
-                    "description": new_po_item.description or new_po_item.item_name,
-                },
+                "Purchase Details", row.gate_entry_item, sync_fields,
                 update_modified=False,
             )
 
-            # Update PO reference + item details on Weighment Purchase Details rows
+            # Update PO reference + full item details on Weighment Purchase Details rows
             for weigh_doc in weigh_docs:
                 for w_item in weigh_doc.items:
                     if w_item.purchase_order_item == row.purchase_order_item:
                         frappe.db.set_value(
-                            "Purchase Details", w_item.name,
-                            {
-                                "purchase_order": self.new_purchase_order,
-                                "purchase_order_item": new_po_item.name,
-                                "item_code": new_po_item.item_code,
-                                "item_name": new_po_item.item_name,
-                                "description": new_po_item.description or new_po_item.item_name,
-                            },
+                            "Purchase Details", w_item.name, sync_fields,
                             update_modified=False,
                         )
 
@@ -1022,31 +1061,20 @@ class PurchaseManagementSystem(Document):
             affected_po_items.add(old_po_item.name)
             affected_po_items.add(new_po_item.name)
 
+            # Full field sync (rate, qty, amount, uom, tax, weight, warehouse, etc.)
+            # from the new supplier's PO item — not just the PO reference.
+            sync_fields = self.build_po_item_sync_fields(new_po_item)
+
             frappe.db.set_value(
-                "Purchase Details", row.gate_entry_item,
-                {
-                    "purchase_order": self.new_purchase_order,
-                    "purchase_order_item": new_po_item.name,
-                    "item_code": new_po_item.item_code,
-                    "item_name": new_po_item.item_name,
-                    "description": new_po_item.description or new_po_item.item_name,
-                },
+                "Purchase Details", row.gate_entry_item, sync_fields,
                 update_modified=False,
             )
 
-            # Update PO reference + item details on Weighment Purchase Details rows
             for weigh_doc in weigh_docs:
                 for w_item in weigh_doc.items:
                     if w_item.purchase_order_item == row.purchase_order_item:
                         frappe.db.set_value(
-                            "Purchase Details", w_item.name,
-                            {
-                                "purchase_order": self.new_purchase_order,
-                                "purchase_order_item": new_po_item.name,
-                                "item_code": new_po_item.item_code,
-                                "item_name": new_po_item.item_name,
-                                "description": new_po_item.description or new_po_item.item_name,
-                            },
+                            "Purchase Details", w_item.name, sync_fields,
                             update_modified=False,
                         )
 
