@@ -15,7 +15,20 @@ frappe.ui.form.on("Sanctioned Loan", {
             add_loan_actions(frm);
         }
     },
-
+    company(frm) {
+        if (frm.doc.company) {
+            frm.set_query("plant", function () {
+                return {
+                    filters: {
+                        company: frm.doc.company
+                    }
+                };
+            });
+        }
+        else{
+            frappe.set_value("plant", "");
+        }
+    },
     validate(frm) {
         validate_disbursement_amount(frm);
         validate_repayment_amount(frm);
