@@ -1,15 +1,16 @@
 {
  "actions": [],
  "autoname": "SLON.-.abbr.-.####",
- "creation": "2026-08-27 12:13:19.297902",
+ "creation": "2026-09-01 10:32:13.540105",
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
   "bank",
   "loan_type",
   "loan_description",
+  "sanctioned_amount",
   "amount_disbursed",
-  "repayment_amount",
+  "outstanding_amount",
   "loan_interest",
   "column_break_buil",
   "company",
@@ -17,13 +18,132 @@
   "disbursement_date",
   "repayment_interval",
   "repayment_start_date",
+  "loan_status",
   "abbr",
-  "is_closed",
-  "is_active",
+  "section_break_djrm",
+  "loan_disbursements",
+  "section_break_xjuh",
+  "repayment_schedule",
   "section_break_nemh",
-  "amended_from"
+  "amended_from",
+  "repayment_amount"
  ],
  "fields": [
+  {
+   "fieldname": "bank",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Bank",
+   "options": "Bank",
+   "reqd": 1
+  },
+  {
+   "fieldname": "loan_type",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Loan Type",
+   "options": "zzLoan Type",
+   "reqd": 1
+  },
+  {
+   "fieldname": "loan_description",
+   "fieldtype": "Data",
+   "label": "Loan Description"
+  },
+  {
+   "fieldname": "sanctioned_amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Sanctioned Amount",
+   "reqd": 1
+  },
+  {
+   "fieldname": "amount_disbursed",
+   "fieldtype": "Currency",
+   "label": "Amount Disbursed",
+   "read_only": 1
+  },
+  {
+   "fieldname": "outstanding_amount",
+   "fieldtype": "Currency",
+   "label": "Outstanding Amount",
+   "read_only": 1
+  },
+  {
+   "fieldname": "loan_interest",
+   "fieldtype": "Percent",
+   "label": "Loan Interest",
+   "precision": "2"
+  },
+  {
+   "fieldname": "column_break_buil",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "fieldname": "plant",
+   "fieldtype": "Link",
+   "label": "Plant",
+   "options": "Branch",
+   "reqd": 1
+  },
+  {
+   "fieldname": "disbursement_date",
+   "fieldtype": "Date",
+   "label": "First Disbursement Date"
+  },
+  {
+   "fieldname": "repayment_start_date",
+   "fieldtype": "Date",
+   "label": "Repayment Start Date"
+  },
+  {
+   "fieldname": "repayment_interval",
+   "fieldtype": "Select",
+   "label": "Repayment Interval",
+   "options": "\nMonthly\nQuarterly\nHalf-Yearly\nYearly"
+  },
+  {
+   "fieldname": "repayment_amount",
+   "fieldtype": "Currency",
+   "label": "Repayment Amount"
+  },
+  {
+   "default": "Draft",
+   "fieldname": "loan_status",
+   "fieldtype": "Select",
+   "label": "Loan Status",
+   "options": "\nDraft\nActive\nClosed",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "plant.custom_invoice_abbr",
+   "fieldname": "abbr",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Abbr",
+   "read_only": 1
+  },
+  {
+   "fieldname": "loan_disbursements",
+   "fieldtype": "Table",
+   "label": "Loan Disbursements",
+   "options": "zzLoan Disbursement"
+  },
+  {
+   "fieldname": "repayment_schedule",
+   "fieldtype": "Table",
+   "label": "Repayment Schedule",
+   "options": "zzLoan Repayment Schedule",
+   "read_only": 1
+  },
   {
    "fieldname": "section_break_nemh",
    "fieldtype": "Section Break"
@@ -39,96 +159,24 @@
    "search_index": 1
   },
   {
-   "fieldname": "bank",
-   "fieldtype": "Link",
-   "label": "Bank",
-   "options": "Bank"
+   "fieldname": "section_break_djrm",
+   "fieldtype": "Section Break"
   },
   {
-   "fieldname": "loan_type",
-   "fieldtype": "Link",
-   "label": "Loan Type",
-   "options": "zzLoan Type"
-  },
-  {
-   "fieldname": "loan_description",
-   "fieldtype": "Data",
-   "label": "Loan Description"
-  },
-  {
-   "fieldname": "amount_disbursed",
-   "fieldtype": "Float",
-   "label": "Amount Disbursed"
-  },
-  {
-   "fieldname": "disbursement_date",
-   "fieldtype": "Date",
-   "label": "Disbursement Date"
-  },
-  {
-   "fieldname": "repayment_start_date",
-   "fieldtype": "Date",
-   "label": "Repayment Start Date"
-  },
-  {
-   "fieldname": "repayment_interval",
-   "fieldtype": "Select",
-   "label": "Repayment Interval",
-   "options": "\nMonthly\nQuarterly\nHalf-Yearly\nYearly"
-  },
-  {
-   "fieldname": "repayment_amount",
-   "fieldtype": "Float",
-   "label": "Repayment Amount"
-  },
-  {
-   "fieldname": "column_break_buil",
-   "fieldtype": "Column Break"
-  },
-  {
-   "default": "0",
-   "fieldname": "is_closed",
-   "fieldtype": "Check",
-   "label": "Is Closed"
-  },
-  {
-   "default": "0",
-   "fieldname": "is_active",
-   "fieldtype": "Check",
-   "label": "Is Active"
-  },
-  {
-   "fieldname": "company",
-   "fieldtype": "Link",
-   "label": "Company",
-   "options": "Company"
-  },
-  {
-   "fieldname": "plant",
-   "fieldtype": "Link",
-   "label": "Plant",
-   "options": "Branch"
-  },
-  {
-   "fetch_from": "plant.custom_invoice_abbr",
-   "fieldname": "abbr",
-   "fieldtype": "Data",
-   "hidden": 1,
-   "label": "Abbr",
-   "read_only": 1
-  },
-  {
-   "fieldname": "loan_interest",
-   "fieldtype": "Percent",
-   "label": "Loan Interest",
-   "precision": "2"
+   "fieldname": "section_break_xjuh",
+   "fieldtype": "Section Break"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
- "links": [],
- "modified": "2026-08-27 12:31:54.388738",
+ "links": [
+  {
+    "link_doctype": "zzLoan Repayment",
+    "link_fieldname": "sanctioned_loan"
+  }
+],
+ "modified": "2026-09-01 10:37:23.524247",
  "modified_by": "Administrator",
  "module": "Finance",
  "name": "Sanctioned Loan",
