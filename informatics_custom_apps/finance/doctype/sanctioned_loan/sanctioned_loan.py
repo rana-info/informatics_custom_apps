@@ -15,7 +15,7 @@ class SanctionedLoan(Document):
     def validate(self):
         self.validate_disbursements()
         self.set_amount_disbursed()
-
+        self.validate_repayment_amount()
         if self.docstatus == 0:
             self.set_outstanding_amount()
 
@@ -114,7 +114,15 @@ class SanctionedLoan(Document):
             flt(row.disbursement_amount)
             for row in (self.loan_disbursements or [])
         )
-
+    def validate_repayment_amount(self):
+        if flt(self.repayment_amount) <= 0:
+            frappe.throw(
+                "Repayment Amount must be greater than zero."
+            )
+        elif flt(self.repayment_amount) > flt(self.sanctioned_amount):
+            frappe.throw(
+                "Repayment Amount cannot exceed Sanctioned Amount."
+            )
     def set_outstanding_amount(self):
         if self.docstatus == 0:
             self.outstanding_amount = flt(self.amount_disbursed)

@@ -113,7 +113,9 @@
   {
    "fieldname": "repayment_amount",
    "fieldtype": "Currency",
-   "label": "Repayment Amount"
+   "label": "Repayment Amount",
+   "non_negative": 1,
+   "reqd": 1
   },
   {
    "default": "Draft",
@@ -172,11 +174,11 @@
  "is_submittable": 1,
  "links": [
   {
-    "link_doctype": "zzLoan Repayment",
-    "link_fieldname": "sanctioned_loan"
+   "link_doctype": "zzLoan Repayment",
+   "link_fieldname": "sanctioned_loan"
   }
-],
- "modified": "2026-09-01 10:37:23.524247",
+ ],
+ "modified": "2026-09-08 12:18:16.902593",
  "modified_by": "Administrator",
  "module": "Finance",
  "name": "Sanctioned Loan",

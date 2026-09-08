@@ -4,7 +4,7 @@
 frappe.ui.form.on("Sanctioned Loan", {
 
     refresh(frm) {
-
+        frm.fields_dict.loan_disbursements.grid.cannot_add_rows = true;
         setTimeout(() => {
             set_loan_status_indicator(frm);
         }, 200);
@@ -16,7 +16,7 @@ frappe.ui.form.on("Sanctioned Loan", {
         }
     },
     company(frm) {
-        frappe.set_value("plant", "");
+        frm.set_value("plant", "");
         if (frm.doc.company) {
             frm.set_query("plant", function () {
                 return {
