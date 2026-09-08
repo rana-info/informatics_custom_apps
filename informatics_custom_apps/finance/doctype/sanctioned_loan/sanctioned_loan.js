@@ -16,6 +16,7 @@ frappe.ui.form.on("Sanctioned Loan", {
         }
     },
     company(frm) {
+        frappe.set_value("plant", "");
         if (frm.doc.company) {
             frm.set_query("plant", function () {
                 return {
@@ -24,9 +25,6 @@ frappe.ui.form.on("Sanctioned Loan", {
                     }
                 };
             });
-        }
-        else{
-            frappe.set_value("plant", "");
         }
     },
     validate(frm) {
