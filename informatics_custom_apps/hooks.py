@@ -100,7 +100,7 @@ doctype_js = {
 # Installation
 # ------------
 
-after_migrate = "informatics_custom_apps.ripl_customized_apps.leave_allocation_override.disable_original_scheduler_job"
+# after_migrate = "informatics_custom_apps.ripl_customized_apps.leave_allocation_override.disable_original_scheduler_job"
 
 # before_install = "informatics_custom_apps.install.before_install"
 # after_install = "informatics_custom_apps.install.after_install"
