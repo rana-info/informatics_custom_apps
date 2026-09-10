@@ -68,6 +68,8 @@
   "tare_weight",
   "column_break_chtc",
   "gross_weight",
+  "column_break_yfik",
+  "actual_gross_weight",
   "column_break_xawv",
   "net_weight",
   "section_remarks",
@@ -516,13 +518,23 @@
    "fieldname": "manual_entry_correction",
    "fieldtype": "Section Break",
    "label": "Manual Entry Correction"
+  },
+  {
+   "fieldname": "column_break_yfik",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "actual_gross_weight",
+   "fieldtype": "Data",
+   "label": "Actual Gross Weight",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-06-17 10:25:55.692144",
+ "modified": "2026-09-10 10:16:49.352684",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "Purchase Management System",
