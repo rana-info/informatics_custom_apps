@@ -269,6 +269,7 @@ class PurchaseManagementSystem(Document):
             self.tare_weight = first_weighment.tare_weight or 0
             self.gross_weight = first_weighment.gross_weight or 0
             self.net_weight = first_weighment.net_weight or 0
+            self.actual_gross_weight = first_weighment.actual_gross_weight or 0
 
         items_data = []
         self.old_purchase_order = None

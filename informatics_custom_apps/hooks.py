@@ -100,6 +100,8 @@ doctype_js = {
 # Installation
 # ------------
 
+after_migrate = "informatics_custom_apps.ripl_customized_apps.leave_allocation_override.disable_original_scheduler_job"
+
 # before_install = "informatics_custom_apps.install.before_install"
 # after_install = "informatics_custom_apps.install.after_install"
 
@@ -209,6 +211,11 @@ doc_events["Additional Salary"] = {
 
 
 scheduler_events = {
+# "cron": {
+#         "0 3 * * *": [
+#             "informatics_custom_apps.ripl_customized_apps.leave_allocation_override.run_leave_allocation_method"
+#         ]
+#     },
 "daily_long": [
 		"informatics_custom_apps.ripl_customized_apps.doctype.zzdeputation_request.zzdeputation_request.attendance_request_created",
         "informatics_custom_apps.ripl_customized_apps.cron_job.auto_close_po_specific_items"
