@@ -7,7 +7,8 @@ PLANTS = [
     "RSL Buttar",
     "RSL Louhka",
     "RSLD Karnal",
-    "Superior Biofuels"
+    "Superior Biofuels",
+    "Karimganj Biofuels"
 ]
 
 

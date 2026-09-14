@@ -217,7 +217,7 @@ class SanctionedLoan(Document):
             },
             update_modified=True,
         )
-
+        self.generate_repayment_schedule()
         frappe.db.commit()
 
         return {
@@ -325,6 +325,7 @@ class SanctionedLoan(Document):
                 "Please select Repayment Interval."
             )
 
+        
         if flt(self.repayment_amount) <= 0:
             frappe.throw(
                 "Repayment Amount must be greater than zero."
@@ -466,7 +467,7 @@ class SanctionedLoan(Document):
             )
 
         result = self.create_schedule_rows(
-            outstanding=outstanding,
+            outstanding=outstanding, 
             payment_date=payment_date,
             months=months,
             periods=periods,

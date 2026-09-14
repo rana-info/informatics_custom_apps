@@ -21,7 +21,8 @@ frappe.pages['water-balance-log'].on_page_load = function(wrapper) {
         "RSL Buttar",
         "RSL Louhka",
         "RSLD Karnal",
-        "Superior Biofuels"
+        "Superior Biofuels",
+        "Karimganj Biofuels"
     ];
 
 
