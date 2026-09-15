@@ -1,0 +1,67 @@
+{
+ "actions": [],
+ "creation": "2026-09-14 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "section_name",
+  "report_type",
+  "summary_group",
+  "column_break_1",
+  "show_subtotal",
+  "subtotal_label"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Section Name",
+   "reqd": 1,
+   "description": "Schedule-level line, e.g. 'Sale of Main Product - Sugar'"
+  },
+  {
+   "fieldname": "report_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Report Type",
+   "options": "Income\nExpense\nExceptional\nTax",
+   "reqd": 1
+  },
+  {
+   "fieldname": "summary_group",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Summary Group",
+   "reqd": 1,
+   "description": "Summary-sheet bucket this section rolls into, e.g. 'Revenue from operations'. Use the exact same text across multiple sections to combine them into one Summary line."
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1",
+   "fieldname": "show_subtotal",
+   "fieldtype": "Check",
+   "label": "Show Subtotal Row"
+  },
+  {
+   "default": "Sub Total",
+   "fieldname": "subtotal_label",
+   "fieldtype": "Data",
+   "label": "Subtotal Row Label",
+   "depends_on": "show_subtotal"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "module": "Ripl Customized Apps",
+ "name": "PNL Settings Section",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}
