@@ -622,12 +622,25 @@ class PurchaseManagementSystem(Document):
 
     def before_submit(self):
         if self.correction_type == "Wrong Accepted Quantity":
-            total_qty_kg = sum(
+            from frappe.utils import flt
+            total_qty_kg = flt(sum(
                 self.convert_to_kg(row.new_accepted_qty, row.uom)
                 for row in self.items
-            )
-            if total_qty_kg > self.net_weight:
+            ), 3)
+            net_weight = flt(self.net_weight, 3)
+            
+            if total_qty_kg > net_weight:
                 frappe.throw("Total Accepted Qty cannot be greater than Net Weight")
+                # frappe.throw(
+                #     f"""
+                #     total_qty_kg={repr(total_qty_kg)}
+                #     net_weight={repr(self.net_weight)}
+                #     comparison={total_qty_kg > self.net_weight}
+                #     """
+                # )
+            # frappe.msgprint(
+            #     f"Total Qty KG = {repr(total_qty_kg)}<br>Net Weight = {repr(self.net_weight)}"
+            # )
 
     def on_submit(self):
         
