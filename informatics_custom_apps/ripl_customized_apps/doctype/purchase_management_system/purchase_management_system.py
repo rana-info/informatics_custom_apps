@@ -626,8 +626,8 @@ class PurchaseManagementSystem(Document):
             total_qty_kg = flt(sum(
                 self.convert_to_kg(row.new_accepted_qty, row.uom)
                 for row in self.items
-            ), 3)
-            net_weight = flt(self.net_weight, 3)
+            ), 0)
+            net_weight = flt(self.net_weight, 0)
             
             if total_qty_kg > net_weight:
                 frappe.throw("Total Accepted Qty cannot be greater than Net Weight")
