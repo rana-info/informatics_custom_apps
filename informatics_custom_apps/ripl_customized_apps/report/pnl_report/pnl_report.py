@@ -1,12 +1,27 @@
 import frappe
 from frappe import _
-from frappe.utils import flt
+from frappe.utils import flt, cint
+from collections import defaultdict
 
 from informatics_custom_apps.ripl_customized_apps.doctype.pnl_settings.pnl_settings import (
 	PNLSettings,
 )
 
 PLANT_FIELD = "branch"
+SEGMENT_FIELD = "segment"
+
+NO_PLANT = _("(No Plant)")
+NO_SEGMENT = _("(No Segment)")
+
+_scrub_cache = {}
+
+
+def scrub(label):
+	cached = _scrub_cache.get(label)
+	if cached is None:
+		cached = frappe.scrub(label)
+		_scrub_cache[label] = cached
+	return cached
 
 
 def execute(filters=None):
@@ -21,10 +36,14 @@ def execute(filters=None):
 		frappe.throw(_("PNL Settings has no accounts configured"))
 
 	account_labels = get_account_labels(account_numbers, filters.get("company"))
-	amounts, plants = get_gl_amounts(filters, account_numbers)
+	plants = get_all_plants(filters)
+	amounts, plant_segments = get_gl_amounts(filters, account_numbers, plants)
 
-	columns = get_columns(plants)
-	data = get_data(settings, amounts, account_labels, plants, filters.get("view") or "Detailed")
+	columns = get_columns(plants, plant_segments)
+	data = get_data(settings, amounts, account_labels, plants, plant_segments, filters.get("view") or "Detailed")
+
+	if cint(filters.get("hide_zero")):
+		columns, data = hide_zero_rows_and_columns(columns, data)
 
 	return columns, data
 
@@ -34,24 +53,75 @@ def validate_filters(filters):
 		frappe.throw(_("From Date and To Date are required"))
 
 
-def get_columns(plants):
+def cell_fieldname(plant, segment):
+	return f"{scrub(plant)}__{scrub(segment)}"
+
+
+def get_columns(plants, plant_segments):
 	columns = [
 		{"fieldname": "description", "label": _("Particulars"), "fieldtype": "Data", "width": 340},
-		{"fieldname": "total", "label": _("Total"), "fieldtype": "Currency", "width": 140},
 	]
-	columns += [
-		{"fieldname": plant_fieldname(p), "label": p, "fieldtype": "Currency", "width": 190}
-		for p in plants
-	]
+	for plant in plants:
+		for segment in plant_segments.get(plant, []):
+			columns.append(
+				{
+					"fieldname": cell_fieldname(plant, segment),
+					"label": f"{plant} - {segment}",
+					"fieldtype": "Currency",
+					"width": 270,
+				}
+			)
 	return columns
 
 
-def plant_fieldname(plant):
-	return f"plant_{frappe.scrub(plant)}"
+def data_fieldnames(plants, plant_segments):
+	fieldnames = []
+	for plant in plants:
+		for segment in plant_segments.get(plant, []):
+			fieldnames.append(cell_fieldname(plant, segment))
+	return fieldnames
 
 
-def zero_row(plants):
-	return {"total": 0, **{p: 0 for p in plants}}
+def zero_row(plants, plant_segments):
+	row = {"total": 0}
+	for fieldname in data_fieldnames(plants, plant_segments):
+		row[fieldname] = 0
+	return row
+
+
+def accumulate(target, source, plants, plant_segments):
+	target["total"] += source.get("total", 0)
+	for fieldname in data_fieldnames(plants, plant_segments):
+		target[fieldname] += source.get(fieldname, 0)
+
+
+def add(a, b, plants, plant_segments):
+	out = {"total": a["total"] + b["total"]}
+	for fieldname in data_fieldnames(plants, plant_segments):
+		out[fieldname] = a.get(fieldname, 0) + b.get(fieldname, 0)
+	return out
+
+
+def subtract(a, b, plants, plant_segments):
+	out = {"total": a["total"] - b["total"]}
+	for fieldname in data_fieldnames(plants, plant_segments):
+		out[fieldname] = a.get(fieldname, 0) - b.get(fieldname, 0)
+	return out
+
+
+def get_all_plants(filters):
+	plant_filter = filters.get("branch")
+	if plant_filter and isinstance(plant_filter, str):
+		plant_filter = frappe.parse_json(plant_filter)
+
+	branches = frappe.get_all("Branch", pluck="name")
+	branches = [b for b in branches if "head office" not in b.lower()]
+
+	if plant_filter:
+		wanted = set(plant_filter)
+		branches = [b for b in branches if b in wanted]
+
+	return sorted(branches)
 
 
 def get_account_labels(account_numbers, company=None):
@@ -73,7 +143,7 @@ def get_account_labels(account_numbers, company=None):
 	return labels
 
 
-def get_gl_amounts(filters, account_numbers):
+def get_gl_amounts(filters, account_numbers, plants):
 	conditions = [
 		"acc.account_number IN %(account_numbers)s",
 		"ge.posting_date BETWEEN %(from_date)s AND %(to_date)s",
@@ -89,36 +159,37 @@ def get_gl_amounts(filters, account_numbers):
 		conditions.append("ge.company = %(company)s")
 		values["company"] = filters.company
 
-	plant_filter = filters.get("branch")
-	if plant_filter:
-		if isinstance(plant_filter, str):
-			plant_filter = frappe.parse_json(plant_filter)
-		if plant_filter:
-			conditions.append(f"ge.{PLANT_FIELD} IN %(plants)s")
-			values["plants"] = plant_filter
+	if plants:
+		conditions.append(f"ge.{PLANT_FIELD} IN %(plants)s")
+		values["plants"] = plants
 
 	query = f"""
 		SELECT
 			acc.account_number AS account_number,
 			ge.{PLANT_FIELD} AS plant,
+			ge.{SEGMENT_FIELD} AS segment,
 			SUM(ge.credit - ge.debit) AS amount
 		FROM `tabGL Entry` ge
 		INNER JOIN `tabAccount` acc ON acc.name = ge.account
 		WHERE {" AND ".join(conditions)}
-		GROUP BY acc.account_number, ge.{PLANT_FIELD}
+		GROUP BY acc.account_number, ge.{PLANT_FIELD}, ge.{SEGMENT_FIELD}
 	"""
 
-	amounts, plants = {}, set()
+	amounts = defaultdict(dict)
+	plant_segments = defaultdict(dict)
+
 	for row in frappe.db.sql(query, values, as_dict=True):
-		plant = row.plant or _("(No Plant)")
-		plants.add(plant)
-		amounts.setdefault(row.account_number, {})[plant] = flt(row.amount)
+		plant = row.plant or NO_PLANT
+		segment = row.segment or NO_SEGMENT
+		amounts[row.account_number][(plant, segment)] = flt(row.amount)
+		plant_segments[plant][segment] = True
 
-	return amounts, sorted(plants)
+	plant_segments = {plant: sorted(segs) for plant, segs in plant_segments.items()}
+	return amounts, plant_segments
 
 
-def build_section(section, section_accounts, amounts, account_labels, plants):
-	section_total = zero_row(plants)
+def build_section(section_accounts, amounts, account_labels, plants, plant_segments):
+	section_total = zero_row(plants, plant_segments)
 	leaf_rows = []
 
 	for acc_row in section_accounts:
@@ -128,114 +199,142 @@ def build_section(section, section_accounts, amounts, account_labels, plants):
 
 		row = {"description": f"{acc_row.account_number} - {label}", "indent": 1}
 		row_total = 0
+
 		for plant in plants:
-			val = flt(acc_amounts.get(plant, 0)) * sign
-			row[plant_fieldname(plant)] = val
-			section_total[plant] += val
-			row_total += val
+			for segment in plant_segments.get(plant, []):
+				val = flt(acc_amounts.get((plant, segment), 0)) * sign
+				row[cell_fieldname(plant, segment)] = val
+				row_total += val
+
 		row["total"] = row_total
 		section_total["total"] += row_total
+		for fieldname in data_fieldnames(plants, plant_segments):
+			section_total[fieldname] += row.get(fieldname, 0)
+
 		leaf_rows.append(row)
 
 	return leaf_rows, section_total
 
 
-def get_data(settings, amounts, account_labels, plants, view):
+def get_data(settings, amounts, account_labels, plants, plant_segments, view):
 	data = []
 	summary_totals = {}
 	summary_order = []
 
+	accounts_by_section = defaultdict(list)
+	for acc_row in settings.section_accounts:
+		accounts_by_section[acc_row.section].append(acc_row)
+
 	for section in settings.sections:
-		section_accounts = [a for a in settings.section_accounts if a.section == section.section_name]
-		leaf_rows, section_total = build_section(section, section_accounts, amounts, account_labels, plants)
+		section_accounts = accounts_by_section.get(section.section_name, [])
+		leaf_rows, section_total = build_section(
+			section_accounts, amounts, account_labels, plants, plant_segments
+		)
 
 		if view == "Detailed":
-			header = build_total_row(section.section_name, section_total, plants, indent=0, bold=True)
-			data.append(header)
+			data.append(build_total_row(section.section_name, section_total, plants, plant_segments, indent=0, bold=True))
 			data.extend(leaf_rows)
 			if section.show_subtotal:
 				data.append(
 					build_total_row(
-						section.subtotal_label or _("Sub Total"), section_total, plants, indent=1, bold=True
+						section.subtotal_label or _("Sub Total"),
+						section_total,
+						plants,
+						plant_segments,
+						indent=1,
+						bold=True,
 					)
 				)
-			data.append({"description": ""})
+			data.append(divider_row())
 
 		key = (section.report_type, section.summary_group)
 		if key not in summary_totals:
-			summary_totals[key] = zero_row(plants)
+			summary_totals[key] = zero_row(plants, plant_segments)
 			summary_order.append(key)
-		accumulate(summary_totals[key], section_total, plants)
+		accumulate(summary_totals[key], section_total, plants, plant_segments)
 
 	if view == "Summary":
-		data.extend(build_summary_view(summary_totals, summary_order, plants))
+		data.extend(build_summary_view(summary_totals, summary_order, plants, plant_segments))
 
 	return data
 
 
-def sum_report_type(report_type, summary_totals, summary_order, plants):
-	total = zero_row(plants)
+def sum_report_type(report_type, summary_totals, summary_order, plants, plant_segments):
+	total = zero_row(plants, plant_segments)
 	rows = []
 	for key in summary_order:
 		if key[0] != report_type:
 			continue
-		row = build_total_row(key[1], summary_totals[key], plants, indent=1)
-		rows.append(row)
-		accumulate(total, summary_totals[key], plants)
+		rows.append(build_total_row(key[1], summary_totals[key], plants, plant_segments, indent=1))
+		accumulate(total, summary_totals[key], plants, plant_segments)
 	return rows, total
 
 
-def build_summary_view(summary_totals, summary_order, plants):
-	income_rows, income_total = sum_report_type("Income", summary_totals, summary_order, plants)
-	expense_rows, expense_total = sum_report_type("Expense", summary_totals, summary_order, plants)
+def build_summary_view(summary_totals, summary_order, plants, plant_segments):
+	income_rows, income_total = sum_report_type("Income", summary_totals, summary_order, plants, plant_segments)
+	expense_rows, expense_total = sum_report_type("Expense", summary_totals, summary_order, plants, plant_segments)
 
-	data = [build_total_row(_("INCOME"), income_total, plants, indent=0, bold=True)]
+	data = [build_total_row(_("INCOME"), income_total, plants, plant_segments, indent=0, bold=True)]
 	data.extend(income_rows)
-	data.append(build_total_row(_("Sub Total"), income_total, plants, indent=1, bold=True))
-	data.append({"description": ""})
+	data.append(build_total_row(_("Sub Total"), income_total, plants, plant_segments, indent=1, bold=True))
+	data.append(divider_row())
 
-	data.append(build_total_row(_("EXPENSES"), expense_total, plants, indent=0, bold=True))
+	data.append(build_total_row(_("EXPENSES"), expense_total, plants, plant_segments, indent=0, bold=True))
 	data.extend(expense_rows)
-	data.append(build_total_row(_("Sub Total"), expense_total, plants, indent=1, bold=True))
-	data.append({"description": ""})
+	data.append(build_total_row(_("Sub Total"), expense_total, plants, plant_segments, indent=1, bold=True))
+	data.append(divider_row())
 
-	pbei = subtract(income_total, expense_total, plants)
-	data.append(build_total_row(_("Profit / (Loss) before Exceptional Items"), pbei, plants, bold=True))
+	pbei = subtract(income_total, expense_total, plants, plant_segments)
+	data.append(build_total_row(_("Profit / (Loss) before Exceptional Items"), pbei, plants, plant_segments, bold=True))
 
-	_unused_rows, exceptional_total = sum_report_type("Exceptional", summary_totals, summary_order, plants)
-	if exceptional_total["total"] or any(exceptional_total[p] for p in plants):
-		data.append(build_total_row(_("Exceptional Items"), exceptional_total, plants))
+	_unused, exceptional_total = sum_report_type("Exceptional", summary_totals, summary_order, plants, plant_segments)
+	if exceptional_total["total"] or any(exceptional_total.get(f) for f in data_fieldnames(plants, plant_segments)):
+		data.append(build_total_row(_("Exceptional Items"), exceptional_total, plants, plant_segments))
 
-	pbt = add(pbei, exceptional_total, plants)
-	data.append(build_total_row(_("Profit / (Loss) before Tax"), pbt, plants, bold=True))
+	pbt = add(pbei, exceptional_total, plants, plant_segments)
+	data.append(build_total_row(_("Profit / (Loss) before Tax"), pbt, plants, plant_segments, bold=True))
 
-	_unused_rows, tax_total = sum_report_type("Tax", summary_totals, summary_order, plants)
-	data.append(build_total_row(_("Tax Expenses"), tax_total, plants))
+	_unused, tax_total = sum_report_type("Tax", summary_totals, summary_order, plants, plant_segments)
+	data.append(build_total_row(_("Tax Expenses"), tax_total, plants, plant_segments))
 
-	pat = subtract(pbt, tax_total, plants)
-	data.append(build_total_row(_("Profit / (Loss) after Tax"), pat, plants, bold=True))
+	pat = subtract(pbt, tax_total, plants, plant_segments)
+	data.append(build_total_row(_("Profit / (Loss) after Tax"), pat, plants, plant_segments, bold=True))
 
 	return data
 
 
-def build_total_row(description, totals, plants, indent=0, bold=False):
+def build_total_row(description, totals, plants, plant_segments, indent=0, bold=False):
 	row = {"description": description, "indent": indent, "total": totals.get("total", 0)}
-	for plant in plants:
-		row[plant_fieldname(plant)] = totals.get(plant, 0)
+	for fieldname in data_fieldnames(plants, plant_segments):
+		row[fieldname] = totals.get(fieldname, 0)
 	if bold:
 		row["is_bold"] = 1
 	return row
 
 
-def accumulate(target, source, plants):
-	target["total"] += source.get("total", 0)
-	for plant in plants:
-		target[plant] += source.get(plant, 0)
+def divider_row():
+	return {"description": "", "is_divider": 1}
 
 
-def add(a, b, plants):
-	return {"total": a["total"] + b["total"], **{p: a.get(p, 0) + b.get(p, 0) for p in plants}}
+def hide_zero_rows_and_columns(columns, data):
+	value_fieldnames = [c["fieldname"] for c in columns if c["fieldname"] != "description"]
+	value_rows = [row for row in data if not row.get("is_divider")]
 
+	zero_columns = {
+		fieldname
+		for fieldname in value_fieldnames
+		if not any(flt(row.get(fieldname)) for row in value_rows)
+	}
 
-def subtract(a, b, plants):
-	return {"total": a["total"] - b["total"], **{p: a.get(p, 0) - b.get(p, 0) for p in plants}}
+	kept_columns = [c for c in columns if c["fieldname"] not in zero_columns]
+	kept_fieldnames = [c["fieldname"] for c in kept_columns if c["fieldname"] != "description"]
+
+	kept_data = []
+	for row in data:
+		if row.get("is_divider"):
+			kept_data.append(row)
+			continue
+		if any(flt(row.get(fieldname)) for fieldname in kept_fieldnames):
+			kept_data.append(row)
+
+	return kept_columns, kept_data

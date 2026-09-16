@@ -26,6 +26,7 @@ frappe.query_reports["PNL Report"] = {
 			get_data: function (txt) {
 				return frappe.db.get_link_options("Branch", txt);
 			},
+			description: __("Leave blank to include all plants."),
 		},
 		{
 			fieldname: "view",
@@ -37,17 +38,23 @@ frappe.query_reports["PNL Report"] = {
 			description: __(
 				"Detailed shows every account under each Section with its Subtotal (Schedule sheet). Summary shows only the rolled-up Summary lines."
 			),
+			on_change: function () {
+				frappe.query_report.refresh();
+			},
+		},
+		{
+			fieldname: "hide_zero",
+			label: __("Hide Zero Rows / Columns"),
+			fieldtype: "Check",
+			default: 0,
+			description: __("Exclude rows and plant/segment columns that are entirely zero."),
+			on_change: function () {
+				frappe.query_report.refresh();
+			},
 		},
 	],
 
 	onload: function (report) {
-		frappe.db.get_list("Branch", { fields: ["name"], limit_page_length: 0 }).then((branches) => {
-			report.set_filter_value(
-				"branch",
-				branches.map((b) => b.name).filter((name) => !name.toLowerCase().includes("head office"))
-			);
-		});
-
 		const today = frappe.datetime.get_today();
 		frappe.db
 			.get_list("Fiscal Year", {
@@ -61,15 +68,21 @@ frappe.query_reports["PNL Report"] = {
 			.then((rows) => {
 				if (rows && rows.length) {
 					report.set_filter_value("from_date", rows[0].year_start_date);
+					frappe.query_report.refresh();
 				}
 			});
 	},
 
 	formatter: function (value, row, column, data, default_formatter) {
-		const isTotalCol = column.fieldname === "total" || (column.fieldname || "").indexOf("plant_") === 0;
-		const isSectionHeader = data && data.indent === 0 && data.is_bold && row && row.meta && row.meta.isLeaf === false;
+		if (data && data.is_divider) {
+			return `<div style="border-top:2px solid #000;height:1px;margin:10px -8px 0;"></div>`;
+		}
 
-		if (isSectionHeader && isTotalCol) {
+		const isValueCol = column.fieldname !== "description";
+		const isSectionHeader =
+			data && data.indent === 0 && data.is_bold && row && row.meta && row.meta.isLeaf === false;
+
+		if (isSectionHeader && isValueCol) {
 			const isCollapsed = !!(row && row.meta && row.meta.isTreeNodeClose);
 			if (!isCollapsed) return "";
 		}
@@ -85,9 +98,9 @@ frappe.query_reports["PNL Report"] = {
 		if (datatable.wrapper.dataset.pnlToggleBound) return;
 		datatable.wrapper.dataset.pnlToggleBound = "1";
 
-		const totalColIndexes = datatable.datamanager
+		const valueColIndexes = datatable.datamanager
 			.getColumns()
-			.filter((c) => c.fieldname === "total" || (c.fieldname || "").indexOf("plant_") === 0)
+			.filter((c) => c.fieldname !== "description")
 			.map((c) => c.colIndex);
 
 		datatable.wrapper.addEventListener("click", function (e) {
@@ -103,7 +116,7 @@ frappe.query_reports["PNL Report"] = {
 			const row = datatable.datamanager.getRow(rowIndex);
 			if (!row) return;
 
-			totalColIndexes.forEach((colIndex) => {
+			valueColIndexes.forEach((colIndex) => {
 				const cell = row[colIndex];
 				if (cell) datatable.cellmanager.refreshCell(cell, true);
 			});
