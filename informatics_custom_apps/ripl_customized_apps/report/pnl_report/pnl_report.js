@@ -88,11 +88,11 @@ frappe.query_reports["PNL Report"] = {
 		}
 
 		value = default_formatter(value, row, column, data);
-		if (data && (data.is_bold || data.is_total)) {
+		if (data && (data.is_bold || data.is_total || column.fieldname === "total")) {
 			value = `<b>${value}</b>`;
 		}
 		return value;
-	},
+},
 
 	after_datatable_render: function (datatable) {
 		if (datatable.wrapper.dataset.pnlToggleBound) return;
