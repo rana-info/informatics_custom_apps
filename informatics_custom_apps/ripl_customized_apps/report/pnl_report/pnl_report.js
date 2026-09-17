@@ -46,7 +46,7 @@ frappe.query_reports["PNL Report"] = {
 			fieldname: "hide_zero",
 			label: __("Hide Zero Rows / Columns"),
 			fieldtype: "Check",
-			default: 0,
+			default: 1,
 			description: __("Exclude rows and plant/segment columns that are entirely zero."),
 			on_change: function () {
 				frappe.query_report.refresh();
