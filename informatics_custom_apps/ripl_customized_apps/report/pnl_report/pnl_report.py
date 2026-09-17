@@ -115,8 +115,6 @@ def get_all_plants(filters):
 		plant_filter = frappe.parse_json(plant_filter)
 
 	branches = frappe.get_all("Branch", pluck="name")
-	branches = [b for b in branches if "head office" not in b.lower()]
-
 	if plant_filter:
 		wanted = set(plant_filter)
 		branches = [b for b in branches if b in wanted]
