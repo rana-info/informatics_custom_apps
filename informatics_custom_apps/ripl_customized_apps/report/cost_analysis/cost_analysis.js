@@ -63,6 +63,12 @@ frappe.query_reports["Cost Analysis"] = {
     if (data && data.is_blank_row) {
         return "";
     }
+    if (data.is_target_row) {
+    if (column.fieldname === "expense_category") {
+        return `<span style="font-size: 14px; font-weight: 600; color: #16a34a;">${value}</span>`;
+    }
+    return "";
+}
 
     value = default_formatter(value, row, column, data);
 
