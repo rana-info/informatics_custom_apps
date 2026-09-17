@@ -800,6 +800,7 @@ def build_section_rows(section_name, gl_codes, code_data_cache, code_to_title, b
 
         row_data = {}
         row_tot_act = 0.0
+        has_nonzero = False          # NEW — tracks any individual month != 0
         c_data = code_data_cache.get(code, {})
 
         for m in months:
@@ -807,6 +808,9 @@ def build_section_rows(section_name, gl_codes, code_data_cache, code_to_title, b
             m_act = c_data.get(m_key, 0.0)
             m_prod = monthly_prod_map.get(m_key, 0.0)
             m_per_bl = round(m_act / m_prod, 2) if m_prod else 0.0
+
+            if m_act != 0:
+                has_nonzero = True   # NEW
 
             row_data[f"actual_{m_key}"] = m_act
             row_data[f"per_bl_{m_key}"] = m_per_bl
@@ -820,7 +824,7 @@ def build_section_rows(section_name, gl_codes, code_data_cache, code_to_title, b
         cat_totals["budget_amount"] += row_budget_amount
         cat_totals["budget_per_bl"] += row_budget_per_bl
 
-        if hide_zero and row_tot_act == 0:
+        if hide_zero and not has_nonzero:      # CHANGED — was `row_tot_act == 0`
             continue
 
         detail_row = {
@@ -836,7 +840,7 @@ def build_section_rows(section_name, gl_codes, code_data_cache, code_to_title, b
         detail_row.update(row_data)
         category_rows.append(detail_row)
 
-    if hide_zero and not category_rows and cat_totals["total_actual"] == 0:
+    if hide_zero and not category_rows:        # CHANGED — dropped the `cat_totals["total_actual"] == 0` clause
         return [], cat_totals
 
     display_rows = []

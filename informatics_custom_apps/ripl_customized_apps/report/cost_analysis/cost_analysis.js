@@ -55,7 +55,7 @@ frappe.query_reports["Cost Analysis"] = {
             "fieldname": "hide_zero_amounts",
             "label": __("Hide Zero Amounts"),
             "fieldtype": "Check",
-            "default": 0
+            "default": 1
         }
     ],
 
