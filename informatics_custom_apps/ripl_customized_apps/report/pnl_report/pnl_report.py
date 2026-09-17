@@ -166,7 +166,7 @@ def get_gl_amounts(filters, account_numbers, plants):
 			acc.account_number AS account_number,
 			ge.{PLANT_FIELD} AS plant,
 			ge.{SEGMENT_FIELD} AS segment,
-			SUM(ge.credit - ge.debit) AS amount
+			SUM(ge.debit - ge.credit) AS amount
 		FROM `tabGL Entry` ge
 		INNER JOIN `tabAccount` acc ON acc.name = ge.account
 		WHERE {" AND ".join(conditions)}
@@ -191,7 +191,6 @@ def build_section(section_accounts, amounts, account_labels, plants, plant_segme
 	leaf_rows = []
 
 	for acc_row in section_accounts:
-		sign = -1 if acc_row.sign == "Reverse" else 1
 		acc_amounts = amounts.get(acc_row.account_number, {})
 		label = account_labels.get(acc_row.account_number, acc_row.account_number)
 
@@ -200,7 +199,7 @@ def build_section(section_accounts, amounts, account_labels, plants, plant_segme
 
 		for plant in plants:
 			for segment in plant_segments.get(plant, []):
-				val = flt(acc_amounts.get((plant, segment), 0)) * sign
+				val = flt(acc_amounts.get((plant, segment), 0))
 				row[cell_fieldname(plant, segment)] = val
 				row_total += val
 
@@ -257,19 +256,31 @@ def get_data(settings, amounts, account_labels, plants, plant_segments, view):
 	return data
 
 
-def sum_report_type(report_type, summary_totals, summary_order, plants, plant_segments):
+def negate(a, plants, plant_segments):
+	out = {"total": -a["total"]}
+	for fieldname in data_fieldnames(plants, plant_segments):
+		out[fieldname] = -a.get(fieldname, 0)
+	return out
+
+
+def sum_report_type(report_type, summary_totals, summary_order, plants, plant_segments, multiplier=1):
 	total = zero_row(plants, plant_segments)
 	rows = []
 	for key in summary_order:
 		if key[0] != report_type:
 			continue
-		rows.append(build_total_row(key[1], summary_totals[key], plants, plant_segments, indent=1))
-		accumulate(total, summary_totals[key], plants, plant_segments)
+		values = summary_totals[key]
+		if multiplier == -1:
+			values = negate(values, plants, plant_segments)
+		rows.append(build_total_row(key[1], values, plants, plant_segments, indent=1))
+		accumulate(total, values, plants, plant_segments)
 	return rows, total
 
 
 def build_summary_view(summary_totals, summary_order, plants, plant_segments):
-	income_rows, income_total = sum_report_type("Income", summary_totals, summary_order, plants, plant_segments)
+	income_rows, income_total = sum_report_type(
+		"Income", summary_totals, summary_order, plants, plant_segments, multiplier=-1
+	)
 	expense_rows, expense_total = sum_report_type("Expense", summary_totals, summary_order, plants, plant_segments)
 
 	data = [build_total_row(_("INCOME"), income_total, plants, plant_segments, indent=0, bold=True)]
@@ -299,7 +310,6 @@ def build_summary_view(summary_totals, summary_order, plants, plant_segments):
 	data.append(build_total_row(_("Profit / (Loss) after Tax"), pat, plants, plant_segments, bold=True))
 
 	return data
-
 
 def build_total_row(description, totals, plants, plant_segments, indent=0, bold=False):
 	row = {"description": description, "indent": indent, "total": totals.get("total", 0)}

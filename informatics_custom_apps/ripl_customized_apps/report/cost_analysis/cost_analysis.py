@@ -12,10 +12,14 @@ def execute(filters=None):
     months = get_months_in_range(filters.get("from_date"), filters.get("to_date"))
     columns = get_columns(filters, months)
     data, target_production = get_data(filters, months)
-    message = None
+
     if not filters.get("show_quantitative_data", 0):
-        message = f"<b style='color:#0369a1;'>{_('Target Production Qty (BL)')}: {frappe.utils.fmt_money(target_production, currency='')}</b>"
-    return columns, data, message
+        data.insert(0, {
+            "expense_category": f"{_('Target Production Qty (BL)')}: {frappe.utils.fmt_money(target_production, currency='')}",
+            "is_target_row": 1,
+        })
+
+    return columns, data, None
 
 
 def get_months_in_range(from_date, to_date):
