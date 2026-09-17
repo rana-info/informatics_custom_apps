@@ -71,6 +71,9 @@ def get_columns(plants, plant_segments):
 					"width": 270,
 				}
 			)
+	columns.append(
+		{"fieldname": "total", "label": _("Total"), "fieldtype": "Currency", "width": 270}
+	)
 	return columns
 
 
@@ -325,7 +328,7 @@ def divider_row():
 
 
 def hide_zero_rows_and_columns(columns, data):
-	value_fieldnames = [c["fieldname"] for c in columns if c["fieldname"] != "description"]
+	value_fieldnames = [c["fieldname"] for c in columns if c["fieldname"] not in ("description", "total")]
 	value_rows = [row for row in data if not row.get("is_divider")]
 
 	zero_columns = {
