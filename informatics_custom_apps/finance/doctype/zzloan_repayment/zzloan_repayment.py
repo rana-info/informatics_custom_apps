@@ -286,9 +286,7 @@ class zzLoanRepayment(Document):
                 loan.name,
                 {
                     "outstanding_amount": 0,
-                    "loan_status": "Closed",
-                    "is_closed": 1,
-                    "is_active": 0
+                    "loan_status": "Closed"
                 }
             )
 
@@ -299,9 +297,7 @@ class zzLoanRepayment(Document):
                 loan.name,
                 {
                     "outstanding_amount": new_outstanding,
-                    "loan_status": "Active",
-                    "is_closed": 0,
-                    "is_active": 1
+                    "loan_status": "Active"
                 }
             )
 
@@ -332,9 +328,7 @@ class zzLoanRepayment(Document):
             loan.name,
             {
                 "outstanding_amount": new_outstanding,
-                "loan_status": "Active",
-                "is_closed": 0,
-                "is_active": 1
+                "loan_status": "Active"
             }
         )
 
