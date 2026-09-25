@@ -79,12 +79,6 @@ frappe.query_reports["Cost Analysis"] = {
         }
 
         if (data.is_quant_subtotal) {
-            // Total rows now carry indent: 0 (server-side) so the datatable's
-            // tree/collapse grouping never nests them under the section
-            // header - this is what keeps them visible when the header is
-            // collapsed. Since that also strips the native indent-1 padding
-            // the detail rows get, add it back manually on the description
-            // column so the Total row still looks nested under its header.
             let extra_padding = column.fieldname === "expense_category" ? "padding-left: 22px;" : "";
             return `<span style="font-weight: 700; color: #0f172a; border-top: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; display: block; padding: 2px 0; ${extra_padding}">${value}</span>`;
         }
@@ -120,10 +114,6 @@ frappe.query_reports["Cost Analysis"] = {
             value = `<span style="font-size: 13px; font-weight: 800; color: #0f172a; background-color: #f8fafc; border-top: 2px solid #0f172a; border-bottom: 2px double #0f172a; display: block; padding: 4px 6px; border-radius: 2px;">${value}</span>`;
         }
 
-        // Cell-level Per BL vs Budget Per BL coloring (Requirement: color
-        // only the Per BL cell that was actually compared to budget, not
-        // the whole row). Each per_bl_<month> and total_per_bl cell carries
-        // its own <fieldname>_color computed server-side in the report.py.
         var cell_color = null;
         if (column.fieldname === "total_per_bl") {
             cell_color = data.total_per_bl_color;

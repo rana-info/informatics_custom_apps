@@ -207,6 +207,32 @@ CONSUMPTION_UOM = "Quintal"
 
 CONSUMPTION_ITEM_CODES = {label: item_code for item_code, label, _opening, _closing in CONSUMPTION_ITEMS}
 
+DWGS_ITEMS = [
+    ("100151", "DWGS from Maize"),
+    ("100149", "DWGS from DFG"),
+    ("100150", "DWGS from FCI"),
+]
+
+DDGS_ITEMS = [
+    ("100147", "DDGS from Maize"),
+    ("100145", "DDGS from DFG"),
+    ("100146", "DDGS from FCI"),
+]
+
+CRUDE_OIL_ITEM = "129946"
+DDGS_TO_DWGS_FACTOR = 3.6
+DWGS_STD_MAIZE_PCT = 0.0275
+DWGS_STD_RICE_PCT = 0.016
+CRUDE_OIL_STD_PRODUCTION = 0.006
+
+ITEM_SALES_GL_ACCOUNTS = {
+    "100114": "30124",
+    "100112": "30125",
+    "100113": "30126",
+    "100122": "30129",
+    "100120": "30128",
+}
+
 
 def get_stock_uom(item_code):
     return frappe.get_cached_value("Item", item_code, "stock_uom") or ""
@@ -255,12 +281,12 @@ def get_lab_parameter_data(companies, dates, plants=None):
     return lookup
 
 
-def get_issued_qty_by_month(companies, overall_start, overall_end, item_codes, plants=None, segments=None):
+def get_issued_qty_for_range(companies, start_date, end_date, item_codes, plants=None, segments=None):
     if not item_codes:
         return {}
 
-    from_dt = f"{overall_start} 06:00:00"
-    to_dt = f"{add_days(overall_end, 1)} 06:00:00"
+    from_dt = f"{start_date} 06:00:00"
+    to_dt = f"{add_days(end_date, 1)} 06:00:00"
 
     conditions = [
         "se.docstatus = 1",
@@ -282,15 +308,58 @@ def get_issued_qty_by_month(companies, overall_start, overall_end, item_codes, p
     rows = frappe.db.sql(f"""
         select
             sed.item_code,
-            date_format(date_sub(timestamp(se.posting_date, se.posting_time), interval 6 hour), '%%Y-%%m') as month_key,
             sum(sed.qty * sed.conversion_factor) as qty
         from `tabStock Entry` se
         inner join `tabStock Entry Detail` sed on se.name = sed.parent
         where {" and ".join(conditions)}
-        group by sed.item_code, month_key
+        group by sed.item_code
     """, values, as_dict=1)
 
-    return {(r.item_code, r.month_key): flt(r.qty) for r in rows}
+    return {r.item_code: flt(r.qty) for r in rows}
+
+
+def get_production_qty_by_month(company_val, branch_val, segment_val, item_codes, filters):
+    if not item_codes:
+        return {}
+
+    conditions = [
+        "se.docstatus = 1",
+        "se.purpose = 'Material Receipt'",
+        "se.posting_date >= %(from_date)s",
+        "se.posting_date <= %(to_date)s",
+        "sed.item_code IN %(items)s",
+        "se.company = %(company)s"
+    ]
+    values = {
+        "from_date": filters.get("from_date"),
+        "to_date": filters.get("to_date"),
+        "items": tuple(item_codes),
+        "company": company_val
+    }
+
+    if branch_val:
+        conditions.append("(se.branch = %(branch)s OR se.to_warehouse LIKE %(branch_pat)s)")
+        values["branch"] = branch_val
+        values["branch_pat"] = f"%{branch_val}%"
+    if segment_val:
+        conditions.append("se.segment = %(segment)s")
+        values["segment"] = segment_val
+
+    rows = frappe.db.sql(f"""
+        SELECT
+            sed.item_code,
+            DATE_FORMAT(se.posting_date, '%%Y-%%m') AS month_key,
+            SUM(sed.qty * sed.conversion_factor) AS qty
+        FROM `tabStock Entry Detail` sed
+        INNER JOIN `tabStock Entry` se ON se.name = sed.parent
+        WHERE {" AND ".join(conditions)}
+        GROUP BY sed.item_code, DATE_FORMAT(se.posting_date, '%%Y-%%m')
+    """, values, as_dict=True)
+
+    result = {}
+    for r in rows:
+        result.setdefault(r.item_code, {})[r.month_key] = flt(r.qty)
+    return result
 
 
 def compute_consumption_data(company_val, branch_val, segment_val, months, filters):
@@ -312,9 +381,10 @@ def compute_consumption_data(company_val, branch_val, segment_val, months, filte
 
     lab_lookup = get_lab_parameter_data(companies, needed_dates, plants)
 
-    overall_start = min(s for s, _ in month_bounds.values())
-    overall_end = max(e for _, e in month_bounds.values())
-    issued_lookup = get_issued_qty_by_month(companies, overall_start, overall_end, item_codes, plants, segments)
+    issued_by_month = {
+        m_key: get_issued_qty_for_range(companies, start, end, item_codes, plants, segments)
+        for m_key, (start, end) in month_bounds.items()
+    }
 
     consumed_by_item = {}
     opening_by_item = {}
@@ -332,7 +402,7 @@ def compute_consumption_data(company_val, branch_val, segment_val, months, filte
 
             opening = lab_lookup.get((start, opening_field), 0.0) * factor
             closing = lab_lookup.get((end, closing_field), 0.0) * factor
-            issued_qty = issued_lookup.get((item_code, m_key), 0.0) * factor
+            issued_qty = issued_by_month.get(m_key, {}).get(item_code, 0.0) * factor
 
             net_consumed = opening + issued_qty - closing
 
@@ -428,6 +498,202 @@ def build_recovery_section(item_month_prod, consumed_by_item, months):
     rows.append(tot_row)
 
     return rows
+
+
+def build_dwgs_ddgs_section(months, item_month_prod, consumed_by_item, filters, company_val, branch_val, segment_val):
+    byproduct_codes = [c for c, _ in DWGS_ITEMS] + [c for c, _ in DDGS_ITEMS] + [CRUDE_OIL_ITEM]
+    byproduct_prod = get_production_qty_by_month(company_val, branch_val, segment_val, byproduct_codes, filters)
+
+    def month_qty(code, m_key):
+        return flt(byproduct_prod.get(code, {}).get(m_key, 0.0))
+
+    def div(a, b):
+        return round(a / b, 2) if b else 0.0
+
+    ethanol_month, maize_month, dfg_fci_month = {}, {}, {}
+    for m in months:
+        m_key = m["key"]
+        maize_month[m_key] = flt(item_month_prod.get("100114", {}).get(m_key, 0.0))
+        dfg_qty = flt(item_month_prod.get("100112", {}).get(m_key, 0.0))
+        fci_qty = flt(item_month_prod.get("100113", {}).get(m_key, 0.0))
+        dfg_fci_month[m_key] = dfg_qty + fci_qty
+        ethanol_month[m_key] = maize_month[m_key] + dfg_fci_month[m_key]
+
+    rows = []
+
+    header = {"expense_category": "DWGS & DDGS Production", "gl_code": "", "uom": "", "indent": 0, "is_quant_header": 1}
+    for m in months:
+        header[f"actual_{m['key']}"] = ""
+    header["total_actual"] = ""
+    rows.append(header)
+
+    dwgs_row = {"expense_category": "DWGS produced", "gl_code": "", "uom": "Qtl", "indent": 1}
+    ddgs_row = {"expense_category": "DDGS produced", "gl_code": "", "uom": "Qtl", "indent": 1}
+    ddgs_equiv_row = {"expense_category": "DDGS Equivalent to DWGS", "gl_code": "", "uom": "Qtl", "indent": 1}
+    total_dwgs_row = {"expense_category": "Total DWGS", "gl_code": "", "uom": "Qtl", "indent": 0, "is_quant_subtotal": 1}
+    dwgs_pct_row = {"expense_category": "% of DWGS on Ethanol", "gl_code": "", "uom": "%", "indent": 1}
+
+    dwgs_ytd = ddgs_ytd = ddgs_equiv_ytd = total_dwgs_ytd = ethanol_ytd = 0.0
+
+    for m in months:
+        m_key = m["key"]
+        dwgs_qty = sum(month_qty(c, m_key) for c, _ in DWGS_ITEMS)
+        ddgs_qty = sum(month_qty(c, m_key) for c, _ in DDGS_ITEMS)
+        ddgs_equiv = ddgs_qty * DDGS_TO_DWGS_FACTOR
+        total_dwgs = dwgs_qty + ddgs_equiv
+        ethanol_qty = ethanol_month[m_key]
+
+        dwgs_row[f"actual_{m_key}"] = fmt_num(dwgs_qty)
+        ddgs_row[f"actual_{m_key}"] = fmt_num(ddgs_qty)
+        ddgs_equiv_row[f"actual_{m_key}"] = fmt_num(ddgs_equiv)
+        total_dwgs_row[f"actual_{m_key}"] = fmt_num(total_dwgs)
+        dwgs_pct_row[f"actual_{m_key}"] = fmt_num(div(total_dwgs, ethanol_qty))
+
+        dwgs_ytd += dwgs_qty
+        ddgs_ytd += ddgs_qty
+        ddgs_equiv_ytd += ddgs_equiv
+        total_dwgs_ytd += total_dwgs
+        ethanol_ytd += ethanol_qty
+
+    dwgs_row["total_actual"] = fmt_num(dwgs_ytd)
+    ddgs_row["total_actual"] = fmt_num(ddgs_ytd)
+    ddgs_equiv_row["total_actual"] = fmt_num(ddgs_equiv_ytd)
+    total_dwgs_row["total_actual"] = fmt_num(total_dwgs_ytd)
+    dwgs_pct_row["total_actual"] = fmt_num(div(total_dwgs_ytd, ethanol_ytd))
+
+    rows.extend([dwgs_row, ddgs_row, ddgs_equiv_row, total_dwgs_row, dwgs_pct_row])
+
+    std_header = {"expense_category": "Standard Production of DWGS", "gl_code": "", "uom": "", "indent": 0, "is_quant_header": 1}
+    for m in months:
+        std_header[f"actual_{m['key']}"] = ""
+    std_header["total_actual"] = ""
+    rows.append(std_header)
+
+    std_maize_row = {"expense_category": "On Maize @ 2.75%", "gl_code": "", "uom": "Qtl", "indent": 1}
+    std_rice_row = {"expense_category": "On Rice @ 1.6%", "gl_code": "", "uom": "Qtl", "indent": 1}
+    std_wavg_row = {"expense_category": "Weighted Average", "gl_code": "", "uom": "Qtl", "indent": 0, "is_quant_subtotal": 1}
+
+    std_maize_ytd = std_rice_ytd = 0.0
+
+    for m in months:
+        m_key = m["key"]
+        std_maize = maize_month[m_key] * DWGS_STD_MAIZE_PCT
+        std_rice = dfg_fci_month[m_key] * DWGS_STD_RICE_PCT
+        ethanol_qty = ethanol_month[m_key]
+
+        std_maize_row[f"actual_{m_key}"] = fmt_num(std_maize)
+        std_rice_row[f"actual_{m_key}"] = fmt_num(std_rice)
+        std_wavg_row[f"actual_{m_key}"] = fmt_num(div(std_maize + std_rice, ethanol_qty))
+
+        std_maize_ytd += std_maize
+        std_rice_ytd += std_rice
+
+    std_maize_row["total_actual"] = fmt_num(std_maize_ytd)
+    std_rice_row["total_actual"] = fmt_num(std_rice_ytd)
+    std_wavg_row["total_actual"] = fmt_num(div(std_maize_ytd + std_rice_ytd, ethanol_ytd))
+
+    rows.extend([std_maize_row, std_rice_row, std_wavg_row])
+
+    oil_header = {"expense_category": "Crude Corn Oil", "gl_code": "", "uom": "", "indent": 0, "is_quant_header": 1}
+    for m in months:
+        oil_header[f"actual_{m['key']}"] = ""
+    oil_header["total_actual"] = ""
+    rows.append(oil_header)
+
+    oil_prod_row = {"expense_category": "Production of Crude Oil", "gl_code": CRUDE_OIL_ITEM, "uom": "Ltr", "indent": 1}
+    oil_pct_row = {"expense_category": "% of Production on Maize Consumed", "gl_code": "", "uom": "%", "indent": 1}
+    oil_std_row = {"expense_category": "Standard Production", "gl_code": "", "uom": "", "indent": 1}
+
+    oil_prod_ytd = maize_consumed_ytd = 0.0
+
+    for m in months:
+        m_key = m["key"]
+        oil_qty = month_qty(CRUDE_OIL_ITEM, m_key)
+        maize_consumed = flt(consumed_by_item.get("Maize", {}).get(m_key, 0.0))
+
+        oil_prod_row[f"actual_{m_key}"] = fmt_num(oil_qty)
+        oil_pct_row[f"actual_{m_key}"] = fmt_num(div(oil_qty, maize_consumed))
+        oil_std_row[f"actual_{m_key}"] = fmt_num(CRUDE_OIL_STD_PRODUCTION)
+
+        oil_prod_ytd += oil_qty
+        maize_consumed_ytd += maize_consumed
+
+    oil_prod_row["total_actual"] = fmt_num(oil_prod_ytd)
+    oil_pct_row["total_actual"] = fmt_num(div(oil_prod_ytd, maize_consumed_ytd))
+    oil_std_row["total_actual"] = fmt_num(CRUDE_OIL_STD_PRODUCTION)
+
+    rows.extend([oil_prod_row, oil_pct_row, oil_std_row])
+
+    return rows
+
+
+def get_sales_gl_amount_by_month(company_val, branch_val, segment_val, item_to_account, filters):
+    account_numbers = tuple(item_to_account.values())
+    if not account_numbers:
+        return {}
+
+    accounts = frappe.db.sql("""
+        SELECT name, account_number
+        FROM `tabAccount`
+        WHERE company = %(company)s
+          AND is_group = 0
+          AND account_number IN %(codes)s
+    """, {"company": company_val, "codes": account_numbers}, as_dict=True)
+
+    account_to_names = {}
+    for acc in accounts:
+        account_to_names.setdefault(acc.account_number, []).append(acc.name)
+
+    all_acc_names = [name for names in account_to_names.values() for name in names]
+    if not all_acc_names:
+        return {}
+
+    conditions = [
+        "docstatus = 1",
+        "is_cancelled = 0",
+        "company = %(company)s",
+        "posting_date >= %(from_date)s",
+        "posting_date <= %(to_date)s",
+        "account IN %(accounts)s"
+    ]
+    values = {
+        "company": company_val,
+        "from_date": filters.get("from_date"),
+        "to_date": filters.get("to_date"),
+        "accounts": tuple(all_acc_names)
+    }
+
+    if branch_val:
+        conditions.append("(section = %(branch)s OR branch = %(branch)s)")
+        values["branch"] = branch_val
+    if segment_val:
+        conditions.append("segment = %(segment)s")
+        values["segment"] = segment_val
+
+    gl_entries = frappe.db.sql(f"""
+        SELECT
+            account,
+            DATE_FORMAT(posting_date, '%%Y-%%m') AS month_key,
+            SUM(credit - debit) AS amount
+        FROM `tabGL Entry`
+        WHERE {" AND ".join(conditions)}
+        GROUP BY account, DATE_FORMAT(posting_date, '%%Y-%%m')
+    """, values, as_dict=True)
+
+    name_to_account_number = {name: num for num, names in account_to_names.items() for name in names}
+
+    account_month_amount = {}
+    for row in gl_entries:
+        account_number = name_to_account_number.get(row.account)
+        if not account_number:
+            continue
+        bucket = account_month_amount.setdefault(account_number, {})
+        bucket[row.month_key] = bucket.get(row.month_key, 0.0) + flt(row.amount)
+
+    return {
+        item_code: account_month_amount.get(acc_num, {})
+        for item_code, acc_num in item_to_account.items()
+    }
 
 
 def get_plants_for_company(company_val):
@@ -648,6 +914,11 @@ def get_quant_data(filters, months, FIXED_PROD_ITEMS_MAP, FIXED_SALES_ITEMS_MAP,
     data.extend(build_quant_section_from_data("Opening WIP", ["Maize", "DFG", "Rice"], opening_by_item, months, label_to_code=CONSUMPTION_ITEM_CODES))
     data.extend(build_quant_section_from_data("Closing WIP", ["Maize", "DFG", "Rice"], closing_by_item, months, label_to_code=CONSUMPTION_ITEM_CODES))
     data.extend(build_recovery_section(item_month_prod, consumed_by_item, months))
+    data.extend(build_dwgs_ddgs_section(months, item_month_prod, consumed_by_item, filters, company_val, branch_val, segment_val))
+
+    gl_sales_val_map = get_sales_gl_amount_by_month(company_val, branch_val, segment_val, ITEM_SALES_GL_ACCOUNTS, filters)
+    for icode, month_amounts in gl_sales_val_map.items():
+        sales_val_map[icode] = month_amounts
 
     sqty_header_row = {"expense_category": "Sales QTY", "gl_code": "Item Code", "uom": "", "indent": 0, "is_quant_header": 1}
     data.append(sqty_header_row)
@@ -678,7 +949,7 @@ def get_quant_data(filters, months, FIXED_PROD_ITEMS_MAP, FIXED_SALES_ITEMS_MAP,
         tot_sqty_row[f"actual_{m['key']}"] = fmt_num(sqty_totals[m['key']])
     data.append(tot_sqty_row)
 
-    sval_header_row = {"expense_category": "Sales Amount", "gl_code": "Item Code", "uom": "", "indent": 0, "is_quant_header": 1}
+    sval_header_row = {"expense_category": "Sales Amount", "gl_code": "GL Code", "uom": "", "indent": 0, "is_quant_header": 1}
     data.append(sval_header_row)
     sval_totals = zero_month_dict(months)
     sval_ytd_total = 0.0
@@ -686,7 +957,7 @@ def get_quant_data(filters, months, FIXED_PROD_ITEMS_MAP, FIXED_SALES_ITEMS_MAP,
     for item_info in FIXED_SALES_ITEMS_MAP:
         icode = item_info["code"]
         iname = item_info["name"]
-        row = {"expense_category": iname, "gl_code": icode, "uom": "", "indent": 1}
+        row = {"expense_category": iname, "gl_code": ITEM_SALES_GL_ACCOUNTS.get(icode, "--"), "uom": "", "indent": 1}
         row_ytd = 0.0
         for m in months:
             m_key = m["key"]
@@ -792,7 +1063,6 @@ ROW_STYLE_FLAG = {
 
 def build_section_rows(section_name, gl_codes, code_data_cache, code_to_title, budget_by_account,
                         months, monthly_prod_map, total_ytd_production, hide_zero, show_summary):
-    """Returns (rows_to_display, cat_totals) for a single section."""
     reverse_color = is_by_product_section(section_name)
     cat_totals = new_type_totals(months)
     category_rows = []
@@ -804,7 +1074,7 @@ def build_section_rows(section_name, gl_codes, code_data_cache, code_to_title, b
 
         row_data = {}
         row_tot_act = 0.0
-        has_nonzero = False          # NEW — tracks any individual month != 0
+        has_nonzero = False
         c_data = code_data_cache.get(code, {})
 
         for m in months:
@@ -813,8 +1083,8 @@ def build_section_rows(section_name, gl_codes, code_data_cache, code_to_title, b
             m_prod = monthly_prod_map.get(m_key, 0.0)
             m_per_bl = round(m_act / m_prod, 2) if m_prod else 0.0
 
-            if m_act != 0:
-                has_nonzero = True   # NEW
+            if flt(m_act, 2) != 0:
+                has_nonzero = True
 
             row_data[f"actual_{m_key}"] = m_act
             row_data[f"per_bl_{m_key}"] = m_per_bl
@@ -828,7 +1098,7 @@ def build_section_rows(section_name, gl_codes, code_data_cache, code_to_title, b
         cat_totals["budget_amount"] += row_budget_amount
         cat_totals["budget_per_bl"] += row_budget_per_bl
 
-        if hide_zero and not has_nonzero:      # CHANGED — was `row_tot_act == 0`
+        if hide_zero and not has_nonzero:
             continue
 
         detail_row = {
@@ -844,7 +1114,7 @@ def build_section_rows(section_name, gl_codes, code_data_cache, code_to_title, b
         detail_row.update(row_data)
         category_rows.append(detail_row)
 
-    if hide_zero and not category_rows:        # CHANGED — dropped the `cat_totals["total_actual"] == 0` clause
+    if hide_zero and not category_rows:
         return [], cat_totals
 
     display_rows = []
@@ -861,7 +1131,6 @@ def build_section_rows(section_name, gl_codes, code_data_cache, code_to_title, b
         display_rows.append(subtotal_row)
 
     return display_rows, cat_totals
-
 
 def get_cost_data(filters, months, FIXED_CODES, monthly_prod_map, total_ytd_production,
                    sales_qty_map, sales_val_map, show_summary, hide_zero,
