@@ -225,13 +225,44 @@ def get_data(settings, amounts, account_labels, plants, plant_segments, view):
 	for acc_row in settings.section_accounts:
 		accounts_by_section[acc_row.section].append(acc_row)
 
+	current_group_key = None
+	current_group_label = None
+	current_group_cumulative = False
+	group_total = None
+	current_report_type = None
+	running_total = None
+
 	for section in settings.sections:
 		section_accounts = accounts_by_section.get(section.section_name, [])
 		leaf_rows, section_total = build_section(
 			section_accounts, amounts, account_labels, plants, plant_segments
 		)
 
+		group_key = (section.report_type, section.summary_group)
+
 		if view == "Detailed":
+			if group_key != current_group_key:
+				if current_group_key is not None and current_group_label:
+					closing_total = running_total if current_group_cumulative else group_total
+					data.append(
+						build_total_row(
+							current_group_label,
+							closing_total,
+							plants,
+							plant_segments,
+							indent=0,
+							bold=True,
+						)
+					)
+					data.append(divider_row())
+				if section.report_type != current_report_type:
+					current_report_type = section.report_type
+					running_total = zero_row(plants, plant_segments)
+				current_group_key = group_key
+				current_group_label = section.get("detailed_total_label")
+				current_group_cumulative = cint(section.get("cumulative_total"))
+				group_total = zero_row(plants, plant_segments)
+
 			data.append(build_total_row(section.section_name, section_total, plants, plant_segments, indent=0, bold=True))
 			data.extend(leaf_rows)
 			if section.show_subtotal:
@@ -247,11 +278,28 @@ def get_data(settings, amounts, account_labels, plants, plant_segments, view):
 				)
 			data.append(divider_row())
 
+			accumulate(group_total, section_total, plants, plant_segments)
+			accumulate(running_total, section_total, plants, plant_segments)
+
 		key = (section.report_type, section.summary_group)
 		if key not in summary_totals:
 			summary_totals[key] = zero_row(plants, plant_segments)
 			summary_order.append(key)
 		accumulate(summary_totals[key], section_total, plants, plant_segments)
+
+	if view == "Detailed" and current_group_key is not None and current_group_label:
+		closing_total = running_total if current_group_cumulative else group_total
+		data.append(
+			build_total_row(
+				current_group_label,
+				closing_total,
+				plants,
+				plant_segments,
+				indent=0,
+				bold=True,
+			)
+		)
+		data.append(divider_row())
 
 	if view == "Summary":
 		data.extend(build_summary_view(summary_totals, summary_order, plants, plant_segments))
