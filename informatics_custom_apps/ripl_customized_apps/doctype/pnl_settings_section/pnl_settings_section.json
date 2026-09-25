@@ -1,6 +1,6 @@
 {
  "actions": [],
- "creation": "2026-09-14 00:00:00.000000",
+ "creation": "2026-09-14 00:00:00",
  "doctype": "DocType",
  "editable_grid": 1,
  "engine": "InnoDB",
@@ -9,19 +9,23 @@
   "report_type",
   "summary_group",
   "column_break_1",
+  "detailed_total_label",
+  "cumulative_total",
   "show_subtotal",
   "subtotal_label"
  ],
  "fields": [
   {
+   "columns": 2,
+   "description": "Schedule-level line, e.g. 'Sale of Main Product - Sugar'",
    "fieldname": "section_name",
    "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Section Name",
-   "reqd": 1,
-   "description": "Schedule-level line, e.g. 'Sale of Main Product - Sugar'"
+   "reqd": 1
   },
   {
+   "columns": 1,
    "fieldname": "report_type",
    "fieldtype": "Select",
    "in_list_view": 1,
@@ -30,38 +34,62 @@
    "reqd": 1
   },
   {
+   "columns": 2,
+   "description": "Summary-sheet bucket this section rolls into, e.g. 'Revenue from operations'. Use the exact same text across multiple sections to combine them into one Summary line.",
    "fieldname": "summary_group",
    "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Summary Group",
-   "reqd": 1,
-   "description": "Summary-sheet bucket this section rolls into, e.g. 'Revenue from operations'. Use the exact same text across multiple sections to combine them into one Summary line."
+   "reqd": 1
   },
   {
    "fieldname": "column_break_1",
    "fieldtype": "Column Break"
   },
   {
+   "columns": 2,
+   "description": "Label for this Summary Group's total row in the Detailed view, e.g. 'Total Of Revenue from operations'. Set it on the first section of the group. Leave blank to skip showing a total row for this group.",
+   "fieldname": "detailed_total_label",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Detailed Total Label"
+  },
+  {
+   "columns": 1,
+   "default": "0",
+   "description": "If checked, this group's Detailed total row shows the running sum of this group plus every earlier Summary Group of the same Report Type, instead of just this group's own sections. Set it on the first section of the group. Example: tick this on 'Other Income' (with label 'Total Revenue') to get Revenue from operations + Other Income.",
+   "fieldname": "cumulative_total",
+   "fieldtype": "Check",
+   "label": "Cumulative Total"
+  },
+  {
+   "columns": 1,
    "default": "1",
    "fieldname": "show_subtotal",
    "fieldtype": "Check",
+   "in_list_view": 1,
    "label": "Show Subtotal Row"
   },
   {
+   "columns": 1,
    "default": "Sub Total",
+   "depends_on": "show_subtotal",
    "fieldname": "subtotal_label",
    "fieldtype": "Data",
-   "label": "Subtotal Row Label",
-   "depends_on": "show_subtotal"
+   "label": "Subtotal Row Label"
   }
  ],
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "module": "Ripl Customized Apps",
+ "modified": "2026-09-25 17:04:09.473387",
+ "modified_by": "Administrator",
+ "module": "RIPL Customized Apps",
  "name": "PNL Settings Section",
  "owner": "Administrator",
  "permissions": [],
+ "row_format": "Dynamic",
  "sort_field": "modified",
- "sort_order": "DESC"
+ "sort_order": "DESC",
+ "states": []
 }
