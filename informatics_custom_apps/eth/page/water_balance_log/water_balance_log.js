@@ -1,19 +1,11 @@
 frappe.pages['water-balance-log'].on_page_load = function(wrapper) {
 
-    // =========================================================
-    // PAGE SETUP
-    // =========================================================
-
     let page = frappe.ui.make_app_page({
         parent: wrapper,
         title: 'Water Balance Dashboard',
         single_column: true
     });
 
-
-    // =========================================================
-    // STATIC PLANTS
-    // =========================================================
 
     const plants = [
         "Buttar Biofuels",
@@ -25,10 +17,6 @@ frappe.pages['water-balance-log'].on_page_load = function(wrapper) {
         "Karimganj Biofuels"
     ];
 
-
-    // =========================================================
-    // PAGE HTML
-    // =========================================================
 
     $(wrapper).find(".layout-main-section").html(`
 
@@ -217,10 +205,6 @@ frappe.pages['water-balance-log'].on_page_load = function(wrapper) {
     `);
 
 
-    // =========================================================
-    // SECTION A
-    // LOAD DAILY DATA
-    // =========================================================
 
     function loadDailyData() {
 
@@ -286,11 +270,6 @@ frappe.pages['water-balance-log'].on_page_load = function(wrapper) {
     }
 
 
-    // =========================================================
-    // SECTION A
-    // RENDER DAILY DASHBOARD
-    // =========================================================
-
     function renderDailyDashboard(data) {
 
         let html = `
@@ -337,6 +316,9 @@ frappe.pages['water-balance-log'].on_page_load = function(wrapper) {
                 const row_id =
                     `water-plant-${index}`;
 
+                const exceeded =
+                    plant.data.some(d => d.exceeds === true);
+
 
                 html += `
 
@@ -367,6 +349,10 @@ frappe.pages['water-balance-log'].on_page_load = function(wrapper) {
                             <b>
                                 ${plant.plant}
                             </b>
+
+                            ${exceeded
+                                ? '<span class="indicator-pill red" style="margin-left:8px;">Norm Exceeded</span>'
+                                : ''}
 
                         </td>
 
@@ -432,10 +418,6 @@ frappe.pages['water-balance-log'].on_page_load = function(wrapper) {
         );
 
 
-        // =====================================================
-        // PLANT EXPAND / COLLAPSE
-        // =====================================================
-
         $(".plant-row").on(
             "click",
             function() {
@@ -475,12 +457,6 @@ frappe.pages['water-balance-log'].on_page_load = function(wrapper) {
 
     }
 
-
-    // =========================================================
-    // SECTION A
-    // RENDER PLANT DATA
-    // =========================================================
-
     function renderPlantData(plant) {
 
         let html = `
@@ -495,13 +471,17 @@ frappe.pages['water-balance-log'].on_page_load = function(wrapper) {
                     <tr>
 
                         <th
-                            style="width:60%;"
+                            style="width:55%;"
                         >
                             Parameter
                         </th>
 
                         <th>
                             Value
+                        </th>
+
+                        <th>
+                            Norm (less than)
                         </th>
 
                     </tr>
@@ -530,9 +510,21 @@ frappe.pages['water-balance-log'].on_page_load = function(wrapper) {
                 }
 
 
+                const row_style =
+                    d.exceeds === true
+                        ? 'style="background:#fdecea;"'
+                        : '';
+
+
+                const norm_html =
+                    (d.norm !== null && d.norm !== undefined)
+                        ? d.norm
+                        : '—';
+
+
                 html += `
 
-                    <tr>
+                    <tr ${row_style}>
 
                         <td>
                             ${display_name}
@@ -540,6 +532,10 @@ frappe.pages['water-balance-log'].on_page_load = function(wrapper) {
 
                         <td>
                             ${d.value}
+                        </td>
+
+                        <td>
+                            ${norm_html}
                         </td>
 
                     </tr>
@@ -563,11 +559,6 @@ frappe.pages['water-balance-log'].on_page_load = function(wrapper) {
 
     }
 
-
-    // =========================================================
-    // SECTION B
-    // LOAD PARAMETERS
-    // =========================================================
 
     function loadParameters() {
 
@@ -623,11 +614,6 @@ frappe.pages['water-balance-log'].on_page_load = function(wrapper) {
 
     }
 
-
-    // =========================================================
-    // SECTION B
-    // LOAD TREND
-    // =========================================================
 
     function loadTrend() {
 
@@ -726,24 +712,11 @@ frappe.pages['water-balance-log'].on_page_load = function(wrapper) {
     }
 
 
-    // =========================================================
-    // SECTION B
-    // RENDER TREND CHART
-    // =========================================================
-
     function renderTrendChart(result) {
 
         let labels = [];
 
         let values = [];
-
-
-        // =====================================================
-        // CHART DATA
-        //
-        // 0 values are NOT plotted.
-        // They are still shown in Recorded Values table.
-        // =====================================================
 
         result.data.forEach(
             d => {
@@ -825,10 +798,6 @@ frappe.pages['water-balance-log'].on_page_load = function(wrapper) {
         `);
 
 
-        // =====================================================
-        // CHART
-        // =====================================================
-
         if (
             labels.length
         ) {
@@ -906,10 +875,6 @@ frappe.pages['water-balance-log'].on_page_load = function(wrapper) {
         }
 
 
-        // =====================================================
-        // RECORDED VALUES TABLE
-        // =====================================================
-
         let table = `
 
             <table
@@ -976,9 +941,7 @@ frappe.pages['water-balance-log'].on_page_load = function(wrapper) {
     }
 
 
-    // =========================================================
-    // BUTTON EVENTS
-    // =========================================================
+
 
     $("#load-daily-btn").on(
         "click",
@@ -999,10 +962,6 @@ frappe.pages['water-balance-log'].on_page_load = function(wrapper) {
         }
     );
 
-
-    // =========================================================
-    // INITIAL LOADING
-    // =========================================================
 
     loadParameters();
 

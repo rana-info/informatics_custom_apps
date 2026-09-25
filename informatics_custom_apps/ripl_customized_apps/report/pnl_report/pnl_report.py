@@ -59,7 +59,7 @@ def cell_fieldname(plant, segment):
 
 def get_columns(plants, plant_segments):
 	columns = [
-		{"fieldname": "description", "label": _("Particulars"), "fieldtype": "Data", "width": 340},
+		{"fieldname": "description", "label": _("Particulars"), "fieldtype": "Data", "width": 340, "align":"left"},
 	]
 	for plant in plants:
 		for segment in plant_segments.get(plant, []):
@@ -68,11 +68,11 @@ def get_columns(plants, plant_segments):
 					"fieldname": cell_fieldname(plant, segment),
 					"label": f"{plant} - {segment}",
 					"fieldtype": "Currency",
-					"width": 270,
+					"width": 170,
 				}
 			)
 	columns.append(
-		{"fieldname": "total", "label": _("Total"), "fieldtype": "Currency", "width": 270}
+		{"fieldname": "total", "label": _("Total"), "fieldtype": "Currency", "width": 120}
 	)
 	return columns
 
