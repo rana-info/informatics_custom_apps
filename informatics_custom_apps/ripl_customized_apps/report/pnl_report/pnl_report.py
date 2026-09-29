@@ -252,6 +252,7 @@ def get_data(settings, amounts, account_labels, plants, plant_segments, view):
 							plant_segments,
 							indent=0,
 							bold=True,
+							style="group_total",
 						)
 					)
 					data.append(divider_row())
@@ -263,7 +264,17 @@ def get_data(settings, amounts, account_labels, plants, plant_segments, view):
 				current_group_cumulative = cint(section.get("cumulative_total"))
 				group_total = zero_row(plants, plant_segments)
 
-			data.append(build_total_row(section.section_name, section_total, plants, plant_segments, indent=0, bold=True))
+			data.append(
+				build_total_row(
+					section.section_name,
+					section_total,
+					plants,
+					plant_segments,
+					indent=0,
+					bold=True,
+					style="section",
+				)
+			)
 			data.extend(leaf_rows)
 			if section.show_subtotal:
 				data.append(
@@ -274,6 +285,7 @@ def get_data(settings, amounts, account_labels, plants, plant_segments, view):
 						plant_segments,
 						indent=1,
 						bold=True,
+						style="subtotal",
 					)
 				)
 			data.append(divider_row())
@@ -297,6 +309,7 @@ def get_data(settings, amounts, account_labels, plants, plant_segments, view):
 				plant_segments,
 				indent=0,
 				bold=True,
+				style="group_total",
 			)
 		)
 		data.append(divider_row())
@@ -362,12 +375,15 @@ def build_summary_view(summary_totals, summary_order, plants, plant_segments):
 
 	return data
 
-def build_total_row(description, totals, plants, plant_segments, indent=0, bold=False):
+
+def build_total_row(description, totals, plants, plant_segments, indent=0, bold=False, style=None):
 	row = {"description": description, "indent": indent, "total": totals.get("total", 0)}
 	for fieldname in data_fieldnames(plants, plant_segments):
 		row[fieldname] = totals.get(fieldname, 0)
 	if bold:
 		row["is_bold"] = 1
+	if style:
+		row["row_style"] = style
 	return row
 
 
