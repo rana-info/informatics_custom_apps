@@ -190,11 +190,11 @@ class ReportContext:
     company: str
     branch: str
     segment: str
-    item_month_prod: dict   
-    monthly_prod_map: dict   
+    item_month_prod: dict
+    monthly_prod_map: dict
     total_ytd_production: float
-    sales_qty_map: dict       
-    sales_val_map: dict     
+    sales_qty_map: dict
+    sales_val_map: dict
 
 
 def build_context(filters, months):
@@ -411,8 +411,9 @@ def compute_consumption_data(company_val, branch_val, segment_val, months, filte
 
     - issued_by_item:      material actually issued to production (Material Issue
                             stock entries). This is what's shown as "Raw Mat Consumed".
-    - net_consumed_by_item: Opening WIP + Issued - Closing WIP. Used ONLY as the
-                            Recovery % denominator, not for display.
+    - net_consumed_by_item: Opening WIP + Issued - Closing WIP. Used as the
+                            Recovery % denominator and the Crude Oil % denominator,
+                            not for display.
     """
     companies = [company_val]
     plants = [branch_val] if branch_val else None
@@ -468,12 +469,16 @@ def add_header_row(rows, title, header_label, months, unit_label):
 
 
 def build_item_table(title, items, months, value_fn, header_label="Item Code",
-                      unit_label="Qty", uom="", code_fn=None):
+                      unit_label="Qty", uom="", code_fn=None, total_mode="sum"):
     """
-    items:    list of (key, display_name)
-    value_fn: (key, month_key) -> number
-    uom:      a fixed string, or a callable key -> uom string (e.g. get_stock_uom)
-    code_fn:  key -> gl_code shown in the "Item Code" column (defaults to the key itself)
+    items:      list of (key, display_name)
+    value_fn:   (key, month_key) -> number
+    uom:        a fixed string, or a callable key -> uom string (e.g. get_stock_uom)
+    code_fn:    key -> gl_code shown in the "Item Code" column (defaults to the key itself)
+    total_mode: how the "Total" column is derived from the monthly values:
+                "sum"   (default) - add all months
+                "first" - opening balance: value of the first month (= opening on From Date)
+                "last"  - closing balance: value of the last month (= closing on To Date)
     """
     rows = []
     add_header_row(rows, title, header_label, months, unit_label)
@@ -488,13 +493,23 @@ def build_item_table(title, items, months, value_fn, header_label="Item Code",
             "uom": uom(key) if callable(uom) else uom,
             "indent": 1,
         }
-        row_total = 0.0
+        vals = []
         for m in months:
             m_key = m["key"]
             val = flt(value_fn(key, m_key))
             row[f"actual_{m_key}"] = fmt_num(val)
-            row_total += val
+            vals.append(val)
             totals[m_key] += val
+
+        if not vals:
+            row_total = 0.0
+        elif total_mode == "first":
+            row_total = vals[0]
+        elif total_mode == "last":
+            row_total = vals[-1]
+        else:
+            row_total = sum(vals)
+
         row["total_actual"] = fmt_num(row_total)
         grand_total += row_total
         rows.append(row)
@@ -605,8 +620,8 @@ def build_recovery_section(item_month_prod, net_consumed_by_item, months):
     return build_ratio_table("Recovery", rows_def, months, unit_label="%")
 
 
-def build_dwgs_ddgs_section(months, item_month_prod, issued_by_item, filters,
-                             company_val, branch_val, segment_val):
+def build_dwgs_ddgs_section(months, item_month_prod, issued_by_item, net_consumed_by_item,
+                             filters, company_val, branch_val, segment_val):
     byproduct_codes = [c for c, _n in DWGS_ITEMS] + [c for c, _n in DDGS_ITEMS] + [CRUDE_OIL_ITEM]
     byproduct_prod = get_production_qty_by_month(company_val, branch_val, segment_val, byproduct_codes, filters)
 
@@ -638,7 +653,9 @@ def build_dwgs_ddgs_section(months, item_month_prod, issued_by_item, filters,
     std_total = {mk: std_maize[mk] + std_rice[mk] for mk in m_keys}
 
     oil_qty = {mk: qty(CRUDE_OIL_ITEM, mk) for mk in m_keys}
-    maize_consumed = {mk: flt(issued_by_item.get("Maize", {}).get(mk, 0.0)) for mk in m_keys}
+    # Denominator for crude oil %: NET maize consumption (Opening + Issued - Closing),
+    # same basis as the Recovery section.
+    maize_consumed = {mk: flt(net_consumed_by_item.get("Maize", {}).get(mk, 0.0)) for mk in m_keys}
     maize_consumed_ytd = sum(maize_consumed.values())
 
     rows = []
@@ -659,14 +676,16 @@ def build_dwgs_ddgs_section(months, item_month_prod, issued_by_item, filters,
     std_rice_ytd = add_sum_row(rows, "On Rice @ 1.6%", "", "Qtl", months, lambda mk: std_rice[mk])
     std_total_ytd = add_sum_row(rows, "Total", "", "Qtl", months, lambda mk: std_total[mk],
                                  indent=0, is_subtotal=True)
-    # Weighted Average = Ethanol production from Maize+DFG+FCI Rice (LTR) / (On Maize + On Rice).
-    add_ratio_row(rows, "Weighted Average", "", months, ethanol_qty, std_total,
-                  ethanol_ytd, std_total_ytd, indent=0, is_subtotal=True)
+    # Weighted Average (%) = Standard DWGS Total / Ethanol production (Maize+DFG+FCI Rice) * 100.
+    # YTD is computed from the YTD sums, not by averaging the monthly percentages.
+    add_ratio_row(rows, "Weighted Average", "%", months, std_total, ethanol_qty,
+                  std_total_ytd, ethanol_ytd, indent=0, is_subtotal=True, multiplier=100)
 
     add_blank_header(rows, "Crude Corn Oil", months)
     oil_prod_ytd = add_sum_row(rows, "Production of Crude Oil", CRUDE_OIL_ITEM, "Ltr", months, lambda mk: oil_qty[mk])
+    # % of Production on Maize Consumed = Crude Oil Production / (Opening + Issued - Closing Maize) * 100
     add_ratio_row(rows, "% of Production on Maize Consumed", "%", months, oil_qty, maize_consumed,
-                  oil_prod_ytd, maize_consumed_ytd)
+                  oil_prod_ytd, maize_consumed_ytd, multiplier=100)
     add_sum_row(rows, "Standard Production", "", "%", months, lambda mk: CRUDE_OIL_STD_PRODUCTION)
     # "Standard Production" is a fixed constant, not something that accumulates across
     # months - override the YTD total so it shows the constant itself, not a monthly sum.
@@ -726,21 +745,25 @@ def get_quant_data(filters, months, ctx):
     data.extend(rows)
 
     consumption_items = [(label, label) for label in ("Maize", "DFG", "Rice")]
-    for title, source in (
-        ("Raw Mat Consumed", issued_by_item),
-        ("Opening WIP", opening_by_item),
-        ("Closing WIP", closing_by_item),
+    # Total column: consumed = sum of months; opening = opening on From Date (first month);
+    # closing = closing on To Date (last month).
+    for title, source, mode in (
+        ("Raw Mat Consumed", issued_by_item, "sum"),
+        ("Opening WIP", opening_by_item, "first"),
+        ("Closing WIP", closing_by_item, "last"),
     ):
         rows, *_ = build_item_table(
             title, consumption_items, months,
             value_fn=lambda label, mk, source=source: source.get(label, {}).get(mk, 0.0),
             header_label="ITEM CODE", uom=CONSUMPTION_UOM, code_fn=CONSUMPTION_ITEM_CODES.get,
+            total_mode=mode,
         )
         data.extend(rows)
 
     data.extend(build_recovery_section(ctx.item_month_prod, net_consumed_by_item, months))
     data.extend(build_dwgs_ddgs_section(
-        months, ctx.item_month_prod, issued_by_item, filters, ctx.company, ctx.branch, ctx.segment
+        months, ctx.item_month_prod, issued_by_item, net_consumed_by_item,
+        filters, ctx.company, ctx.branch, ctx.segment
     ))
 
     rows, sqty_totals, sqty_ytd = build_item_table(
