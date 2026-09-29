@@ -458,6 +458,25 @@ def compute_consumption_data(company_val, branch_val, segment_val, months, filte
     return issued_by_item, net_consumed_by_item, opening_by_item, closing_by_item
 
 
+def compute_ytd_net_consumed(months, issued_by_item, opening_by_item, closing_by_item):
+    """
+    Period-level net consumption per item, applying the same formula as the monthly columns
+    to the Total column:
+        Opening (first month = opening on From Date) + Issued (sum of months) - Closing (last month = closing on To Date)
+    This is NOT the same as summing the monthly net values, because monthly openings/closings
+    don't cancel out perfectly (and the Opening/Closing tables' Total column is first/last, not a sum).
+    """
+    if not months:
+        return {}
+    first_key, last_key = months[0]["key"], months[-1]["key"]
+    result = {}
+    for label, issued in issued_by_item.items():
+        opening = opening_by_item.get(label, {}).get(first_key, 0.0)
+        closing = closing_by_item.get(label, {}).get(last_key, 0.0)
+        result[label] = opening + sum(issued.values()) - closing
+    return result
+
+
 
 def add_header_row(rows, title, header_label, months, unit_label):
     header = {"expense_category": title, "gl_code": header_label, "uom": "", "indent": 0, "is_quant_header": 1}
@@ -523,7 +542,11 @@ def build_item_table(title, items, months, value_fn, header_label="Item Code",
     return rows, totals, grand_total
 
 
-def build_ratio_table(title, rows_def, months, unit_label="%", header_label=""):
+def build_ratio_table(title, rows_def, months, unit_label="%", header_label="", den_total_override=None):
+    """den_total_override: optional {row_label: value} - use this as the Total column's denominator
+    for that row instead of the sum of the monthly denominators."""
+    den_total_override = den_total_override or {}
+
     def ratio(n, d):
         return round(n / d, 2) if d else 0.0
 
@@ -545,6 +568,8 @@ def build_ratio_table(title, rows_def, months, unit_label="%", header_label=""):
             den_total += d
             grand_num_by_month[m_key] += n
             grand_den_by_month[m_key] += d
+        if label in den_total_override:
+            den_total = flt(den_total_override[label])
         row["total_actual"] = fmt_num(ratio(num_total, den_total))
         grand_num_total += num_total
         grand_den_total += den_total
@@ -599,9 +624,11 @@ def add_ratio_row(rows, label, uom, months, num_by_month, den_by_month, num_tota
     rows.append(row)
 
 
-def build_recovery_section(item_month_prod, net_consumed_by_item, months):
+def build_recovery_section(item_month_prod, net_consumed_by_item, months, ytd_net_consumed):
     """Recovery % denominator is the NET consumption (Opening + Issued - Closing),
-    not the plain issued qty shown in the "Raw Mat Consumed" table."""
+    not the plain issued qty shown in the "Raw Mat Consumed" table.
+    Monthly columns use each month's net; the Total column uses the period-level net
+    (opening on From Date + total issued - closing on To Date)."""
     recovery_defs = [
         ("Maize", ["100122", "100114"], "Maize"),
         ("DFG", ["100120", "100112"], "DFG"),
@@ -617,11 +644,17 @@ def build_recovery_section(item_month_prod, net_consumed_by_item, months):
     rows_def = [(label, make_num_fn(codes), make_den_fn(consume_label))
                 for label, codes, consume_label in recovery_defs]
 
-    return build_ratio_table("Recovery", rows_def, months, unit_label="%")
+    den_total_override = {
+        label: ytd_net_consumed.get(consume_label, 0.0)
+        for label, _codes, consume_label in recovery_defs
+    }
+
+    return build_ratio_table("Recovery", rows_def, months, unit_label="%",
+                             den_total_override=den_total_override)
 
 
 def build_dwgs_ddgs_section(months, item_month_prod, issued_by_item, net_consumed_by_item,
-                             filters, company_val, branch_val, segment_val):
+                             ytd_net_consumed, filters, company_val, branch_val, segment_val):
     byproduct_codes = [c for c, _n in DWGS_ITEMS] + [c for c, _n in DDGS_ITEMS] + [CRUDE_OIL_ITEM]
     byproduct_prod = get_production_qty_by_month(company_val, branch_val, segment_val, byproduct_codes, filters)
 
@@ -656,7 +689,8 @@ def build_dwgs_ddgs_section(months, item_month_prod, issued_by_item, net_consume
     # Denominator for crude oil %: NET maize consumption (Opening + Issued - Closing),
     # same basis as the Recovery section.
     maize_consumed = {mk: flt(net_consumed_by_item.get("Maize", {}).get(mk, 0.0)) for mk in m_keys}
-    maize_consumed_ytd = sum(maize_consumed.values())
+    # Total column: opening on From Date + total issued - closing on To Date (not the sum of monthly nets).
+    maize_consumed_ytd = flt(ytd_net_consumed.get("Maize", 0.0))
 
     rows = []
 
@@ -685,7 +719,7 @@ def build_dwgs_ddgs_section(months, item_month_prod, issued_by_item, net_consume
     oil_prod_ytd = add_sum_row(rows, "Production of Crude Oil", CRUDE_OIL_ITEM, "Ltr", months, lambda mk: oil_qty[mk])
     # % of Production on Maize Consumed = Crude Oil Production / (Opening + Issued - Closing Maize) * 100
     add_ratio_row(rows, "% of Production on Maize Consumed", "%", months, oil_qty, maize_consumed,
-                  oil_prod_ytd, maize_consumed_ytd, multiplier=100)
+                  oil_prod_ytd, maize_consumed_ytd, multiplier=1)
     add_sum_row(rows, "Standard Production", "", "%", months, lambda mk: CRUDE_OIL_STD_PRODUCTION)
     # "Standard Production" is a fixed constant, not something that accumulates across
     # months - override the YTD total so it shows the constant itself, not a monthly sum.
@@ -760,9 +794,11 @@ def get_quant_data(filters, months, ctx):
         )
         data.extend(rows)
 
-    data.extend(build_recovery_section(ctx.item_month_prod, net_consumed_by_item, months))
+    ytd_net_consumed = compute_ytd_net_consumed(months, issued_by_item, opening_by_item, closing_by_item)
+
+    data.extend(build_recovery_section(ctx.item_month_prod, net_consumed_by_item, months, ytd_net_consumed))
     data.extend(build_dwgs_ddgs_section(
-        months, ctx.item_month_prod, issued_by_item, net_consumed_by_item,
+        months, ctx.item_month_prod, issued_by_item, net_consumed_by_item, ytd_net_consumed,
         filters, ctx.company, ctx.branch, ctx.segment
     ))
 
