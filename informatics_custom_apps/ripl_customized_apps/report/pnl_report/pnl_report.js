@@ -88,7 +88,18 @@ frappe.query_reports["PNL Report"] = {
 		}
 
 		value = default_formatter(value, row, column, data);
-		if (data && (data.is_bold || data.is_total)) {
+
+		// Text colors for Detailed view totals (row_style is set in the Python report)
+		const ROW_COLORS = {
+			section: "#1d4ed8",     // blue: section header rows
+			subtotal: "#15803d",    // green: section sub totals
+			group_total: "#b91c1c", // red: group / cumulative totals
+		};
+		const color = data && ROW_COLORS[data.row_style];
+
+		if (color) {
+			value = `<span style="color:${color};font-weight:700;">${value}</span>`;
+		} else if (data && (data.is_bold || data.is_total || column.fieldname === "total")) {
 			value = `<b>${value}</b>`;
 		}
 		return value;

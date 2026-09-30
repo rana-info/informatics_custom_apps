@@ -11,6 +11,31 @@ PLANTS = [
     "Karimganj Biofuels"
 ]
 
+HIDDEN_FIELDS = {
+    "ethanol_production",
+    "condensate_generation_ratio",
+    "effluent_generation_ratio",
+}
+
+STATUS_SOURCE_MAP = {
+    "total_condensate_genration": {
+        "source": "condensate_generation_ratio",
+        "norm": "condensate_generation_norm",
+    },
+    "total_effluent_genration": {
+        "source": "effluent_generation_ratio",
+        "norm": "effluent_generation_norm",
+    },
+    "effluent_treatment_cost": {
+        "source": "effluent_treatment_cost",
+        "norm": "effluent_treatment_cost_norm",
+    },
+    "dm_water_treatment_cost": {
+        "source": "dm_water_treatment_cost",
+        "norm": "dm_water_treatment_cost_norm",
+    },
+}
+
 
 @frappe.whitelist()
 def get_parameters():
@@ -28,13 +53,12 @@ def get_parameters():
         "company",
         "plant",
         "date",
-    }
+    } | HIDDEN_FIELDS
 
     parameters = []
 
     for df in meta.fields:
 
-        # Only actual numeric parameters
         if df.fieldtype not in ("Float", "Int", "Currency"):
             continue
 
@@ -50,12 +74,49 @@ def get_parameters():
     return parameters
 
 
+def get_fetch_fields(parameters):
+    fields = {p["fieldname"] for p in parameters}
+    for mapping in STATUS_SOURCE_MAP.values():
+        fields.add(mapping["source"])
+    return list(fields)
+
+
+def get_plant_norms(plant):
+    """Returns the norm row (as a dict) configured for this plant, or {}."""
+    settings = frappe.get_single("Water Balance Settings")
+    for row in settings.norms:
+        if row.plant == plant:
+            return row.as_dict()
+    return {}
+
+
+def attach_exceeds(entry, source_row, plant_norms):
+    mapping = STATUS_SOURCE_MAP.get(entry["fieldname"])
+
+    if not mapping:
+        entry["exceeds"] = None
+        entry["norm"] = None
+        return
+
+    norm_value = plant_norms.get(mapping["norm"])
+
+    if norm_value in (None, ""):
+        entry["exceeds"] = None
+        entry["norm"] = None
+        return
+
+    source_value = source_row.get(mapping["source"]) or 0
+
+    entry["exceeds"] = source_value >= norm_value
+    entry["norm"] = norm_value
+
+
 @frappe.whitelist()
 def get_daily_data(plant, date):
 
-    meta = frappe.get_meta("Water Balance Log Book")
-
     parameters = get_parameters()
+    plant_norms = get_plant_norms(plant)
+    fetch_fields = get_fetch_fields(parameters)
 
     logs = frappe.get_all(
         "Water Balance Log Book",
@@ -63,9 +124,7 @@ def get_daily_data(plant, date):
             "plant": plant,
             "date": date
         },
-        fields=["name"] + [
-            p["fieldname"] for p in parameters
-        ],
+        fields=["name"] + fetch_fields,
         limit_page_length=1
     )
 
@@ -83,16 +142,19 @@ def get_daily_data(plant, date):
 
         value = log.get(parameter["fieldname"])
 
-        # Keep 0 values in daily data
         if value is None:
             value = 0
 
-        result.append({
+        entry = {
             "fieldname": parameter["fieldname"],
             "label": parameter["label"],
             "description": parameter["description"],
             "value": value
-        })
+        }
+
+        attach_exceeds(entry, log, plant_norms)
+
+        result.append(entry)
 
     return {
         "exists": True,
@@ -158,10 +220,12 @@ def get_parameter_trend(
         "label": field.label or parameter
     }
 
+
 @frappe.whitelist()
 def get_daily_dashboard(date):
 
     parameters = get_parameters()
+    fetch_fields = get_fetch_fields(parameters)
 
     logs = frappe.get_all(
         "Water Balance Log Book",
@@ -183,12 +247,11 @@ def get_daily_dashboard(date):
         full_doc = frappe.db.get_value(
             "Water Balance Log Book",
             log.name,
-            [
-                p["fieldname"]
-                for p in parameters
-            ],
+            fetch_fields,
             as_dict=True
         )
+
+        plant_norms = get_plant_norms(log.plant)
 
         plant_data = []
 
@@ -202,7 +265,7 @@ def get_daily_dashboard(date):
             if value is None:
                 value = 0
 
-            plant_data.append({
+            entry = {
 
                 "fieldname":
                     parameter["fieldname"],
@@ -216,7 +279,11 @@ def get_daily_dashboard(date):
                 "value":
                     value
 
-            })
+            }
+
+            attach_exceeds(entry, full_doc, plant_norms)
+
+            plant_data.append(entry)
 
 
         result.append({

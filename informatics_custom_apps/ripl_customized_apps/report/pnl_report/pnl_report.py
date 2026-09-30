@@ -59,7 +59,7 @@ def cell_fieldname(plant, segment):
 
 def get_columns(plants, plant_segments):
 	columns = [
-		{"fieldname": "description", "label": _("Particulars"), "fieldtype": "Data", "width": 340},
+		{"fieldname": "description", "label": _("Particulars"), "fieldtype": "Data", "width": 340, "align":"left"},
 	]
 	for plant in plants:
 		for segment in plant_segments.get(plant, []):
@@ -68,9 +68,12 @@ def get_columns(plants, plant_segments):
 					"fieldname": cell_fieldname(plant, segment),
 					"label": f"{plant} - {segment}",
 					"fieldtype": "Currency",
-					"width": 270,
+					"width": 170,
 				}
 			)
+	columns.append(
+		{"fieldname": "total", "label": _("Total"), "fieldtype": "Currency", "width": 120}
+	)
 	return columns
 
 
@@ -115,8 +118,6 @@ def get_all_plants(filters):
 		plant_filter = frappe.parse_json(plant_filter)
 
 	branches = frappe.get_all("Branch", pluck="name")
-	branches = [b for b in branches if "head office" not in b.lower()]
-
 	if plant_filter:
 		wanted = set(plant_filter)
 		branches = [b for b in branches if b in wanted]
@@ -168,7 +169,7 @@ def get_gl_amounts(filters, account_numbers, plants):
 			acc.account_number AS account_number,
 			ge.{PLANT_FIELD} AS plant,
 			ge.{SEGMENT_FIELD} AS segment,
-			SUM(ge.credit - ge.debit) AS amount
+			SUM(ge.debit - ge.credit) AS amount
 		FROM `tabGL Entry` ge
 		INNER JOIN `tabAccount` acc ON acc.name = ge.account
 		WHERE {" AND ".join(conditions)}
@@ -193,7 +194,6 @@ def build_section(section_accounts, amounts, account_labels, plants, plant_segme
 	leaf_rows = []
 
 	for acc_row in section_accounts:
-		sign = -1 if acc_row.sign == "Reverse" else 1
 		acc_amounts = amounts.get(acc_row.account_number, {})
 		label = account_labels.get(acc_row.account_number, acc_row.account_number)
 
@@ -202,7 +202,7 @@ def build_section(section_accounts, amounts, account_labels, plants, plant_segme
 
 		for plant in plants:
 			for segment in plant_segments.get(plant, []):
-				val = flt(acc_amounts.get((plant, segment), 0)) * sign
+				val = flt(acc_amounts.get((plant, segment), 0))
 				row[cell_fieldname(plant, segment)] = val
 				row_total += val
 
@@ -225,14 +225,56 @@ def get_data(settings, amounts, account_labels, plants, plant_segments, view):
 	for acc_row in settings.section_accounts:
 		accounts_by_section[acc_row.section].append(acc_row)
 
+	current_group_key = None
+	current_group_label = None
+	current_group_cumulative = False
+	group_total = None
+	current_report_type = None
+	running_total = None
+
 	for section in settings.sections:
 		section_accounts = accounts_by_section.get(section.section_name, [])
 		leaf_rows, section_total = build_section(
 			section_accounts, amounts, account_labels, plants, plant_segments
 		)
 
+		group_key = (section.report_type, section.summary_group)
+
 		if view == "Detailed":
-			data.append(build_total_row(section.section_name, section_total, plants, plant_segments, indent=0, bold=True))
+			if group_key != current_group_key:
+				if current_group_key is not None and current_group_label:
+					closing_total = running_total if current_group_cumulative else group_total
+					data.append(
+						build_total_row(
+							current_group_label,
+							closing_total,
+							plants,
+							plant_segments,
+							indent=0,
+							bold=True,
+							style="group_total",
+						)
+					)
+					data.append(divider_row())
+				if section.report_type != current_report_type:
+					current_report_type = section.report_type
+					running_total = zero_row(plants, plant_segments)
+				current_group_key = group_key
+				current_group_label = section.get("detailed_total_label")
+				current_group_cumulative = cint(section.get("cumulative_total"))
+				group_total = zero_row(plants, plant_segments)
+
+			data.append(
+				build_total_row(
+					section.section_name,
+					section_total,
+					plants,
+					plant_segments,
+					indent=0,
+					bold=True,
+					style="section",
+				)
+			)
 			data.extend(leaf_rows)
 			if section.show_subtotal:
 				data.append(
@@ -243,9 +285,13 @@ def get_data(settings, amounts, account_labels, plants, plant_segments, view):
 						plant_segments,
 						indent=1,
 						bold=True,
+						style="subtotal",
 					)
 				)
 			data.append(divider_row())
+
+			accumulate(group_total, section_total, plants, plant_segments)
+			accumulate(running_total, section_total, plants, plant_segments)
 
 		key = (section.report_type, section.summary_group)
 		if key not in summary_totals:
@@ -253,25 +299,52 @@ def get_data(settings, amounts, account_labels, plants, plant_segments, view):
 			summary_order.append(key)
 		accumulate(summary_totals[key], section_total, plants, plant_segments)
 
+	if view == "Detailed" and current_group_key is not None and current_group_label:
+		closing_total = running_total if current_group_cumulative else group_total
+		data.append(
+			build_total_row(
+				current_group_label,
+				closing_total,
+				plants,
+				plant_segments,
+				indent=0,
+				bold=True,
+				style="group_total",
+			)
+		)
+		data.append(divider_row())
+
 	if view == "Summary":
 		data.extend(build_summary_view(summary_totals, summary_order, plants, plant_segments))
 
 	return data
 
 
-def sum_report_type(report_type, summary_totals, summary_order, plants, plant_segments):
+def negate(a, plants, plant_segments):
+	out = {"total": -a["total"]}
+	for fieldname in data_fieldnames(plants, plant_segments):
+		out[fieldname] = -a.get(fieldname, 0)
+	return out
+
+
+def sum_report_type(report_type, summary_totals, summary_order, plants, plant_segments, multiplier=1):
 	total = zero_row(plants, plant_segments)
 	rows = []
 	for key in summary_order:
 		if key[0] != report_type:
 			continue
-		rows.append(build_total_row(key[1], summary_totals[key], plants, plant_segments, indent=1))
-		accumulate(total, summary_totals[key], plants, plant_segments)
+		values = summary_totals[key]
+		if multiplier == -1:
+			values = negate(values, plants, plant_segments)
+		rows.append(build_total_row(key[1], values, plants, plant_segments, indent=1))
+		accumulate(total, values, plants, plant_segments)
 	return rows, total
 
 
 def build_summary_view(summary_totals, summary_order, plants, plant_segments):
-	income_rows, income_total = sum_report_type("Income", summary_totals, summary_order, plants, plant_segments)
+	income_rows, income_total = sum_report_type(
+		"Income", summary_totals, summary_order, plants, plant_segments, multiplier=-1
+	)
 	expense_rows, expense_total = sum_report_type("Expense", summary_totals, summary_order, plants, plant_segments)
 
 	data = [build_total_row(_("INCOME"), income_total, plants, plant_segments, indent=0, bold=True)]
@@ -303,12 +376,14 @@ def build_summary_view(summary_totals, summary_order, plants, plant_segments):
 	return data
 
 
-def build_total_row(description, totals, plants, plant_segments, indent=0, bold=False):
+def build_total_row(description, totals, plants, plant_segments, indent=0, bold=False, style=None):
 	row = {"description": description, "indent": indent, "total": totals.get("total", 0)}
 	for fieldname in data_fieldnames(plants, plant_segments):
 		row[fieldname] = totals.get(fieldname, 0)
 	if bold:
 		row["is_bold"] = 1
+	if style:
+		row["row_style"] = style
 	return row
 
 
@@ -317,7 +392,7 @@ def divider_row():
 
 
 def hide_zero_rows_and_columns(columns, data):
-	value_fieldnames = [c["fieldname"] for c in columns if c["fieldname"] != "description"]
+	value_fieldnames = [c["fieldname"] for c in columns if c["fieldname"] not in ("description", "total")]
 	value_rows = [row for row in data if not row.get("is_divider")]
 
 	zero_columns = {
