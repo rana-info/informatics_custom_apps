@@ -54,7 +54,7 @@ def get_data(filters):
 
     for slip in salary_slips:
         employee = frappe.get_cached_doc("Employee", slip.employee)
-        plant=frappe.get_value("Branch", slip.branch, "plant")
+        plant=frappe.get_doc("Branch", slip.branch)
         # Skip if no UAN
         if not employee.provident_fund_account:
             continue
