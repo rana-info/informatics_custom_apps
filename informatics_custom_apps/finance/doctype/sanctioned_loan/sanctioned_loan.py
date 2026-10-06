@@ -32,7 +32,7 @@ class SanctionedLoan(Document):
             self.loan_status = "Active"
 
             # Generate schedule automatically on first submit
-            self.generate_repayment_schedule(from_submit=True)
+            # self.generate_repayment_schedule(from_submit=True)
 
         else:
             self.outstanding_amount = 0
@@ -217,7 +217,7 @@ class SanctionedLoan(Document):
             },
             update_modified=True,
         )
-        self.generate_repayment_schedule()
+        # self.generate_repayment_schedule()
         frappe.db.commit()
 
         return {
