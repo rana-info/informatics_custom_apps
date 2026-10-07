@@ -54,7 +54,7 @@ def get_data(filters):
 
     for slip in salary_slips:
         employee = frappe.get_cached_doc("Employee", slip.employee)
-
+        plant=frappe.get_doc("Branch", slip.branch)
         # Skip if no UAN
         if not employee.provident_fund_account:
             continue
@@ -71,9 +71,9 @@ def get_data(filters):
 		"provident_fund_account": employee.provident_fund_account,
 		"gross_pay": flt(slip.gross_pay),
 		"payment_absent_days": flt(slip.total_working_days) - flt(slip.payment_days),
-		"pf_salary": min(flt(basic_salary), 15000),
-		"pension_salary": min(flt(basic_salary), 15000),
-		"edli": min(flt(basic_salary), 15000),
+		"pf_salary": min(flt(basic_salary), plant.pf_ceiling_limit),
+		"pension_salary": min(flt(basic_salary), plant.pf_ceiling_limit),
+		"edli": min(flt(basic_salary), plant.pf_ceiling_limit),
 		"pf_12_per": 0,
 		"employee_pension_amount": 0,
 		"employee_pf": 0,

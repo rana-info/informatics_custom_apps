@@ -15,7 +15,7 @@
   "column_break_buil",
   "company",
   "plant",
-  "disbursement_date",
+  "sanctioned_date",
   "repayment_interval",
   "repayment_start_date",
   "loan_status",
@@ -95,11 +95,6 @@
    "reqd": 1
   },
   {
-   "fieldname": "disbursement_date",
-   "fieldtype": "Date",
-   "label": "First Disbursement Date"
-  },
-  {
    "fieldname": "repayment_start_date",
    "fieldtype": "Date",
    "label": "Repayment Start Date"
@@ -140,11 +135,12 @@
    "options": "zzLoan Disbursement"
   },
   {
+   "allow_bulk_edit": 1,
+   "allow_on_submit": 1,
    "fieldname": "repayment_schedule",
    "fieldtype": "Table",
    "label": "Repayment Schedule",
-   "options": "zzLoan Repayment Schedule",
-   "read_only": 1
+   "options": "zzLoan Repayment Schedule"
   },
   {
    "fieldname": "section_break_nemh",
@@ -167,6 +163,11 @@
   {
    "fieldname": "section_break_xjuh",
    "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "sanctioned_date",
+   "fieldtype": "Date",
+   "label": "Sanctioned Date"
   }
  ],
  "grid_page_length": 50,
@@ -178,7 +179,7 @@
    "link_fieldname": "sanctioned_loan"
   }
  ],
- "modified": "2026-09-08 12:18:16.902593",
+ "modified": "2026-09-30 15:22:40.296903",
  "modified_by": "Administrator",
  "module": "Finance",
  "name": "Sanctioned Loan",
