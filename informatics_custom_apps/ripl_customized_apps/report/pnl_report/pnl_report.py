@@ -1,3 +1,5 @@
+import re
+
 import frappe
 from frappe import _
 from frappe.utils import flt, cint
@@ -24,20 +26,34 @@ def scrub(label):
 	return cached
 
 
+_JUNK = re.compile(r"[\s\u00a0\u200b\u200c\u200d\ufeff]+")
+
+
+def clean(value):
+	"""Account numbers: remove ALL whitespace, incl. non-breaking space, tabs,
+	newlines and zero-width characters (SQL TRIM only removes plain spaces)."""
+	return _JUNK.sub("", value or "")
+
+
+def clean_text(value):
+	"""Section names: trim and collapse any whitespace run to a single space."""
+	return " ".join((value or "").replace("\u00a0", " ").replace("\u200b", "").split())
+
+
 def execute(filters=None):
 	filters = frappe._dict(filters or {})
 	validate_filters(filters)
 
 	settings = PNLSettings.get_active_settings()
 	account_numbers = sorted(
-		{row.account_number for row in settings.section_accounts if row.account_number}
+		{clean(row.account_number) for row in settings.section_accounts if clean(row.account_number)}
 	)
 	if not account_numbers:
 		frappe.throw(_("PNL Settings has no accounts configured"))
 
-	account_labels = get_account_labels(account_numbers, filters.get("company"))
+	acc_to_no, account_labels = get_account_master(account_numbers, filters.get("company"))
 	plants = get_all_plants(filters)
-	amounts, plant_segments = get_gl_amounts(filters, account_numbers, plants)
+	amounts, plant_segments = get_gl_amounts(filters, acc_to_no, plants)
 
 	columns = get_columns(plants, plant_segments)
 	data = get_data(settings, amounts, account_labels, plants, plant_segments, filters.get("view") or "Detailed")
@@ -59,7 +75,7 @@ def cell_fieldname(plant, segment):
 
 def get_columns(plants, plant_segments):
 	columns = [
-		{"fieldname": "description", "label": _("Particulars"), "fieldtype": "Data", "width": 340, "align":"left"},
+		{"fieldname": "description", "label": _("Particulars"), "fieldtype": "Data", "width": 340, "align": "left"},
 	]
 	for plant in plants:
 		for segment in plant_segments.get(plant, []):
@@ -125,33 +141,46 @@ def get_all_plants(filters):
 	return sorted(branches)
 
 
-def get_account_labels(account_numbers, company=None):
+def get_account_master(account_numbers, company=None):
+	"""Match accounts in Python after cleaning, so any hidden whitespace in the
+	Account master is ignored. Returns ({account name: clean number}, {clean number: label})."""
+	wanted = set(account_numbers)
 	rows = frappe.get_all(
 		"Account",
-		filters={"account_number": ["in", account_numbers]},
-		fields=["account_number", "account_name", "company"],
+		filters={"account_number": ["is", "set"]},
+		fields=["name", "account_number", "account_name", "company"],
+		limit_page_length=0,
 	)
 
-	labels, fallback = {}, {}
+	acc_to_no, labels, fallback = {}, {}, {}
 	for row in rows:
-		fallback.setdefault(row.account_number, row.account_name)
+		acc_no = clean(row.account_number)
+		if acc_no not in wanted:
+			continue
+		acc_to_no[row.name] = acc_no
+		fallback.setdefault(acc_no, row.account_name)
 		if company and row.company == company:
-			labels[row.account_number] = row.account_name
+			labels[acc_no] = row.account_name
 
 	for acc_no, name in fallback.items():
 		labels.setdefault(acc_no, name)
 
-	return labels
+	return acc_to_no, labels
 
 
-def get_gl_amounts(filters, account_numbers, plants):
+def get_gl_amounts(filters, acc_to_no, plants):
+	amounts = defaultdict(dict)
+	plant_segments = defaultdict(dict)
+	if not acc_to_no:
+		return amounts, {}
+
 	conditions = [
-		"acc.account_number IN %(account_numbers)s",
+		"ge.account IN %(accounts)s",
 		"ge.posting_date BETWEEN %(from_date)s AND %(to_date)s",
 		"ge.is_cancelled = 0",
 	]
 	values = {
-		"account_numbers": account_numbers,
+		"accounts": list(acc_to_no),
 		"from_date": filters.from_date,
 		"to_date": filters.to_date,
 	}
@@ -166,23 +195,22 @@ def get_gl_amounts(filters, account_numbers, plants):
 
 	query = f"""
 		SELECT
-			acc.account_number AS account_number,
+			ge.account AS account,
 			ge.{PLANT_FIELD} AS plant,
 			ge.{SEGMENT_FIELD} AS segment,
 			SUM(ge.debit - ge.credit) AS amount
 		FROM `tabGL Entry` ge
-		INNER JOIN `tabAccount` acc ON acc.name = ge.account
 		WHERE {" AND ".join(conditions)}
-		GROUP BY acc.account_number, ge.{PLANT_FIELD}, ge.{SEGMENT_FIELD}
+		GROUP BY ge.account, ge.{PLANT_FIELD}, ge.{SEGMENT_FIELD}
 	"""
-
-	amounts = defaultdict(dict)
-	plant_segments = defaultdict(dict)
 
 	for row in frappe.db.sql(query, values, as_dict=True):
 		plant = row.plant or NO_PLANT
 		segment = row.segment or NO_SEGMENT
-		amounts[row.account_number][(plant, segment)] = flt(row.amount)
+		acc_no = acc_to_no[row.account]
+		key = (plant, segment)
+		# several Account records (one per company) can share one number
+		amounts[acc_no][key] = amounts[acc_no].get(key, 0) + flt(row.amount)
 		plant_segments[plant][segment] = True
 
 	plant_segments = {plant: sorted(segs) for plant, segs in plant_segments.items()}
@@ -194,10 +222,11 @@ def build_section(section_accounts, amounts, account_labels, plants, plant_segme
 	leaf_rows = []
 
 	for acc_row in section_accounts:
-		acc_amounts = amounts.get(acc_row.account_number, {})
-		label = account_labels.get(acc_row.account_number, acc_row.account_number)
+		acc_no = clean(acc_row.account_number)
+		acc_amounts = amounts.get(acc_no, {})
+		label = account_labels.get(acc_no, acc_no)
 
-		row = {"description": f"{acc_row.account_number} - {label}", "indent": 1}
+		row = {"description": f"{acc_no} - {label}", "indent": 1}
 		row_total = 0
 
 		for plant in plants:
@@ -223,7 +252,7 @@ def get_data(settings, amounts, account_labels, plants, plant_segments, view):
 
 	accounts_by_section = defaultdict(list)
 	for acc_row in settings.section_accounts:
-		accounts_by_section[acc_row.section].append(acc_row)
+		accounts_by_section[clean_text(acc_row.section)].append(acc_row)
 
 	current_group_key = None
 	current_group_label = None
@@ -233,7 +262,7 @@ def get_data(settings, amounts, account_labels, plants, plant_segments, view):
 	running_total = None
 
 	for section in settings.sections:
-		section_accounts = accounts_by_section.get(section.section_name, [])
+		section_accounts = accounts_by_section.get(clean_text(section.section_name), [])
 		leaf_rows, section_total = build_section(
 			section_accounts, amounts, account_labels, plants, plant_segments
 		)
