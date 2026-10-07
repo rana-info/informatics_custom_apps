@@ -6,6 +6,7 @@ from calendar import monthrange
 from dataclasses import dataclass
 from erpnext.stock.get_item_details import get_conversion_factor
 
+
 def execute(filters=None):
     filters = filters or {}
     months = get_months_in_range(filters.get("from_date"), filters.get("to_date"))
@@ -13,6 +14,9 @@ def execute(filters=None):
     data, target_production = get_data(filters, months)
 
     if not filters.get("show_quantitative_data", 0):
+        if filters.get("hide_zero_amounts", 0):
+            columns = filter_zero_columns(columns, data)
+
         data.insert(0, {
             "expense_category": f"{_('Target Production Qty (BL)')}: {frappe.utils.fmt_money(target_production, currency='')}",
             "is_target_row": 1,
@@ -43,7 +47,6 @@ def get_data(filters, months):
     return data, target_production
 
 
-
 def get_months_in_range(from_date, to_date):
     if not from_date or not to_date:
         return []
@@ -64,7 +67,6 @@ def zero_month_dict(months):
 
 
 def fmt_num(value):
-    """Format a number for the quant table's Data-type month/total columns."""
     return frappe.utils.fmt_money(flt(value), precision=2, currency="")
 
 
@@ -82,6 +84,31 @@ def get_variance_color(actual, budget, reverse=False):
     if pct < 90:
         return "red" if reverse else "green"
     return ""
+
+
+ZERO_CHECK_PREFIXES = ("actual_", "per_bl_", "budget_", "total_")
+ALWAYS_VISIBLE_COLUMNS = ("expense_category", "gl_code")
+
+
+def is_zero_row(row):
+    for key, value in row.items():
+        if not key.startswith(ZERO_CHECK_PREFIXES) or key.endswith("_color"):
+            continue
+        if isinstance(value, (int, float)) and flt(value, 2) != 0:
+            return False
+    return True
+
+
+def filter_zero_columns(columns, data):
+    visible = []
+    for col in columns:
+        fieldname = col["fieldname"]
+        if fieldname in ALWAYS_VISIBLE_COLUMNS:
+            visible.append(col)
+            continue
+        if any(flt(row.get(fieldname), 2) != 0 for row in data):
+            visible.append(col)
+    return visible
 
 
 def get_stock_uom(item_code):
@@ -128,7 +155,6 @@ def get_columns(filters, months):
     return columns
 
 
-
 CONSUMPTION_ITEMS = [
     ("106444", "Maize", "maize_opening_balance", "maize_closing_balance"),
     ("106446", "DFG", "dfg_opening_balance", "dfg_closing_balance"),
@@ -161,7 +187,6 @@ ITEM_SALES_GL_ACCOUNTS = {
     "100114": "30124", "100112": "30125", "100113": "30126", "100122": "30129", "100120": "30128",
 }
 
-# (item_code, display name) - used for both the Production and Sales Qty/Amount/Price tables.
 FIXED_PROD_ITEMS = [
     ("100114", "Production of Ethanol from Maize"),
     ("100112", "Production of Ethanol from DFG"),
@@ -181,8 +206,6 @@ FIXED_SALES_ITEMS = [
     ("100128", "RS from DFG"),
 ]
 FIXED_CODES = tuple(code for code, _name in FIXED_PROD_ITEMS)
-
-
 
 
 @dataclass
@@ -224,7 +247,6 @@ def build_context(filters, months):
 
 
 def get_production_qty_by_month(company_val, branch_val, segment_val, item_codes, filters):
-    """Qty received (Material Receipt stock entries) per item per month."""
     if not item_codes:
         return {}
 
@@ -261,7 +283,6 @@ def get_production_qty_by_month(company_val, branch_val, segment_val, item_codes
 
 
 def get_sales_qty_val_by_month(company_val, branch_val, segment_val, item_codes, filters):
-    """Qty + value delivered (Delivery Note) per item per month."""
     if not item_codes:
         return {}, {}
 
@@ -297,7 +318,6 @@ def get_sales_qty_val_by_month(company_val, branch_val, segment_val, item_codes,
 
 
 def get_sales_gl_amount_by_month(company_val, branch_val, segment_val, item_to_account, filters):
-    """Sales value per item per month, taken from GL Entry against each item's sales account."""
     account_numbers = tuple(item_to_account.values())
     if not account_numbers:
         return {}
@@ -347,8 +367,6 @@ def get_sales_gl_amount_by_month(company_val, branch_val, segment_val, item_to_a
         bucket[row.month_key] = bucket.get(row.month_key, 0.0) + flt(row.amount)
 
     return {item_code: account_month_amount.get(acc_num, {}) for item_code, acc_num in item_to_account.items()}
-
-
 
 
 def get_month_boundaries(month_key, overall_from, overall_to):
@@ -406,15 +424,6 @@ def get_issued_qty_for_range(companies, start_date, end_date, item_codes, plants
 
 
 def compute_consumption_data(company_val, branch_val, segment_val, months, filters):
-    """
-    Returns (issued_by_item, net_consumed_by_item, opening_by_item, closing_by_item).
-
-    - issued_by_item:      material actually issued to production (Material Issue
-                            stock entries). This is what's shown as "Raw Mat Consumed".
-    - net_consumed_by_item: Opening WIP + Issued - Closing WIP. Used as the
-                            Recovery % denominator and the Crude Oil % denominator,
-                            not for display.
-    """
     companies = [company_val]
     plants = [branch_val] if branch_val else None
     segments = [segment_val] if segment_val else None
@@ -459,13 +468,6 @@ def compute_consumption_data(company_val, branch_val, segment_val, months, filte
 
 
 def compute_ytd_net_consumed(months, issued_by_item, opening_by_item, closing_by_item):
-    """
-    Period-level net consumption per item, applying the same formula as the monthly columns
-    to the Total column:
-        Opening (first month = opening on From Date) + Issued (sum of months) - Closing (last month = closing on To Date)
-    This is NOT the same as summing the monthly net values, because monthly openings/closings
-    don't cancel out perfectly (and the Opening/Closing tables' Total column is first/last, not a sum).
-    """
     if not months:
         return {}
     first_key, last_key = months[0]["key"], months[-1]["key"]
@@ -475,7 +477,6 @@ def compute_ytd_net_consumed(months, issued_by_item, opening_by_item, closing_by
         closing = closing_by_item.get(label, {}).get(last_key, 0.0)
         result[label] = opening + sum(issued.values()) - closing
     return result
-
 
 
 def add_header_row(rows, title, header_label, months, unit_label):
@@ -489,16 +490,6 @@ def add_header_row(rows, title, header_label, months, unit_label):
 
 def build_item_table(title, items, months, value_fn, header_label="Item Code",
                       unit_label="Qty", uom="", code_fn=None, total_mode="sum"):
-    """
-    items:      list of (key, display_name)
-    value_fn:   (key, month_key) -> number
-    uom:        a fixed string, or a callable key -> uom string (e.g. get_stock_uom)
-    code_fn:    key -> gl_code shown in the "Item Code" column (defaults to the key itself)
-    total_mode: how the "Total" column is derived from the monthly values:
-                "sum"   (default) - add all months
-                "first" - opening balance: value of the first month (= opening on From Date)
-                "last"  - closing balance: value of the last month (= closing on To Date)
-    """
     rows = []
     add_header_row(rows, title, header_label, months, unit_label)
 
@@ -543,8 +534,6 @@ def build_item_table(title, items, months, value_fn, header_label="Item Code",
 
 
 def build_ratio_table(title, rows_def, months, unit_label="%", header_label="", den_total_override=None):
-    """den_total_override: optional {row_label: value} - use this as the Total column's denominator
-    for that row instead of the sum of the monthly denominators."""
     den_total_override = den_total_override or {}
 
     def ratio(n, d):
@@ -585,7 +574,6 @@ def build_ratio_table(title, rows_def, months, unit_label="%", header_label="", 
 
 
 def add_blank_header(rows, title, months):
-    """A section title row with no data of its own (used inside the DWGS/DDGS block)."""
     header = {"expense_category": title, "gl_code": "", "uom": "", "indent": 0, "is_quant_header": 1}
     for m in months:
         header[f"actual_{m['key']}"] = ""
@@ -594,7 +582,6 @@ def add_blank_header(rows, title, months):
 
 
 def add_sum_row(rows, label, gl_code, uom, months, value_fn, indent=1, is_subtotal=False):
-    """A row whose YTD total is the sum of its monthly values. Returns the YTD total."""
     row = {"expense_category": label, "gl_code": gl_code, "uom": uom, "indent": indent}
     if is_subtotal:
         row["is_quant_subtotal"] = 1
@@ -610,8 +597,6 @@ def add_sum_row(rows, label, gl_code, uom, months, value_fn, indent=1, is_subtot
 
 def add_ratio_row(rows, label, uom, months, num_by_month, den_by_month, num_total, den_total,
                    indent=1, is_subtotal=False, multiplier=1):
-    """A row that shows num/den per month, with the YTD total computed from the YTD sums.
-    Pass multiplier=100 to express the ratio as a percentage."""
     def ratio(n, d):
         return round((n / d) * multiplier, 2) if d else 0.0
     row = {"expense_category": label, "gl_code": "", "uom": uom, "indent": indent}
@@ -625,10 +610,6 @@ def add_ratio_row(rows, label, uom, months, num_by_month, den_by_month, num_tota
 
 
 def build_recovery_section(item_month_prod, net_consumed_by_item, months, ytd_net_consumed):
-    """Recovery % denominator is the NET consumption (Opening + Issued - Closing),
-    not the plain issued qty shown in the "Raw Mat Consumed" table.
-    Monthly columns use each month's net; the Total column uses the period-level net
-    (opening on From Date + total issued - closing on To Date)."""
     recovery_defs = [
         ("Maize", ["100122", "100114"], "Maize"),
         ("DFG", ["100120", "100112"], "DFG"),
@@ -663,8 +644,6 @@ def build_dwgs_ddgs_section(months, item_month_prod, issued_by_item, net_consume
 
     m_keys = [m["key"] for m in months]
 
-    # Each of the 3 DWGS items (and 3 DDGS items) can be stocked in a different UOM,
-    # so convert every one to Quintal individually before summing them together.
     dwgs_factors = {c: get_stock_to_target_factor(c, CONSUMPTION_UOM) for c, _n in DWGS_ITEMS}
     ddgs_factors = {c: get_stock_to_target_factor(c, CONSUMPTION_UOM) for c, _n in DDGS_ITEMS}
     dwgs_qty = {mk: sum(qty(c, mk) * dwgs_factors[c] for c, _n in DWGS_ITEMS) for mk in m_keys}
@@ -686,10 +665,7 @@ def build_dwgs_ddgs_section(months, item_month_prod, issued_by_item, net_consume
     std_total = {mk: std_maize[mk] + std_rice[mk] for mk in m_keys}
 
     oil_qty = {mk: qty(CRUDE_OIL_ITEM, mk) for mk in m_keys}
-    # Denominator for crude oil %: NET maize consumption (Opening + Issued - Closing),
-    # same basis as the Recovery section.
     maize_consumed = {mk: flt(net_consumed_by_item.get("Maize", {}).get(mk, 0.0)) for mk in m_keys}
-    # Total column: opening on From Date + total issued - closing on To Date (not the sum of monthly nets).
     maize_consumed_ytd = flt(ytd_net_consumed.get("Maize", 0.0))
 
     rows = []
@@ -700,8 +676,6 @@ def build_dwgs_ddgs_section(months, item_month_prod, issued_by_item, net_consume
     add_sum_row(rows, "DDGS Equivalent to DWGS", "", "Qtl", months, lambda mk: ddgs_equiv[mk])
     total_dwgs_ytd = add_sum_row(rows, "Total DWGS", "", "Qtl", months, lambda mk: total_dwgs[mk],
                                   indent=0, is_subtotal=True)
-    # % of DWGS on Ethanol = Total DWGS (Quintal) / Ethanol production from Maize+DFG+FCI Rice (LTR),
-    # expressed as a percentage.
     add_ratio_row(rows, "% of DWGS on Ethanol", "%", months, total_dwgs, ethanol_qty,
                   total_dwgs_ytd, ethanol_ytd, multiplier=100)
 
@@ -710,19 +684,14 @@ def build_dwgs_ddgs_section(months, item_month_prod, issued_by_item, net_consume
     std_rice_ytd = add_sum_row(rows, "On Rice @ 1.6%", "", "Qtl", months, lambda mk: std_rice[mk])
     std_total_ytd = add_sum_row(rows, "Total", "", "Qtl", months, lambda mk: std_total[mk],
                                  indent=0, is_subtotal=True)
-    # Weighted Average (%) = Standard DWGS Total / Ethanol production (Maize+DFG+FCI Rice) * 100.
-    # YTD is computed from the YTD sums, not by averaging the monthly percentages.
     add_ratio_row(rows, "Weighted Average", "%", months, std_total, ethanol_qty,
                   std_total_ytd, ethanol_ytd, indent=0, is_subtotal=True, multiplier=100)
 
     add_blank_header(rows, "Crude Corn Oil", months)
     oil_prod_ytd = add_sum_row(rows, "Production of Crude Oil", CRUDE_OIL_ITEM, "Ltr", months, lambda mk: oil_qty[mk])
-    # % of Production on Maize Consumed = Crude Oil Production / (Opening + Issued - Closing Maize) * 100
     add_ratio_row(rows, "% of Production on Maize Consumed", "%", months, oil_qty, maize_consumed,
                   oil_prod_ytd, maize_consumed_ytd, multiplier=1)
     add_sum_row(rows, "Standard Production", "", "%", months, lambda mk: CRUDE_OIL_STD_PRODUCTION)
-    # "Standard Production" is a fixed constant, not something that accumulates across
-    # months - override the YTD total so it shows the constant itself, not a monthly sum.
     rows[-1]["total_actual"] = fmt_num(CRUDE_OIL_STD_PRODUCTION)
 
     return rows
@@ -730,7 +699,6 @@ def build_dwgs_ddgs_section(months, item_month_prod, issued_by_item, net_consume
 
 def build_sales_price_table(items, months, qty_map, val_map,
                              month_qty_totals, month_val_totals, ytd_qty, ytd_val):
-    """Per-litre selling price for each item, plus the weighted average across all of them."""
     def price(val, qty):
         return round(val / qty, 2) if qty else 0.0
 
@@ -779,8 +747,6 @@ def get_quant_data(filters, months, ctx):
     data.extend(rows)
 
     consumption_items = [(label, label) for label in ("Maize", "DFG", "Rice")]
-    # Total column: consumed = sum of months; opening = opening on From Date (first month);
-    # closing = closing on To Date (last month).
     for title, source, mode in (
         ("Raw Mat Consumed", issued_by_item, "sum"),
         ("Opening WIP", opening_by_item, "first"),
@@ -833,7 +799,6 @@ def get_grouping_doc():
 
 
 def get_section_definitions(grouping):
-    """Returns (section_name -> [account_number, ...], [section_name in first-seen order])."""
     section_codes = {}
     section_seen_order = []
 
@@ -851,14 +816,12 @@ def get_section_definitions(grouping):
         if row.section_name not in section_seen_order:
             section_seen_order.append(row.section_name)
 
-    # drop sections with no GL codes at all - nothing to compute
     section_codes = {name: codes for name, codes in section_codes.items() if codes}
     section_seen_order = [name for name in section_seen_order if name in section_codes]
     return section_codes, section_seen_order
 
 
 def get_total_row_definitions(grouping):
-    """Returns row_label -> {components, row_style, reverse_color, is_cop_base}."""
     total_rows = {}
     total_row_seen_order = []
 
@@ -882,7 +845,6 @@ def get_total_row_definitions(grouping):
 
 
 def get_row_sequence(grouping, section_codes, section_seen_order, total_rows, total_row_seen_order):
-    """The single ordered list (Section / Total Row entries) that drives report + summary order."""
     sequence, seen = [], set()
 
     for row in grouping.row_sequence:
@@ -994,7 +956,7 @@ def build_section_rows(section_name, gl_codes, code_data_cache, code_to_title, b
 
         row_data = {}
         row_tot_act = 0.0
-        has_nonzero = False
+        has_nonzero = flt(row_budget_amount, 2) != 0 or flt(row_budget_per_bl, 2) != 0
         c_data = code_data_cache.get(code, {})
 
         for m in months:
@@ -1146,7 +1108,8 @@ def get_cost_data(filters, months, FIXED_CODES, monthly_prod_map, total_ytd_prod
             total_row_out = build_summary_totals_row(
                 row_name, agg, months, monthly_prod_map, total_ytd_production, flag_key, total_def["reverse_color"]
             )
-            data.append(total_row_out)
+            if not (hide_zero and is_zero_row(total_row_out)):
+                data.append(total_row_out)
             computed_totals[row_name] = agg
             if total_def["is_cop_base"]:
                 cop_base_row = total_row_out
@@ -1178,7 +1141,8 @@ def get_cost_data(filters, months, FIXED_CODES, monthly_prod_map, total_ytd_prod
 
     if cop_base_row is not None:
         data.extend(build_profitability_section(
-            months, FIXED_CODES, monthly_prod_map, total_ytd_production, sales_qty_map, sales_val_map, cop_base_row
+            months, FIXED_CODES, monthly_prod_map, total_ytd_production, sales_qty_map, sales_val_map,
+            cop_base_row, hide_zero
         ))
 
     return data
@@ -1190,7 +1154,7 @@ PER_BL_PROFIT_ROWS = {
 
 
 def build_profitability_section(months, FIXED_CODES, monthly_prod_map, total_ytd_production,
-                                 sales_qty_map, sales_val_map, grand_total_row):
+                                 sales_qty_map, sales_val_map, grand_total_row, hide_zero=0):
     monthly_snapshot = {}
     for m in months:
         m_key = m["key"]
@@ -1217,11 +1181,6 @@ def build_profitability_section(months, FIXED_CODES, monthly_prod_map, total_ytd
         {"name": "Profit / Loss Value as Per Sales", "val": round(net_profit_per_litre * tot_sales_qty, 2)},
     ]
 
-    data = [
-        {"expense_category": "", "gl_code": "", "indent": 0},
-        {"expense_category": "Profitability", "gl_code": "", "indent": 0, "is_header": 1},
-    ]
-
     value_by_name = {
         "Wgt Avg Selling Price (Per Litre)": lambda snap: snap["selling_price"],
         "Wgt Avg COP (Per Litre)": lambda snap: snap["cop"],
@@ -1230,6 +1189,7 @@ def build_profitability_section(months, FIXED_CODES, monthly_prod_map, total_ytd
         "Profit / Loss Value as Per Sales": lambda snap: round(snap["net_profit"] * snap["qty"], 2),
     }
 
+    profit_rows = []
     for pr in prof_rows:
         is_per_bl = pr["name"] in PER_BL_PROFIT_ROWS
         p_row = {
@@ -1247,6 +1207,16 @@ def build_profitability_section(months, FIXED_CODES, monthly_prod_map, total_ytd
             else:
                 p_row[f"actual_{m_key}"] = val
                 p_row[f"per_bl_{m_key}"] = 0.0
-        data.append(p_row)
+        if hide_zero and is_zero_row(p_row):
+            continue
+        profit_rows.append(p_row)
 
+    if not profit_rows:
+        return []
+
+    data = [
+        {"expense_category": "", "gl_code": "", "indent": 0},
+        {"expense_category": "Profitability", "gl_code": "", "indent": 0, "is_header": 1},
+    ]
+    data.extend(profit_rows)
     return data

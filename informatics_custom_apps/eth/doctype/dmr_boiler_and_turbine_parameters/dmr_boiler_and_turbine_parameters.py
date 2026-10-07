@@ -96,7 +96,7 @@ PLANT_CONFIG = {
 					"float_reke": {"tag": "TE415", "label": "ESP Outlet Temp", "agg": "avg"},
 					"oxygen__at_eco_ol": {"tag": "AT401", "label": "Oxygen % At Eco O/L", "agg": "avg"},
 					"boiler_feed_water_flow": {"tag": "FT301", "label": "Boiler Feed Water Flow", "agg": "sum"},
-					"float_zcpn": {"tag": "FT302", "label": "Steam Produced", "agg": "sum"},
+					"float_zcpn": {"tag": "FT303", "label": "Steam Produced", "agg": "sum"},
 					"dm_flow_to_dearator": {"tag": "FI_2014", "label": "DM Flow To Dearator ", "agg": "sum"}
 				},
 			},

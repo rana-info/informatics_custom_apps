@@ -1,8 +1,5 @@
-// Copyright (c) 2026, Monil Kamboj and contributors
-// For license information, please see license.txt
-
 frappe.query_reports["Cost Analysis"] = {
-	 "filters": [
+    "filters": [
         {
             "fieldname": "company",
             "label": __("Company"),
@@ -59,18 +56,18 @@ frappe.query_reports["Cost Analysis"] = {
         }
     ],
 
-   "formatter": function(value, row, column, data, default_formatter) {
-    if (data && data.is_blank_row) {
-        return "";
-    }
-    if (data.is_target_row) {
-    if (column.fieldname === "expense_category") {
-        return `<span style="font-size: 14px; font-weight: 600; color: #16a34a;">${value}</span>`;
-    }
-    return "";
-}
+    "formatter": function(value, row, column, data, default_formatter) {
+        if (data && data.is_blank_row) {
+            return "";
+        }
+        if (data && data.is_target_row) {
+            if (column.fieldname === "expense_category") {
+                return `<span style="font-size: 14px; font-weight: 600; color: #16a34a;">${value}</span>`;
+            }
+            return "";
+        }
 
-    value = default_formatter(value, row, column, data);
+        value = default_formatter(value, row, column, data);
 
         if (!data) return value;
 
@@ -90,6 +87,7 @@ frappe.query_reports["Cost Analysis"] = {
                 return "";
             }
         }
+
         if (column.fieldname === "gl_code" && value) {
             value = `<span style="background-color: #f1f5f9; color: #475569; font-family: monospace; font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 4px; border: 1px solid #e2e8f0;">${value}</span>`;
         }
