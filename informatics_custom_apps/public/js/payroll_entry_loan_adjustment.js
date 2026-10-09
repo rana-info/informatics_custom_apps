@@ -30,6 +30,7 @@ function renderLoanAdjustmentRows(dialog, rows, currency) {
 
 	dialog.fields_dict.employee_rows.$wrapper.html(`
 		<div class="loan-adjustment-table-wrap">
+			<div class="loan-adjustment-status text-muted" role="status" style="margin-bottom: 8px"></div>
 			<div class="text-right" style="margin-bottom: 8px">
 				<button type="button" class="btn btn-default btn-sm loan-adjustment-refresh">${__("Refresh")}</button>
 			</div>
@@ -69,23 +70,28 @@ function renderLoanAdjustmentRows(dialog, rows, currency) {
 	});
 }
 
-async function refreshLoanAdjustmentRows(dialog, currency) {
-	const response = await frappe.call({
+function fetchLoanAdjustmentCandidates(frm) {
+	return frappe.call({
 		method: "informatics_custom_apps.ripl_customized_apps.payroll_loan_candidates.get_loan_adjustment_candidates",
-		args: {
-			payroll_entry: dialog.frm.doc.name,
-		},
+		args: { payroll_entry: frm.doc.name },
 		freeze: true,
-		freeze_message: __("Refreshing loan repayment candidates"),
+		freeze_message: __("Checking loan repayments"),
 	});
-	const rows = response.message?.employees || [];
-	if (!rows.length) {
-		dialog.loan_adjustment_rows = [];
+}
+
+async function refreshLoanAdjustmentRows(dialog, currency) {
+	const wrapper = dialog.fields_dict.employee_rows.$wrapper;
+	const status = wrapper.find(".loan-adjustment-status");
+	status.text(__("Refreshing loan repayment candidates…"));
+	try {
+		const response = await fetchLoanAdjustmentCandidates(dialog.frm);
+		const rows = response.message?.employees || [];
+		dialog.loan_adjustment_rows = rows;
 		renderLoanAdjustmentRows(dialog, rows, currency);
-		return;
+	} catch (error) {
+		status.text(error.message || __("Unable to refresh loan repayment candidates."));
+		status.removeClass("text-muted").addClass("text-danger");
 	}
-	dialog.loan_adjustment_rows = rows;
-	renderLoanAdjustmentRows(dialog, rows, currency);
 }
 
 function collectLoanAdjustmentRows(dialog) {
@@ -140,7 +146,40 @@ function showLoanAdjustmentDialog(frm, response) {
 		}
 		const primaryButton = dialog.get_primary_btn();
 		primaryButton.prop("disabled", true);
+		dialog.hide();
+		let completionEvent;
+		let onComplete;
 		try {
+			await runStandardGetEmployeeDetails(frm, adjustmentValues.excludedEmployees);
+
+			completionEvent = "loan_repayment_adjustment_complete";
+			let requestQueued = false;
+			let earlyCompletion = null;
+			const handleCompletion = (message) => {
+				frappe.realtime.off(completionEvent, onComplete);
+				if (message.status === "error") {
+					frappe.msgprint(message.error || __("The loan adjustment failed."));
+					return;
+				}
+				if (message.skipped?.length) {
+					frappe.msgprint({
+						title: __("Some employees were skipped"),
+						message: message.skipped
+							.map((item) => `${escapeLoanAdjustmentHTML(item.employee)}: ${escapeLoanAdjustmentHTML(item.reason)}`)
+							.join("<br>"),
+					});
+				}
+			};
+			onComplete = (message) => {
+				if (message.payroll_entry !== frm.doc.name) return;
+				if (!requestQueued) {
+					earlyCompletion = message;
+					return;
+				}
+				handleCompletion(message);
+			};
+			frappe.realtime.on(completionEvent, onComplete);
+
 			const result = await frappe.call({
 				method: "informatics_custom_apps.ripl_customized_apps.payroll_loan_adjustment.apply_loan_repayment_adjustments",
 				args: {
@@ -148,24 +187,20 @@ function showLoanAdjustmentDialog(frm, response) {
 					adjustments: adjustmentValues.adjustments,
 					excluded_employees: adjustmentValues.excludedEmployees,
 				},
-				freeze: true,
-				freeze_message: __("Updating loan repayment schedules"),
+				freeze: false,
 			});
-			dialog.hide();
-			if (result.message?.skipped?.length) {
-				frappe.msgprint({
-					title: __("Some employees were skipped"),
-					message: result.message.skipped
-						.map((item) => `${escapeLoanAdjustmentHTML(item.employee)}: ${escapeLoanAdjustmentHTML(item.reason)}`)
-						.join("<br>"),
-				});
+			if (!result.message?.queued) {
+				throw new Error(__("The loan adjustment job was not queued."));
 			}
-			if (!adjustmentValues.excludedEmployees.length && standardGetEmployeeDetails) {
-				return standardGetEmployeeDetails(frm);
+			requestQueued = true;
+			if (earlyCompletion) {
+				handleCompletion(earlyCompletion);
 			}
-			return runStandardGetEmployeeDetails(frm, adjustmentValues.excludedEmployees);
-		} finally {
-			primaryButton.prop("disabled", false);
+		} catch (error) {
+			if (completionEvent && onComplete) {
+				frappe.realtime.off(completionEvent, onComplete);
+			}
+			frappe.msgprint(error.message || __("Unable to apply the loan adjustment."));
 		}
 	});
 	dialog.set_secondary_action_label(__("Cancel"));
@@ -174,22 +209,20 @@ function showLoanAdjustmentDialog(frm, response) {
 	renderLoanAdjustmentRows(dialog, rows, currency);
 }
 
-function runStandardGetEmployeeDetails(frm, excludedEmployees = []) {
+function runStandardGetEmployeeDetails(frm, excludedEmployees = [], freeze = true) {
 	return frappe
 		.call({
 			doc: frm.doc,
 			method: "fill_employee_details",
-			freeze: true,
+			freeze,
 			freeze_message: __("Fetching Employees"),
 		})
 		.then((r) => {
 			if (r.docs?.[0]?.employees) {
-				if (excludedEmployees.length) {
-					const excluded = new Set(excludedEmployees);
-					frm.doc.employees = r.docs[0].employees.filter((row) => !excluded.has(row.employee));
-					frm.doc.number_of_employees = frm.doc.employees.length;
-					frm.refresh_field("employees");
-				}
+				const excluded = new Set(excludedEmployees);
+				frm.doc.employees = r.docs[0].employees.filter((row) => !excluded.has(row.employee));
+				frm.doc.number_of_employees = frm.doc.employees.length;
+				frm.refresh_field("employees");
 				frm.dirty();
 				return frm.save().then(() => r);
 			}
@@ -206,20 +239,17 @@ function runStandardGetEmployeeDetails(frm, excludedEmployees = []) {
 
 frappe.ui.form.on("Payroll Entry", {
 	get_employee_details(frm) {
-		return frappe
-			.call({
-				method: "informatics_custom_apps.ripl_customized_apps.payroll_loan_candidates.get_loan_adjustment_candidates",
-				args: { payroll_entry: frm.doc.name },
-				freeze: true,
-				freeze_message: __("Checking loan repayments"),
-			})
-			.then((r) => {
-				if (!r.message?.employees?.length) {
+		return fetchLoanAdjustmentCandidates(frm)
+			.then((response) => {
+				if (!response.message?.employees?.length) {
 					return standardGetEmployeeDetails
 						? standardGetEmployeeDetails(frm)
 						: runStandardGetEmployeeDetails(frm);
 				}
-				showLoanAdjustmentDialog(frm, r.message);
+				showLoanAdjustmentDialog(frm, response.message);
+			})
+			.catch((error) => {
+				frappe.msgprint(error.message || __("Unable to check loan repayments."));
 			});
 	},
 });

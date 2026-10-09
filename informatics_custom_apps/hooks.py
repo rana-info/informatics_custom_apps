@@ -211,7 +211,12 @@ doc_events["Additional Salary"] = {
 }
 
 doc_events["Payroll Entry"] = {
+    "on_update": "informatics_custom_apps.ripl_customized_apps.payroll_loan_adjustment.restore_loan_adjustments_on_employee_removal",
     "on_cancel": "informatics_custom_apps.ripl_customized_apps.payroll_loan_adjustment.restore_loan_adjustments_on_payroll_cancel"
+}
+
+doc_events["Salary Slip"] = {
+    "validate": "informatics_custom_apps.ripl_customized_apps.payroll_loan_adjustment.prevent_salary_slip_submit_during_loan_adjustment"
 }
 
 

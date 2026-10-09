@@ -76,6 +76,22 @@ class TestPayrollLoanAdjustment(FrappeTestCase):
 			"informatics_custom_apps.ripl_customized_apps.payroll_loan_adjustment.restore_loan_adjustments_on_payroll_cancel",
 		)
 
+	def test_payroll_entry_employee_removal_hook_is_registered(self):
+		from informatics_custom_apps import hooks
+
+		self.assertEqual(
+			hooks.doc_events["Payroll Entry"]["on_update"],
+			"informatics_custom_apps.ripl_customized_apps.payroll_loan_adjustment.restore_loan_adjustments_on_employee_removal",
+		)
+
+	def test_salary_slip_pending_adjustment_guard_is_registered(self):
+		from informatics_custom_apps import hooks
+
+		self.assertEqual(
+			hooks.doc_events["Salary Slip"]["validate"],
+			"informatics_custom_apps.ripl_customized_apps.payroll_loan_adjustment.prevent_salary_slip_submit_during_loan_adjustment",
+		)
+
 	def test_loan_interest_accrual_accepts_accounting_dimensions(self):
 		accrual = frappe.new_doc("Loan Interest Accrual")
 		for fieldname in ("branch", "segment", "section"):
@@ -84,6 +100,19 @@ class TestPayrollLoanAdjustment(FrappeTestCase):
 
 	def test_default_threshold_is_ten_percent(self):
 		self.assertEqual(candidates._get_threshold(), 10)
+
+	def test_candidate_endpoint_returns_candidates_synchronously(self):
+		payroll_entry = frappe._dict(name="PE-CANDIDATES")
+		result = {"threshold_percent": 10, "employees": []}
+		with (
+			patch.object(candidates, "_get_payroll_entry", return_value=payroll_entry),
+			patch.object(candidates, "_get_threshold", return_value=10),
+			patch.object(candidates, "_build_candidates", return_value=[]) as build_candidates,
+		):
+			result = candidates.get_loan_adjustment_candidates("PE-CANDIDATES")
+
+		self.assertEqual(result, {"threshold_percent": 10, "employees": []})
+		build_candidates.assert_called_once_with(payroll_entry, 10)
 
 	def test_negative_net_pay_is_eligible(self):
 		self.assertTrue(candidates._is_eligible(15000, 10000, 6000, 10, 2))
@@ -158,6 +187,40 @@ class TestPayrollLoanAdjustment(FrappeTestCase):
 			["EMP-0", "EMP-1", "EMP-2"], "2025-01-01", "2025-01-31", "PE-1"
 		)
 		preview.assert_not_called()
+
+	def test_candidate_builder_includes_allocation_rows_for_adjustment_reuse(self):
+		employee = frappe._dict(employee="EMP-1", employee_name="Employee One")
+		loan_row = {
+			"loan": "LOAN-1",
+			"schedule": "SCHEDULE-1",
+			"schedule_row": "ROW-1",
+			"scheduled_amount": 6000,
+			"payment_date": "2025-01-31",
+			"principal_amount": 6000,
+			"interest_amount": 0,
+			"balance_loan_amount": 54000,
+			"start_date": "2024-01-01",
+		}
+		payroll_entry = frappe._dict(
+			make_filters=MagicMock(return_value={}),
+			start_date="2025-01-01",
+			end_date="2025-01-31",
+			name="PE-1",
+		)
+		with (
+			patch(
+				"hrms.payroll.doctype.payroll_entry.payroll_entry.get_employee_list",
+				return_value=[employee],
+			),
+			patch.object(candidates, "_get_due_loan_schedules_for_employees", return_value={"EMP-1": [loan_row]}),
+			patch.object(candidates, "_preview_salary_amounts", return_value=(15000, 9000)),
+			patch.object(candidates, "_is_eligible", return_value=True),
+		):
+			result = candidates._build_candidates(payroll_entry, 10)
+
+		self.assertEqual(result[0]["loans"][0]["schedule"], "SCHEDULE-1")
+		self.assertEqual(result[0]["loans"][0]["schedule_row"], "ROW-1")
+		self.assertEqual(result[0]["loans"][0]["principal_amount"], 6000)
 
 	def test_schedule_candidate_lookup_ignores_adjustment_logs_for_cancelled_payroll(self):
 		logs = [
@@ -376,6 +439,61 @@ class TestPayrollLoanAdjustment(FrappeTestCase):
 
 		delete_doc.assert_not_called()
 
+	def test_removed_payroll_employee_adjustments_are_restored_and_deleted(self):
+		previous_doc = frappe._dict(employees=[frappe._dict(employee="EMP-1"), frappe._dict(employee="EMP-2")])
+		doc = frappe._dict(
+			name="PE-1",
+			docstatus=0,
+			employees=[frappe._dict(employee="EMP-2")],
+			get_doc_before_save=MagicMock(return_value=previous_doc),
+		)
+		logs = [frappe._dict(name="LOG-1", loan="LOAN-1")]
+		with patch("frappe.get_all", return_value=logs) as get_all, patch.object(
+			adjustment, "_restore_and_delete_loan_adjustment_logs"
+		) as restore:
+			adjustment.restore_loan_adjustments_on_employee_removal(doc)
+
+		self.assertEqual(get_all.call_args.kwargs["filters"]["employee"], ("in", ["EMP-1"]))
+		restore.assert_called_once_with(logs)
+
+	def test_removed_employee_without_adjustment_logs_does_not_restore(self):
+		previous_doc = frappe._dict(employees=[frappe._dict(employee="EMP-1")])
+		doc = frappe._dict(
+			name="PE-1",
+			docstatus=0,
+			employees=[],
+			get_doc_before_save=MagicMock(return_value=previous_doc),
+		)
+		with patch("frappe.get_all", return_value=[]), patch.object(
+			adjustment, "_restore_and_delete_loan_adjustment_logs"
+		) as restore:
+			adjustment.restore_loan_adjustments_on_employee_removal(doc)
+
+		restore.assert_called_once_with([])
+
+	def test_salary_slip_submission_waits_for_running_loan_adjustment(self):
+		from rq.job import JobStatus
+
+		doc = frappe._dict(payroll_entry="PE-1")
+		with patch("frappe.utils.background_jobs.get_job_status", return_value=JobStatus.STARTED):
+			with self.assertRaisesRegex(frappe.ValidationError, "still processing"):
+				adjustment.prevent_salary_slip_submit_during_loan_adjustment(doc)
+
+	def test_salary_slip_submission_is_blocked_after_adjustment_failure(self):
+		from rq.job import JobStatus
+
+		doc = frappe._dict(payroll_entry="PE-1")
+		with patch("frappe.utils.background_jobs.get_job_status", return_value=JobStatus.FAILED):
+			with self.assertRaisesRegex(frappe.ValidationError, "adjustment failed"):
+				adjustment.prevent_salary_slip_submit_during_loan_adjustment(doc)
+
+	def test_salary_slip_submission_is_allowed_after_adjustment_finishes(self):
+		from rq.job import JobStatus
+
+		doc = frappe._dict(payroll_entry="PE-1")
+		with patch("frappe.utils.background_jobs.get_job_status", return_value=JobStatus.FINISHED):
+			self.assertIsNone(adjustment.prevent_salary_slip_submit_during_loan_adjustment(doc))
+
 	def test_hr_amount_above_scheduled_amount_is_rejected(self):
 		candidate = {"gross_pay": 15000, "other_deductions": 9000, "scheduled_amount": 6000}
 		with self.assertRaises(frappe.ValidationError):
@@ -575,7 +693,7 @@ class TestPayrollLoanAdjustment(FrappeTestCase):
 			patch("frappe.db.exists", return_value=None),
 		):
 			with self.assertRaisesRegex(RuntimeError, "injected failure"):
-				adjustment.apply_loan_repayment_adjustments(
+				adjustment._apply_loan_repayment_adjustments_sync(
 					"PE-1",
 					[{"employee": "EMP-1", "hr_amount": 4000, "schedule_choice": "Yes"}],
 					threshold_percent=10,
@@ -614,7 +732,7 @@ class TestPayrollLoanAdjustment(FrappeTestCase):
 			patch("frappe.db.exists", return_value=None),
 			patch("frappe.db.savepoint"),
 		):
-			result = adjustment.apply_loan_repayment_adjustments(
+			result = adjustment._apply_loan_repayment_adjustments_sync(
 				"PE-1",
 				[{"employee": "EMP-1", "hr_amount": 4000, "schedule_choice": "No"}],
 				threshold_percent=10,
@@ -642,7 +760,7 @@ class TestPayrollLoanAdjustment(FrappeTestCase):
 			patch.object(adjustment, "_apply_one_loan") as apply_loan,
 			patch("frappe.db.exists", return_value="SS-1"),
 		):
-			result = adjustment.apply_loan_repayment_adjustments(
+			result = adjustment._apply_loan_repayment_adjustments_sync(
 				"PE-1",
 				[{"employee": "EMP-1", "hr_amount": 4000, "schedule_choice": "No"}],
 				threshold_percent=10,
@@ -668,12 +786,111 @@ class TestPayrollLoanAdjustment(FrappeTestCase):
 			patch.object(adjustment, "_apply_one_loan") as apply_loan,
 			patch("frappe.db.savepoint"),
 		):
-			result = adjustment.apply_loan_repayment_adjustments(
+			result = adjustment._apply_loan_repayment_adjustments_sync(
 				"PE-1", [], threshold_percent=10, excluded_employees=["EMP-1"]
 			)
 
 		self.assertEqual(result["adjusted_logs"], [])
 		apply_loan.assert_not_called()
+
+	def test_apply_endpoint_queues_adjustment_job(self):
+		payroll_entry = frappe._dict(name="PE-ASYNC", docstatus=0)
+		with (
+			patch.object(adjustment, "_check_hr_manager"),
+			patch.object(adjustment, "_get_payroll_entry", return_value=payroll_entry),
+			patch("frappe.enqueue") as enqueue,
+			patch.object(adjustment, "_apply_loan_repayment_adjustments_sync") as apply_sync,
+		):
+			result = adjustment.apply_loan_repayment_adjustments(
+				"PE-ASYNC",
+				[{"employee": "EMP-1", "hr_amount": 100, "schedule_choice": "Yes"}],
+				threshold_percent=10,
+			)
+
+		self.assertEqual(result, {"queued": True, "payroll_entry": "PE-ASYNC"})
+		enqueue.assert_called_once()
+		self.assertEqual(enqueue.call_args.kwargs["queue"], "long")
+		self.assertTrue(enqueue.call_args.kwargs["deduplicate"])
+		apply_sync.assert_not_called()
+
+	def test_candidate_allocation_reuses_fresh_candidate_rows(self):
+		payroll_entry = frappe._dict(
+			name="PE-1", docstatus=0, start_date="2025-01-01", end_date="2025-01-31"
+		)
+		candidate = {
+			"employee": "EMP-1",
+			"gross_pay": 15000,
+			"other_deductions": 9000,
+			"scheduled_amount": 6000,
+			"loans": [
+				{
+					"loan": "LOAN-1",
+					"schedule": "SCHEDULE-1",
+					"schedule_row": "ROW-1",
+					"payment_date": "2025-01-31",
+					"scheduled_amount": 6000,
+					"principal_amount": 6000,
+					"interest_amount": 0,
+					"balance_loan_amount": 54000,
+				},
+			],
+		}
+		with (
+			patch.object(adjustment, "_check_hr_manager"),
+			patch.object(adjustment, "_get_payroll_entry", return_value=payroll_entry),
+			patch.object(adjustment, "_build_candidates", return_value=[candidate]),
+			patch.object(adjustment, "_get_loan_repayment_allocations") as get_allocations,
+			patch.object(adjustment, "_get_unpaid_accruals", return_value=[]) as get_accruals,
+			patch.object(adjustment, "_apply_one_loan") as apply_loan,
+			patch("frappe.db.savepoint"),
+		):
+			result = adjustment._apply_loan_repayment_adjustments_sync(
+				"PE-1",
+				[{"employee": "EMP-1", "hr_amount": 4000, "schedule_choice": "Yes"}],
+				threshold_percent=10,
+			)
+
+		self.assertEqual(result["adjusted_logs"], [apply_loan.return_value])
+		get_allocations.assert_not_called()
+		get_accruals.assert_called_once_with("LOAN-1", "2025-01-31")
+		self.assertEqual(apply_loan.call_args.args[3], [])
+
+	def test_background_apply_publishes_success_event(self):
+		with (
+			patch.object(adjustment, "_apply_loan_repayment_adjustments_sync", return_value={"skipped": []}),
+			patch("frappe.publish_realtime") as publish,
+		):
+			result = adjustment.process_loan_repayment_adjustment_job(
+				"PE-ASYNC", [], excluded_employees=["EMP-1"], user_to_notify="hr@example.com"
+			)
+
+		self.assertEqual(result, {"skipped": []})
+		publish.assert_called_once_with(
+			"loan_repayment_adjustment_complete",
+			{"status": "success", "payroll_entry": "PE-ASYNC", "skipped": []},
+			user="hr@example.com",
+			after_commit=True,
+		)
+
+	def test_background_apply_reports_error_and_rolls_back(self):
+		with (
+			patch.object(
+				adjustment,
+				"_apply_loan_repayment_adjustments_sync",
+				side_effect=RuntimeError("background failure"),
+			),
+			patch("frappe.db.rollback") as rollback,
+			patch("frappe.publish_realtime") as publish,
+		):
+			with self.assertRaisesRegex(RuntimeError, "background failure"):
+				adjustment.process_loan_repayment_adjustment_job(
+					"PE-ASYNC", [], user_to_notify="hr@example.com"
+				)
+
+		rollback.assert_called_once_with()
+		self.assertEqual(publish.call_args.args[0], "loan_repayment_adjustment_complete")
+		self.assertEqual(publish.call_args.args[1]["status"], "error")
+		self.assertEqual(publish.call_args.kwargs["user"], "hr@example.com")
 
 	def test_multiple_loans_receive_amount_oldest_first(self):
 		rows = [

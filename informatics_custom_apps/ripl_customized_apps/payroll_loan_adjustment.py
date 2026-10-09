@@ -54,9 +54,7 @@ def _split_repayment_amount(allocation, hr_amount, precision):
 	return interest_amount, principal_amount
 
 
-def _get_loan_repayment_allocations(employee, start_date, end_date, hr_amount, payroll_entry=None):
-	precision = _currency_precision()
-	rows = _get_due_loan_schedules(employee, start_date, end_date, payroll_entry)
+def _allocate_loan_repayment_amounts(rows, hr_amount, precision):
 	grouped = {}
 	for row in rows:
 		if row["loan"] in grouped:
@@ -71,6 +69,12 @@ def _get_loan_repayment_allocations(employee, start_date, end_date, hr_amount, p
 		allocations.append({**row, "hr_amount": flt(amount, precision)})
 		remaining = flt(remaining - amount, precision)
 	return allocations
+
+
+def _get_loan_repayment_allocations(employee, start_date, end_date, hr_amount, payroll_entry=None):
+	precision = _currency_precision()
+	rows = _get_due_loan_schedules(employee, start_date, end_date, payroll_entry)
+	return _allocate_loan_repayment_amounts(rows, hr_amount, precision)
 
 
 def _existing_salary_slip(payroll_entry, employee):
@@ -302,7 +306,7 @@ def _make_replacement_accrual(
 	return accrual
 
 
-def _apply_one_loan(payroll_entry, allocation, schedule_choice):
+def _apply_one_loan(payroll_entry, allocation, schedule_choice, old_accruals=None):
 	loan_doc = frappe.get_doc("Loan", allocation["loan"])
 	schedule = frappe.get_doc("Loan Repayment Schedule", allocation["schedule"])
 	prior_adjustment = _get_prior_adjustment_log(payroll_entry.name, loan_doc.applicant, loan_doc.name)
@@ -318,7 +322,8 @@ def _apply_one_loan(payroll_entry, allocation, schedule_choice):
 	)
 	schedule_snapshot = _schedule_snapshot(schedule)
 	accounting_dimensions = _get_loan_accounting_dimensions(loan_doc)
-	old_accruals = _get_unpaid_accruals(loan_doc.name, payroll_entry.end_date)
+	if old_accruals is None:
+		old_accruals = _get_unpaid_accruals(loan_doc.name, payroll_entry.end_date)
 	for accrual in old_accruals:
 		for fieldname, value in accounting_dimensions.items():
 			if not accrual.get(fieldname):
@@ -429,10 +434,63 @@ def _reverse_loan_adjustment_logs(loan, loan_logs, schedule_names=None):
 		_recreate_cancelled_accrual(accrual_name)
 
 
-def restore_loan_adjustments_on_payroll_cancel(doc, method=None):
-	if not frappe.db.exists("Loan Adjustment Log", {"payroll_entry": doc.name}):
+def _restore_and_delete_loan_adjustment_logs(loan_logs):
+	if not loan_logs:
 		return
 
+	logs_by_loan = {}
+	for log in loan_logs:
+		logs_by_loan.setdefault(log.loan, []).append(log)
+	schedule_names_by_loan = {}
+	for schedule in frappe.get_all(
+		"Loan Repayment Schedule",
+		filters={
+			"loan": ("in", list(logs_by_loan)),
+			"docstatus": 1,
+			"status": "Active",
+		},
+		fields=["name", "loan"],
+	):
+		schedule_names_by_loan.setdefault(schedule.loan, []).append(schedule.name)
+
+	for loan, logs in logs_by_loan.items():
+		_reverse_loan_adjustment_logs(loan, logs, schedule_names_by_loan.get(loan, []))
+
+	for log in loan_logs:
+		frappe.delete_doc("Loan Adjustment Log", log.name, ignore_permissions=True)
+
+
+def restore_loan_adjustments_on_employee_removal(doc, method=None):
+	if doc.docstatus != 0:
+		return
+
+	previous_doc = doc.get_doc_before_save()
+	if not previous_doc:
+		return
+
+	previous_employees = {row.employee for row in previous_doc.get("employees", [])}
+	current_employees = {row.employee for row in doc.get("employees", [])}
+	removed_employees = previous_employees - current_employees
+	if not removed_employees:
+		return
+
+	loan_logs = frappe.get_all(
+		"Loan Adjustment Log",
+		filters={"payroll_entry": doc.name, "employee": ("in", list(removed_employees))},
+		fields=[
+			"name",
+			"loan",
+			"creation",
+			"old_accrual_docs",
+			"new_accrual_doc",
+			"schedule_snapshot",
+		],
+		order_by="creation asc",
+	)
+	_restore_and_delete_loan_adjustment_logs(loan_logs)
+
+
+def restore_loan_adjustments_on_payroll_cancel(doc, method=None):
 	loan_logs = frappe.get_all(
 		"Loan Adjustment Log",
 		filters={"payroll_entry": doc.name},
@@ -446,26 +504,22 @@ def restore_loan_adjustments_on_payroll_cancel(doc, method=None):
 		],
 		order_by="creation asc",
 	)
-	logs_by_loan = {}
-	for log in loan_logs:
-		logs_by_loan.setdefault(log.loan, []).append(log)
-	schedule_names_by_loan = {}
-	if logs_by_loan:
-		for schedule in frappe.get_all(
-			"Loan Repayment Schedule",
-			filters={
-				"loan": ("in", list(logs_by_loan)),
-				"docstatus": 1,
-				"status": "Active",
-			},
-			fields=["name", "loan"],
-		):
-			schedule_names_by_loan.setdefault(schedule.loan, []).append(schedule.name)
-	for loan, logs in logs_by_loan.items():
-		_reverse_loan_adjustment_logs(loan, logs, schedule_names_by_loan.get(loan, []))
+	_restore_and_delete_loan_adjustment_logs(loan_logs)
 
-	for log in loan_logs:
-		frappe.delete_doc("Loan Adjustment Log", log.name, ignore_permissions=True)
+
+def prevent_salary_slip_submit_during_loan_adjustment(doc, method=None):
+	if not doc.payroll_entry:
+		return
+
+	from frappe.utils.background_jobs import get_job_status
+	from rq.job import JobStatus
+
+	job_id = f"loan-repayment-adjustment-{doc.payroll_entry}"
+	status = get_job_status(job_id)
+	if status in (JobStatus.QUEUED, JobStatus.STARTED):
+		frappe.throw(_("Loan repayment adjustments are still processing for this Payroll Entry. Try again shortly."))
+	if status == JobStatus.FAILED:
+		frappe.throw(_("The loan adjustment failed. Reopen the Payroll Entry and apply the adjustment again."))
 
 
 @frappe.whitelist(methods=["POST"])
@@ -473,7 +527,7 @@ def apply_loan_repayment_adjustments(
 	payroll_entry, adjustments, threshold_percent=None, excluded_employees=None
 ):
 	_check_hr_manager()
-	payroll_entry = _get_payroll_entry(payroll_entry, "write")
+	payroll_entry_doc = _get_payroll_entry(payroll_entry, "write")
 	if isinstance(adjustments, str):
 		adjustments = json.loads(adjustments)
 	if isinstance(excluded_employees, str):
@@ -484,6 +538,58 @@ def apply_loan_repayment_adjustments(
 		excluded_employees = []
 	if not isinstance(excluded_employees, list):
 		frappe.throw(_("Employees to exclude must be provided as a list."))
+	job_id = f"loan-repayment-adjustment-{payroll_entry_doc.name}"
+	frappe.enqueue(
+		"informatics_custom_apps.ripl_customized_apps.payroll_loan_adjustment.process_loan_repayment_adjustment_job",
+		queue="long",
+		timeout=1500,
+		job_id=job_id,
+		deduplicate=True,
+		enqueue_after_commit=True,
+		payroll_entry=payroll_entry_doc.name,
+		adjustments=adjustments,
+		threshold_percent=threshold_percent,
+		excluded_employees=excluded_employees,
+		user_to_notify=frappe.session.user,
+	)
+	return {"queued": True, "payroll_entry": payroll_entry_doc.name}
+
+
+def process_loan_repayment_adjustment_job(
+	payroll_entry, adjustments, threshold_percent=None, excluded_employees=None, user_to_notify=None
+):
+	try:
+		result = _apply_loan_repayment_adjustments_sync(
+			payroll_entry, adjustments, threshold_percent, excluded_employees
+		)
+		frappe.publish_realtime(
+			"loan_repayment_adjustment_complete",
+			{
+				"status": "success",
+				"payroll_entry": payroll_entry,
+				"skipped": result.get("skipped", []),
+			},
+			user=user_to_notify,
+			after_commit=True,
+		)
+		return result
+	except Exception as error:
+		frappe.db.rollback()
+		frappe.publish_realtime(
+			"loan_repayment_adjustment_complete",
+			{"status": "error", "payroll_entry": payroll_entry, "error": str(error)},
+			user=user_to_notify,
+		)
+		raise
+
+
+def _apply_loan_repayment_adjustments_sync(
+	payroll_entry, adjustments, threshold_percent=None, excluded_employees=None
+):
+	if excluded_employees is None:
+		excluded_employees = []
+	_check_hr_manager()
+	payroll_entry = _get_payroll_entry(payroll_entry, "write")
 
 	threshold = _get_threshold(threshold_percent)
 	eligible = {row["employee"]: row for row in _build_candidates(payroll_entry, threshold)}
@@ -513,9 +619,13 @@ def apply_loan_repayment_adjustments(
 			frappe.throw(_("The employee list changed. Refresh the adjustment dialog and try again."))
 		candidate = eligible[employee]
 		amount, choice = _validate_adjustment(employee, candidate, item, precision)
-		allocations = _get_loan_repayment_allocations(
-			employee, payroll_entry.start_date, payroll_entry.end_date, amount, payroll_entry.name
-		)
+		due_loan_rows = candidate.get("loans")
+		if due_loan_rows is None:
+			allocations = _get_loan_repayment_allocations(
+				employee, payroll_entry.start_date, payroll_entry.end_date, amount, payroll_entry.name
+			)
+		else:
+			allocations = _allocate_loan_repayment_amounts(due_loan_rows, amount, precision)
 		prepared.append({"employee": employee, "choice": choice, "allocations": allocations})
 
 	if set(eligible) - seen_employees - excluded_set:
@@ -525,7 +635,8 @@ def apply_loan_repayment_adjustments(
 	for item in prepared:
 		blocked = None
 		for allocation in item["allocations"]:
-			for accrual in _get_unpaid_accruals(allocation["loan"], payroll_entry.end_date):
+			old_accruals = _get_unpaid_accruals(allocation["loan"], payroll_entry.end_date)
+			for accrual in old_accruals:
 				repayment = _submitted_repayment_for_accrual(accrual.name)
 				if repayment:
 					blocked = _("Accrual {0} is linked to submitted Loan Repayment {1}.").format(
@@ -534,6 +645,7 @@ def apply_loan_repayment_adjustments(
 					break
 			if blocked:
 				break
+			allocation["old_accruals"] = old_accruals
 		if blocked:
 			skipped.append({"employee": item["employee"], "reason": blocked})
 		else:
@@ -545,7 +657,11 @@ def apply_loan_repayment_adjustments(
 		logs = []
 		for item in ready:
 			for allocation in item["allocations"]:
-				logs.append(_apply_one_loan(payroll_entry, allocation, item["choice"]))
+				logs.append(
+					_apply_one_loan(
+						payroll_entry, allocation, item["choice"], allocation["old_accruals"]
+					)
+				)
 	except Exception:
 		frappe.db.rollback(save_point=savepoint)
 		raise

@@ -345,8 +345,13 @@ def _build_candidates(payroll_entry, threshold):
 					"loans": [
 						{
 							"loan": item["loan"],
+							"schedule": item["schedule"],
+							"schedule_row": item["schedule_row"],
 							"scheduled_amount": item["scheduled_amount"],
 							"payment_date": str(item["payment_date"]),
+							"principal_amount": item["principal_amount"],
+							"interest_amount": item["interest_amount"],
+							"balance_loan_amount": item["balance_loan_amount"],
 						}
 						for item in due_loans
 					],
