@@ -430,6 +430,9 @@ def _reverse_loan_adjustment_logs(loan, loan_logs, schedule_names=None):
 
 
 def restore_loan_adjustments_on_payroll_cancel(doc, method=None):
+	if not frappe.db.exists("Loan Adjustment Log", {"payroll_entry": doc.name}):
+		return
+
 	loan_logs = frappe.get_all(
 		"Loan Adjustment Log",
 		filters={"payroll_entry": doc.name},
@@ -460,6 +463,9 @@ def restore_loan_adjustments_on_payroll_cancel(doc, method=None):
 			schedule_names_by_loan.setdefault(schedule.loan, []).append(schedule.name)
 	for loan, logs in logs_by_loan.items():
 		_reverse_loan_adjustment_logs(loan, logs, schedule_names_by_loan.get(loan, []))
+
+	for log in loan_logs:
+		frappe.delete_doc("Loan Adjustment Log", log.name, ignore_permissions=True)
 
 
 @frappe.whitelist(methods=["POST"])

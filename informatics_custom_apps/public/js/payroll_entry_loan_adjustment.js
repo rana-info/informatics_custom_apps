@@ -7,14 +7,18 @@ function escapeLoanAdjustmentHTML(value) {
 
 function renderLoanAdjustmentRows(dialog, rows, currency) {
 	const precision = cint(frappe.defaults.get_default("currency_precision")) || 2;
+	const payrollPeriod = `${frappe.datetime.str_to_user(dialog.frm.doc.start_date)} - ${frappe.datetime.str_to_user(dialog.frm.doc.end_date)}`;
 	const body = rows.length
 		? rows
 		.map((row, index) => {
 			const employee = escapeLoanAdjustmentHTML(row.employee);
 			const employeeName = escapeLoanAdjustmentHTML(row.employee_name);
+			const currentMonthNet = flt(row.gross_pay - row.other_deductions, precision);
+			const estimatedNet = flt(row.gross_pay - row.other_deductions - row.scheduled_amount, precision);
 			return `<tr data-index="${index}">
 				<td><strong>${employee}</strong><br>${employeeName}</td>
-				<td class="text-right">${format_currency(row.net_after_loan, currency)}</td>
+				<td class="text-right">${format_currency(currentMonthNet, currency)}</td>
+				<td class="text-right estimated-net-pay" data-index="${index}">${format_currency(estimatedNet, currency)}</td>
 				<td class="text-right">${format_currency(row.scheduled_amount, currency)}</td>
 				<td><input class="form-control input-sm hr-loan-amount" type="number" min="0" step="${1 / 10 ** precision}" value="${flt(row.scheduled_amount, precision)}" data-index="${index}"></td>
 				<td><select class="form-control input-sm loan-schedule-choice" data-index="${index}"><option value=""></option><option value="Yes">Yes</option><option value="No">No</option></select></td>
@@ -22,18 +26,20 @@ function renderLoanAdjustmentRows(dialog, rows, currency) {
 			</tr>`;
 		})
 		.join("")
-		: `<tr><td colspan="6" class="text-muted">${__("No employees meet the loan repayment threshold.")}</td></tr>`;
+		: `<tr><td colspan="7" class="text-muted">${__("No employees meet the loan repayment threshold.")}</td></tr>`;
 
 	dialog.fields_dict.employee_rows.$wrapper.html(`
 		<div class="loan-adjustment-table-wrap">
 			<div class="text-right" style="margin-bottom: 8px">
 				<button type="button" class="btn btn-default btn-sm loan-adjustment-refresh">${__("Refresh")}</button>
 			</div>
+			<div class="text-muted" style="margin-bottom: 8px">${__("Payroll period")}: ${escapeLoanAdjustmentHTML(payrollPeriod)}</div>
 			<div style="overflow-x: auto">
 				<table class="table table-bordered table-condensed">
 					<thead><tr>
 						<th>${__("Employee")}</th>
-						<th class="text-right">${__("Net salary after deductions including loan")}</th>
+						<th class="text-right">${__("Net salary for current month (before loan deduction)")}</th>
+						<th class="text-right">${__("Estimated net after HR loan deduction")}</th>
 						<th class="text-right">${__("Scheduled loan deduction")}</th>
 						<th>${__("Loan deduction by HR")}</th>
 						<th>${__("Increase repayment schedule")}</th>
@@ -46,9 +52,21 @@ function renderLoanAdjustmentRows(dialog, rows, currency) {
 
 	const wrapper = dialog.fields_dict.employee_rows.$wrapper;
 	wrapper.off("click.loanAdjustment", ".loan-adjustment-refresh");
+	wrapper.off("input.loanAdjustment", ".hr-loan-amount");
 	wrapper.on("click.loanAdjustment", ".loan-adjustment-refresh", () =>
 		refreshLoanAdjustmentRows(dialog, currency),
 	);
+	wrapper.on("input.loanAdjustment", ".hr-loan-amount", (event) => {
+		const input = $(event.currentTarget);
+		const index = cint(input.attr("data-index"));
+		const row = rows[index];
+		const amount = Number(input.val());
+		const netPay = Number.isFinite(amount)
+			? flt(row.gross_pay - row.other_deductions - amount, precision)
+			: null;
+		const display = netPay === null ? "-" : format_currency(netPay, currency);
+		wrapper.find(`.estimated-net-pay[data-index="${index}"]`).text(display);
+	});
 }
 
 async function refreshLoanAdjustmentRows(dialog, currency) {

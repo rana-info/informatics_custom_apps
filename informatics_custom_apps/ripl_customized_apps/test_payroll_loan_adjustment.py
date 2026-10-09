@@ -354,6 +354,28 @@ class TestPayrollLoanAdjustment(FrappeTestCase):
 		self.assertEqual(schedule.repayment_periods, 3)
 		self.assertEqual(schedule.repayment_schedule[0].name, "ORIGINAL-ROW")
 
+	def test_cancelled_payroll_deletes_adjustment_logs_after_restoration(self):
+		log = frappe._dict(name="LOG-1", loan="LOAN-1")
+		doc = frappe._dict(name="PE-1")
+		with patch("frappe.db.exists", return_value=True), patch("frappe.get_all", return_value=[log]), patch.object(
+			adjustment, "_reverse_loan_adjustment_logs"
+		) as reverse, patch("frappe.delete_doc") as delete_doc:
+			adjustment.restore_loan_adjustments_on_payroll_cancel(doc)
+
+		reverse.assert_called_once()
+		delete_doc.assert_called_once_with("Loan Adjustment Log", "LOG-1", ignore_permissions=True)
+
+	def test_cancelled_payroll_preserves_adjustment_logs_if_restoration_fails(self):
+		log = frappe._dict(name="LOG-1", loan="LOAN-1")
+		doc = frappe._dict(name="PE-1")
+		with patch("frappe.db.exists", return_value=True), patch("frappe.get_all", return_value=[log]), patch.object(
+			adjustment, "_reverse_loan_adjustment_logs", side_effect=RuntimeError("restore failed")
+		), patch("frappe.delete_doc") as delete_doc:
+			with self.assertRaisesRegex(RuntimeError, "restore failed"):
+				adjustment.restore_loan_adjustments_on_payroll_cancel(doc)
+
+		delete_doc.assert_not_called()
+
 	def test_hr_amount_above_scheduled_amount_is_rejected(self):
 		candidate = {"gross_pay": 15000, "other_deductions": 9000, "scheduled_amount": 6000}
 		with self.assertRaises(frappe.ValidationError):
