@@ -6,3 +6,5 @@
 # Patches added in this section will be executed after doctypes are migrated
 
 informatics_custom_apps.patches.leave_allocation_oct_joiners #1
+informatics_custom_apps.patches.add_loan_repayment_threshold #2
+informatics_custom_apps.patches.add_loan_repayment_threshold_default #3

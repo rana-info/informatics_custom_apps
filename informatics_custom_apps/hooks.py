@@ -65,7 +65,8 @@ doctype_js = {
     "Asset": "public/js/asset_date_custom.js",
     "Purchase Receipt": "public/js/purchase_receipt.js",
     "Purchase Invoice" : "public/js/purchase_invoice.js",
-    "Sales Invoice": "public/js/sales_invoice.js"
+    "Sales Invoice": "public/js/sales_invoice.js",
+    "Payroll Entry": "public/js/payroll_entry_loan_adjustment.js"
 }
 # doc_events = {
 #     "Leave Application": {
@@ -207,6 +208,10 @@ doc_events["Leave Encashment"] = {
 
 doc_events["Additional Salary"] = {
     "before_cancel": PREVENT_INDIVIDUAL_CANCEL
+}
+
+doc_events["Payroll Entry"] = {
+    "on_cancel": "informatics_custom_apps.ripl_customized_apps.payroll_loan_adjustment.restore_loan_adjustments_on_payroll_cancel"
 }
 
 

@@ -1,0 +1,131 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "LAL-.YY.-.#####",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "employee",
+  "loan",
+  "payroll_entry",
+  "scheduled_amount",
+  "hr_amount",
+  "schedule_choice",
+  "schedule_snapshot",
+  "old_accrual_docs",
+  "new_accrual_doc",
+  "user",
+  "timestamp"
+ ],
+ "fields": [
+  {
+   "fieldname": "employee",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Employee",
+   "options": "Employee",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "loan",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Loan",
+   "options": "Loan",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "payroll_entry",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Payroll Entry",
+   "options": "Payroll Entry",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "scheduled_amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Scheduled Amount",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "hr_amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "HR Amount",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "schedule_choice",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Increase Repayment Schedule",
+   "options": "\nYes\nNo",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "old_accrual_docs",
+   "fieldtype": "Long Text",
+   "label": "Old Accrual Documents",
+   "read_only": 1
+  },
+  {
+   "fieldname": "schedule_snapshot",
+   "fieldtype": "Long Text",
+   "label": "Original Repayment Schedule Snapshot",
+   "read_only": 1
+  },
+  {
+   "fieldname": "new_accrual_doc",
+   "fieldtype": "Link",
+   "label": "New Accrual Document",
+   "options": "Loan Interest Accrual",
+    "read_only": 1
+  },
+  {
+   "default": "__user",
+   "fieldname": "user",
+   "fieldtype": "Link",
+   "label": "User",
+   "options": "User",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "default": "Now",
+   "fieldname": "timestamp",
+   "fieldtype": "Datetime",
+   "label": "Timestamp",
+   "read_only": 1,
+   "reqd": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "module": "RIPL Customized Apps",
+ "name": "Loan Adjustment Log",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "read": 1,
+   "role": "HR Manager",
+   "write": 0
+  },
+  {
+   "create": 1,
+   "read": 1,
+   "role": "System Manager",
+   "write": 0
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "track_changes": 1
+}
