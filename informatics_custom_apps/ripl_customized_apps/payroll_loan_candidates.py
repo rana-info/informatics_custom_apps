@@ -2,7 +2,7 @@ import json
 
 import frappe
 from frappe import _
-from frappe.utils import cint, flt
+from frappe.utils import cint, flt, getdate
 
 
 THRESHOLD_FIELD = "loan_repayment_threshold_percent"
@@ -240,7 +240,7 @@ def _get_due_loan_schedules_for_employees(employees, start_date, end_date, payro
 		"Repayment Schedule",
 		filters={
 			"parent": ("in", [schedule.name for schedule in schedules]),
-			"payment_date": ("between", [start_date, end_date]),
+			"payment_date": ("<=", end_date),
 		},
 		fields=[
 			"name",
@@ -256,6 +256,10 @@ def _get_due_loan_schedules_for_employees(employees, start_date, end_date, payro
 	)
 	if not rows:
 		return due_by_employee
+	row_by_name = {row.name: row for row in rows}
+	rows_by_schedule = {}
+	for row in rows:
+		rows_by_schedule.setdefault(row.parent, []).append(row)
 	prior_logs = {}
 	for log in _get_active_adjustment_logs(payroll_entry, employees, list(loan_by_name)):
 		prior_logs.setdefault((log.employee, log.loan), log)
@@ -278,27 +282,101 @@ def _get_due_loan_schedules_for_employees(employees, start_date, end_date, payro
 			)
 		}
 
-	for row in rows:
-		schedule = schedule_by_name[row.parent]
-		loan = loan_by_name[schedule.loan]
-		adjustment_log = prior_logs.get((loan.applicant, loan.name))
-		if adjustment_log:
-			row = _restore_prior_schedule_row(row, adjustment_log, accruals)
-		due_by_employee[loan.applicant].append(
-			{
-				"loan": loan.name,
-				"start_date": loan.disbursement_date or loan.posting_date or loan.repayment_start_date,
-				"schedule": schedule.name,
-				"schedule_row": row.name,
-				"payment_date": row.payment_date,
-				"scheduled_amount": flt(
-					row.get("scheduled_amount", row.total_payment), _currency_precision()
-				),
-				"principal_amount": flt(row.principal_amount, _currency_precision()),
-				"interest_amount": flt(row.interest_amount, _currency_precision()),
-				"balance_loan_amount": flt(row.balance_loan_amount, _currency_precision()),
-			}
+	from lending.loan_management.doctype.loan_repayment.loan_repayment import get_accrued_interest_entries
+
+	unpaid_entries_by_loan = {
+		loan_name: get_accrued_interest_entries(loan_name, end_date) for loan_name in loan_by_name
+	}
+	unpaid_entry_names = [
+		entry.name for entries in unpaid_entries_by_loan.values() for entry in entries
+	]
+	accrual_rows = {}
+	if unpaid_entry_names:
+		accrual_rows = {
+			entry.name: entry
+			for entry in frappe.get_all(
+				"Loan Interest Accrual",
+				filters={"name": ("in", unpaid_entry_names)},
+				fields=["name", "repayment_schedule_name"],
+			)
+		}
+
+	precision = _currency_precision()
+	for loan in loans:
+		schedule = next(
+			(schedule for schedule in schedules if schedule.loan == loan.name), None
 		)
+		if not schedule:
+			continue
+
+		unpaid_by_schedule = {}
+		for entry in unpaid_entries_by_loan.get(loan.name, []):
+			accrual_row = accrual_rows.get(entry.name)
+			if not accrual_row or accrual_row.repayment_schedule_name not in row_by_name:
+				continue
+			unpaid_by_schedule.setdefault(accrual_row.repayment_schedule_name, []).append(entry)
+
+		loan_due_rows = []
+		if unpaid_by_schedule:
+			anchor_row = max(
+				(row_by_name[name] for name in unpaid_by_schedule),
+				key=lambda row: (str(row.payment_date), row.idx),
+			)
+			unpaid_schedule_rows = [row_by_name[name] for name in unpaid_by_schedule]
+			principal_amount = flt(
+				sum(flt(row.principal_amount, precision) for row in unpaid_schedule_rows), precision
+			)
+			interest_amount = flt(
+				sum(flt(row.interest_amount, precision) for row in unpaid_schedule_rows), precision
+			)
+			scheduled_amount = flt(
+				sum(flt(row.total_payment, precision) for row in unpaid_schedule_rows), precision
+			)
+			arrears_principal_amount = flt(
+				sum(
+					flt(row.principal_amount, precision)
+					for row in unpaid_schedule_rows
+					if row.name != anchor_row.name
+				),
+				precision,
+			)
+			row = frappe._dict(anchor_row)
+			row.scheduled_amount = scheduled_amount
+			row.scheduled_principal_amount = flt(anchor_row.principal_amount, precision)
+			row.principal_amount = principal_amount
+			row.interest_amount = interest_amount
+			row.arrears_principal_amount = arrears_principal_amount
+			loan_due_rows.append(row)
+		else:
+			loan_due_rows.extend(
+				row
+				for row in rows_by_schedule.get(schedule.name, [])
+				if getdate(start_date) <= getdate(row.payment_date) <= getdate(end_date)
+			)
+
+		for row in loan_due_rows:
+			adjustment_log = prior_logs.get((loan.applicant, loan.name))
+			if adjustment_log:
+				row = _restore_prior_schedule_row(row, adjustment_log, accruals)
+			due_by_employee[loan.applicant].append(
+				{
+					"loan": loan.name,
+					"start_date": loan.disbursement_date or loan.posting_date or loan.repayment_start_date,
+					"schedule": schedule.name,
+					"schedule_row": row.name,
+					"payment_date": row.payment_date,
+					"scheduled_amount": flt(
+						row.get("scheduled_amount", row.total_payment), precision
+					),
+					"principal_amount": flt(row.principal_amount, precision),
+					"interest_amount": flt(row.interest_amount, precision),
+					"balance_loan_amount": flt(row.balance_loan_amount, precision),
+					"arrears_principal_amount": flt(row.get("arrears_principal_amount", 0), precision),
+					"scheduled_principal_amount": flt(
+						row.get("scheduled_principal_amount", row.principal_amount), precision
+					),
+				}
+			)
 	for due_loans in due_by_employee.values():
 		due_loans.sort(key=lambda item: (str(item["start_date"] or ""), item["loan"], str(item["payment_date"])))
 	return due_by_employee
@@ -352,6 +430,10 @@ def _build_candidates(payroll_entry, threshold):
 							"principal_amount": item["principal_amount"],
 							"interest_amount": item["interest_amount"],
 							"balance_loan_amount": item["balance_loan_amount"],
+							"arrears_principal_amount": item.get("arrears_principal_amount", 0),
+							"scheduled_principal_amount": item.get(
+								"scheduled_principal_amount", item["principal_amount"]
+							),
 						}
 						for item in due_loans
 					],

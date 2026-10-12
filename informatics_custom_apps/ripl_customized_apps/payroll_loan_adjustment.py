@@ -169,7 +169,15 @@ def _rebuild_legacy_schedule_baseline(schedule, loan_doc):
 	return _schedule_snapshot(schedule)
 
 
-def _recalculate_schedule(schedule, current_row, principal_paid, interest_paid, increase_schedule):
+def _recalculate_schedule(
+	schedule,
+	current_row,
+	principal_paid,
+	interest_paid,
+	increase_schedule,
+	arrears_principal_amount=0,
+	scheduled_principal_amount=None,
+):
 	from lending.loan_management.doctype.loan_repayment_schedule.loan_repayment_schedule import (
 		add_single_month,
 	)
@@ -178,9 +186,15 @@ def _recalculate_schedule(schedule, current_row, principal_paid, interest_paid, 
 	current_date = getdate(current_row.payment_date)
 	future_rows = [row for row in schedule.repayment_schedule if getdate(row.payment_date) > current_date]
 
-	scheduled_principal = flt(current_row.principal_amount, precision)
+	if scheduled_principal_amount is None:
+		scheduled_principal_amount = current_row.principal_amount
+	scheduled_principal = flt(scheduled_principal_amount, precision)
 	outstanding_after_month = flt(
-		current_row.balance_loan_amount + scheduled_principal - flt(principal_paid, precision), precision
+		current_row.balance_loan_amount
+		+ scheduled_principal
+		+ flt(arrears_principal_amount, precision)
+		- flt(principal_paid, precision),
+		precision,
 	)
 	current_row.principal_amount = flt(principal_paid, precision)
 	current_row.interest_amount = flt(interest_paid, precision)
@@ -353,7 +367,13 @@ def _apply_one_loan(payroll_entry, allocation, schedule_choice, old_accruals=Non
 		allocation, allocation["hr_amount"], _currency_precision()
 	)
 	_recalculate_schedule(
-		schedule, schedule_row, principal_paid, interest_paid, schedule_choice == "Yes"
+		schedule,
+		schedule_row,
+		principal_paid,
+		interest_paid,
+		schedule_choice == "Yes",
+		allocation.get("arrears_principal_amount", 0),
+		allocation.get("scheduled_principal_amount"),
 	)
 	new_accrual = _make_replacement_accrual(
 		loan_doc,

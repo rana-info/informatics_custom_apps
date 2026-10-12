@@ -99,7 +99,8 @@ class TestPayrollLoanAdjustment(FrappeTestCase):
 			self.assertEqual(accrual.get(fieldname), f"TEST-{fieldname.upper()}")
 
 	def test_default_threshold_is_ten_percent(self):
-		self.assertEqual(candidates._get_threshold(), 10)
+		with patch("frappe.db.get_single_value", return_value=None):
+			self.assertEqual(candidates._get_threshold(), 10)
 
 	def test_candidate_endpoint_returns_candidates_synchronously(self):
 		payroll_entry = frappe._dict(name="PE-CANDIDATES")
@@ -221,6 +222,73 @@ class TestPayrollLoanAdjustment(FrappeTestCase):
 		self.assertEqual(result[0]["loans"][0]["schedule"], "SCHEDULE-1")
 		self.assertEqual(result[0]["loans"][0]["schedule_row"], "ROW-1")
 		self.assertEqual(result[0]["loans"][0]["principal_amount"], 6000)
+
+	def test_candidate_lookup_aggregates_unpaid_arrears_for_eligibility(self):
+		loan = frappe._dict(
+			name="LOAN-1",
+			applicant="EMP-1",
+			disbursement_date="2025-01-01",
+			loan_product="PRODUCT-1",
+		)
+		schedule = frappe._dict(name="SCHEDULE-1", loan="LOAN-1")
+		schedule_rows = [
+			frappe._dict(
+				name=f"ROW-{month}",
+				parent="SCHEDULE-1",
+				payment_date=f"2025-0{month}-01",
+				principal_amount=26000 if month == 3 else 10000,
+				interest_amount=0,
+				total_payment=26000 if month == 3 else 10000,
+				balance_loan_amount=23000 if month == 3 else 20000,
+				number_of_days=30,
+				idx=month,
+			)
+			for month in (1, 2, 3)
+		]
+		accrued_entries = [
+			frappe._dict(
+				name=f"ACCRUAL-{month}",
+				due_date=f"2025-0{month}-01",
+				payable_principal_amount=21000 if month == 3 else 10000,
+				interest_amount=0,
+			)
+			for month in (1, 2, 3)
+		]
+		get_all_results = [
+			[loan],
+			[schedule],
+			schedule_rows,
+			[
+				frappe._dict(name=f"ACCRUAL-{month}", repayment_schedule_name=f"ROW-{month}")
+				for month in (1, 2, 3)
+			],
+		]
+		payroll_entry = frappe._dict(
+			name=None,
+			make_filters=MagicMock(return_value={}),
+			start_date="2025-03-01",
+			end_date="2025-03-31",
+		)
+		with (
+			patch(
+				"hrms.payroll.doctype.payroll_entry.payroll_entry.get_employee_list",
+				return_value=[frappe._dict(employee="EMP-1", employee_name="Employee One")],
+			),
+			patch("frappe.get_all", side_effect=get_all_results),
+			patch(
+				"lending.loan_management.doctype.loan_repayment.loan_repayment.get_accrued_interest_entries",
+				return_value=accrued_entries,
+			),
+			patch.object(candidates, "_preview_salary_amounts", return_value=(50000, 0)),
+		):
+			result = candidates._build_candidates(payroll_entry, 10)
+
+		self.assertEqual(len(result), 1)
+		self.assertEqual(result[0]["scheduled_amount"], 46000)
+		self.assertEqual(result[0]["net_after_loan"], 4000)
+		self.assertEqual(result[0]["loans"][0]["schedule_row"], "ROW-3")
+		self.assertEqual(result[0]["loans"][0]["arrears_principal_amount"], 20000)
+		self.assertEqual(result[0]["loans"][0]["scheduled_principal_amount"], 26000)
 
 	def test_schedule_candidate_lookup_ignores_adjustment_logs_for_cancelled_payroll(self):
 		logs = [
@@ -555,6 +623,40 @@ class TestPayrollLoanAdjustment(FrappeTestCase):
 		self.assertEqual(current.balance_loan_amount, 0)
 		self.assertEqual(schedule.repayment_periods, len(schedule.repayment_schedule))
 		self.assertTrue(schedule.saved)
+
+	def test_arrears_principal_is_included_when_recalculating_balance(self):
+		schedule = FakeSchedule()
+		current = schedule.repayment_schedule[2]
+		current.balance_loan_amount = 0
+		current.principal_amount = 10000
+		with patch.object(adjustment, "_currency_precision", return_value=2), patch(
+			"frappe.get_cached_doc",
+			return_value=frappe._dict(
+				repayment_schedule_type="Monthly as per repayment start date",
+				repayment_date_on="End of the current month",
+			),
+		):
+			adjustment._recalculate_schedule(schedule, current, 30000, 0, False, 20000)
+
+		self.assertEqual(current.balance_loan_amount, 0)
+		self.assertEqual(schedule.repayment_schedule[3].balance_loan_amount, 0)
+
+	def test_schedule_principal_amount_is_preserved_when_accrual_was_stale(self):
+		schedule = FakeSchedule()
+		current = schedule.repayment_schedule[2]
+		current.balance_loan_amount = 23000
+		with patch.object(adjustment, "_currency_precision", return_value=2), patch(
+			"frappe.get_cached_doc",
+			return_value=frappe._dict(
+				repayment_schedule_type="Monthly as per repayment start date",
+				repayment_date_on="End of the current month",
+			),
+		):
+			adjustment._recalculate_schedule(
+				schedule, current, 26000, 0, False, scheduled_principal_amount=26000
+			)
+
+		self.assertEqual(current.balance_loan_amount, 23000)
 
 	def test_no_choice_requires_extension_when_final_instalment_leaves_balance(self):
 		schedule = FakeSchedule()
