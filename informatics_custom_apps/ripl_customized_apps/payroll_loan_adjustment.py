@@ -187,6 +187,19 @@ def _recalculate_schedule(schedule, current_row, principal_paid, interest_paid, 
 	current_row.total_payment = flt(principal_paid + interest_paid, precision)
 	current_row.balance_loan_amount = outstanding_after_month
 
+	if not increase_schedule and not future_rows:
+		if flt(outstanding_after_month, precision) > 0:
+			frappe.throw(
+				_("Loan {0} is on its final instalment. Select Yes to extend the repayment schedule.").format(
+					schedule.loan
+				)
+			)
+		schedule.repayment_periods = len(schedule.repayment_schedule)
+		schedule.flags.ignore_validate = True
+		schedule.flags.ignore_validate_update_after_submit = True
+		schedule.save(ignore_permissions=True)
+		return
+
 	loan_product = frappe.get_cached_doc("Loan Product", schedule.loan_product)
 	if increase_schedule:
 		balance = outstanding_after_month
@@ -519,7 +532,12 @@ def prevent_salary_slip_submit_during_loan_adjustment(doc, method=None):
 	if status in (JobStatus.QUEUED, JobStatus.STARTED):
 		frappe.throw(_("Loan repayment adjustments are still processing for this Payroll Entry. Try again shortly."))
 	if status == JobStatus.FAILED:
-		frappe.throw(_("The loan adjustment failed. Reopen the Payroll Entry and apply the adjustment again."))
+		frappe.throw(
+			_(
+				"The previous loan adjustment failed. Reopen the Payroll Entry and apply it again. "
+				"If reducing the final instalment, select Yes to extend the repayment schedule."
+			)
+		)
 
 
 @frappe.whitelist(methods=["POST"])

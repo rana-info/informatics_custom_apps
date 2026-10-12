@@ -484,7 +484,7 @@ class TestPayrollLoanAdjustment(FrappeTestCase):
 
 		doc = frappe._dict(payroll_entry="PE-1")
 		with patch("frappe.utils.background_jobs.get_job_status", return_value=JobStatus.FAILED):
-			with self.assertRaisesRegex(frappe.ValidationError, "adjustment failed"):
+			with self.assertRaisesRegex(frappe.ValidationError, "select Yes to extend"):
 				adjustment.prevent_salary_slip_submit_during_loan_adjustment(doc)
 
 	def test_salary_slip_submission_is_allowed_after_adjustment_finishes(self):
@@ -545,6 +545,23 @@ class TestPayrollLoanAdjustment(FrappeTestCase):
 		self.assertEqual(schedule.monthly_repayment_amount, 6222.22)
 		self.assertEqual(round(sum(row.principal_amount for row in future_rows), 2), 56000)
 		self.assertEqual(future_rows[-1].balance_loan_amount, 0)
+
+	def test_no_choice_allows_full_payment_of_final_instalment(self):
+		schedule = FakeSchedule()
+		current = schedule.repayment_schedule[-1]
+		with patch.object(adjustment, "_currency_precision", return_value=2):
+			adjustment._recalculate_schedule(schedule, current, 6000, 0, False)
+
+		self.assertEqual(current.balance_loan_amount, 0)
+		self.assertEqual(schedule.repayment_periods, len(schedule.repayment_schedule))
+		self.assertTrue(schedule.saved)
+
+	def test_no_choice_requires_extension_when_final_instalment_leaves_balance(self):
+		schedule = FakeSchedule()
+		current = schedule.repayment_schedule[-1]
+		with patch.object(adjustment, "_currency_precision", return_value=2):
+			with self.assertRaisesRegex(frappe.ValidationError, "Select Yes to extend"):
+				adjustment._recalculate_schedule(schedule, current, 5000, 0, False)
 
 	def test_hr_amount_follows_scheduled_principal_interest_split(self):
 		class FakeAccrual(frappe._dict):
