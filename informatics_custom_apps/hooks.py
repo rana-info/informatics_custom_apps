@@ -65,8 +65,10 @@ doctype_js = {
     "Asset": "public/js/asset_date_custom.js",
     "Purchase Receipt": "public/js/purchase_receipt.js",
     "Purchase Invoice" : "public/js/purchase_invoice.js",
-    "Sales Invoice": "public/js/sales_invoice.js"
+    "Sales Invoice": "public/js/sales_invoice.js",
+    "Loan Repayment Schedule": "public/js/loan_repayment_schedule.js"
 }
+fixtures = [{"dt": "Custom Field", "filters": [["name", "in", ["Repayment Schedule-custom_skipped"]]]}]
 # doc_events = {
 #     "Leave Application": {
 #         "on_submit": "informatics_custom_apps.api.update_attendance_for_half_day"
