@@ -1,6 +1,6 @@
 frappe.ui.form.on("Loan Repayment Schedule", {
   refresh(frm) {
-    if (frm.doc.docstatus === 1 && frm.doc.status === "Active") {
+    if (frm.doc.docstatus === 1 && frm.doc.status === "Active" && frm.session.user.has_role("HR Manager")) {
       frm.add_custom_button(
         __("Skip Instalments"),
         () => show_skip_dialog(frm),
