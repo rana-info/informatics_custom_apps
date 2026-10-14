@@ -2,7 +2,7 @@ import json
 
 import frappe
 from frappe import _
-from frappe.utils import flt, getdate, now_datetime
+from frappe.utils import escape_html, flt, getdate, now_datetime
 
 from .payroll_loan_candidates import (
 	_build_candidates,
@@ -538,6 +538,39 @@ def restore_loan_adjustments_on_payroll_cancel(doc, method=None):
 		order_by="creation asc",
 	)
 	_restore_and_delete_loan_adjustment_logs(loan_logs)
+
+
+def apply_staged_loan_adjustments_before_payroll_submit(doc, method=None):
+	payload = doc.get("loan_repayment_adjustment_data")
+	if not payload:
+		return
+	if isinstance(payload, str):
+		payload = json.loads(payload)
+	if not isinstance(payload, dict):
+		frappe.throw(_("Pending loan repayment adjustments must be a JSON object."))
+
+	adjustments = payload.get("adjustments")
+	excluded_employees = payload.get("excluded_employees", [])
+	if not isinstance(adjustments, list) or not isinstance(excluded_employees, list):
+		frappe.throw(_("Pending loan repayment adjustments contain invalid employee data."))
+
+	result = _apply_loan_repayment_adjustments_sync(
+		doc.name,
+		adjustments,
+		excluded_employees=excluded_employees,
+	)
+	doc.loan_repayment_adjustment_data = None
+	if result.get("skipped"):
+		frappe.msgprint(
+			{
+				"title": _("Some loan adjustments were skipped"),
+				"message": "<br>".join(
+					_("{0}: {1}").format(escape_html(item["employee"]), escape_html(item["reason"]))
+					for item in result["skipped"]
+				),
+				"indicator": "orange",
+			}
+		)
 
 
 def prevent_salary_slip_submit_during_loan_adjustment(doc, method=None):

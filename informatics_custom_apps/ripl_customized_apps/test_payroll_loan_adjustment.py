@@ -72,9 +72,41 @@ class TestPayrollLoanAdjustment(FrappeTestCase):
 		from informatics_custom_apps import hooks
 
 		self.assertEqual(
+			hooks.override_doctype_class["Payroll Entry"],
+			"informatics_custom_apps.ripl_customized_apps.payroll_entry.CustomPayrollEntry",
+		)
+		self.assertEqual(
+			hooks.doc_events["Payroll Entry"]["before_submit"],
+			"informatics_custom_apps.ripl_customized_apps.payroll_loan_adjustment.apply_staged_loan_adjustments_before_payroll_submit",
+		)
+		self.assertEqual(
 			hooks.doc_events["Payroll Entry"]["on_cancel"],
 			"informatics_custom_apps.ripl_customized_apps.payroll_loan_adjustment.restore_loan_adjustments_on_payroll_cancel",
 		)
+
+	def test_staged_loan_adjustments_are_applied_before_payroll_submit(self):
+		doc = frappe._dict(
+			name="PE-STAGED",
+			loan_repayment_adjustment_data=json.dumps(
+				{
+					"adjustments": [{"employee": "EMP-1", "hr_amount": 500, "schedule_choice": "Yes"}],
+					"excluded_employees": ["EMP-2"],
+				}
+			),
+		)
+		with patch.object(
+			adjustment,
+			"_apply_loan_repayment_adjustments_sync",
+			return_value={"skipped": []},
+		) as apply_adjustments:
+			adjustment.apply_staged_loan_adjustments_before_payroll_submit(doc)
+
+		apply_adjustments.assert_called_once_with(
+			"PE-STAGED",
+			[{"employee": "EMP-1", "hr_amount": 500, "schedule_choice": "Yes"}],
+			excluded_employees=["EMP-2"],
+		)
+		self.assertIsNone(doc.loan_repayment_adjustment_data)
 
 	def test_payroll_entry_employee_removal_hook_is_registered(self):
 		from informatics_custom_apps import hooks
@@ -285,6 +317,7 @@ class TestPayrollLoanAdjustment(FrappeTestCase):
 
 		self.assertEqual(len(result), 1)
 		self.assertEqual(result[0]["scheduled_amount"], 46000)
+		self.assertEqual(result[0]["hr_default_amount"], 26000)
 		self.assertEqual(result[0]["net_after_loan"], 4000)
 		self.assertEqual(result[0]["loans"][0]["schedule_row"], "ROW-3")
 		self.assertEqual(result[0]["loans"][0]["arrears_principal_amount"], 20000)

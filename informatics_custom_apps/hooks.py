@@ -211,6 +211,7 @@ doc_events["Additional Salary"] = {
 }
 
 doc_events["Payroll Entry"] = {
+    "before_submit": "informatics_custom_apps.ripl_customized_apps.payroll_loan_adjustment.apply_staged_loan_adjustments_before_payroll_submit",
     "on_update": "informatics_custom_apps.ripl_customized_apps.payroll_loan_adjustment.restore_loan_adjustments_on_employee_removal",
     "on_cancel": "informatics_custom_apps.ripl_customized_apps.payroll_loan_adjustment.restore_loan_adjustments_on_payroll_cancel"
 }
@@ -324,4 +325,3 @@ override_whitelisted_methods = {
 # default_log_clearing_doctypes = {
 # 	"Logging DocType Name": 30  # days to retain logs
 # }
-

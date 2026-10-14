@@ -302,12 +302,22 @@ def _get_due_loan_schedules_for_employees(employees, start_date, end_date, payro
 		}
 
 	precision = _currency_precision()
+	period_start = getdate(start_date)
+	period_end = getdate(end_date)
 	for loan in loans:
 		schedule = next(
 			(schedule for schedule in schedules if schedule.loan == loan.name), None
 		)
 		if not schedule:
 			continue
+		hr_default_amount = flt(
+			sum(
+				flt(row.total_payment, precision)
+				for row in rows_by_schedule.get(schedule.name, [])
+				if period_start <= getdate(row.payment_date) <= period_end
+			),
+			precision,
+		)
 
 		unpaid_by_schedule = {}
 		for entry in unpaid_entries_by_loan.get(loan.name, []):
@@ -368,6 +378,7 @@ def _get_due_loan_schedules_for_employees(employees, start_date, end_date, payro
 					"scheduled_amount": flt(
 						row.get("scheduled_amount", row.total_payment), precision
 					),
+					"hr_default_amount": hr_default_amount,
 					"principal_amount": flt(row.principal_amount, precision),
 					"interest_amount": flt(row.interest_amount, precision),
 					"balance_loan_amount": flt(row.balance_loan_amount, precision),
@@ -410,6 +421,10 @@ def _build_candidates(payroll_entry, threshold):
 
 		gross_pay, other_deductions = _preview_salary_amounts(payroll_entry, employee)
 		scheduled_amount = flt(sum(item["scheduled_amount"] for item in due_loans), precision)
+		hr_default_amount = flt(
+			sum(item.get("hr_default_amount", item["scheduled_amount"]) for item in due_loans),
+			precision,
+		)
 		net_after_loan = flt(gross_pay - other_deductions - scheduled_amount, precision)
 		if _is_eligible(gross_pay, other_deductions, scheduled_amount, threshold, precision):
 			eligible.append(
@@ -419,6 +434,7 @@ def _build_candidates(payroll_entry, threshold):
 					"gross_pay": gross_pay,
 					"other_deductions": other_deductions,
 					"scheduled_amount": scheduled_amount,
+					"hr_default_amount": hr_default_amount,
 					"net_after_loan": net_after_loan,
 					"loans": [
 						{

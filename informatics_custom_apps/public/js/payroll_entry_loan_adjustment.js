@@ -5,6 +5,57 @@ function escapeLoanAdjustmentHTML(value) {
 	return frappe.utils.escape_html(String(value ?? ""));
 }
 
+function getLoanAdjustmentNegativeEmployees(dialog, rows) {
+	const precision = cint(frappe.defaults.get_default("currency_precision")) || 2;
+	const wrapper = dialog.fields_dict.employee_rows.$wrapper;
+	const negativeEmployees = [];
+	for (const [index, row] of rows.entries()) {
+		const excluded = wrapper
+			.find(`.exclude-loan-employee[data-index="${index}"]`)
+			.is(":checked");
+		if (excluded) continue;
+		const amountInput = wrapper.find(`.hr-loan-amount[data-index="${index}"]`);
+		const amount = Number(amountInput.val());
+		if (!Number.isFinite(amount)) continue;
+		const netAfterAdjustment = flt(row.gross_pay - row.other_deductions - amount, precision);
+		if (netAfterAdjustment < 0) {
+			negativeEmployees.push({
+				employee: row.employee,
+				netAfterAdjustment,
+			});
+		}
+	}
+	return negativeEmployees;
+}
+
+function updateLoanAdjustmentWarningStatus(dialog, rows) {
+	const wrapper = dialog.fields_dict.employee_rows.$wrapper;
+	const status = wrapper.find(".loan-adjustment-status");
+	const negativeEmployees = getLoanAdjustmentNegativeEmployees(dialog, rows);
+	const primaryButton = dialog.get_primary_btn && dialog.get_primary_btn();
+	if (negativeEmployees.length) {
+		const details = negativeEmployees
+			.map(({ employee, netAfterAdjustment }) => {
+				return `${escapeLoanAdjustmentHTML(employee)} (${format_currency(netAfterAdjustment, dialog.frm.doc.currency)})`;
+			})
+			.join(", ");
+		status
+			.removeClass("text-muted text-success")
+			.addClass("text-warning")
+			.html(
+				`${__("Warning")}: ${__("Net salary remains negative for")}: ${details}. ${__("Adjust the HR loan amount or exclude the employee before continuing.")}`,
+			);
+		if (primaryButton) primaryButton.prop("disabled", true);
+		return false;
+	}
+	status
+		.removeClass("text-warning text-danger")
+		.addClass("text-muted")
+		.text(__("No negative net payroll values after HR loan adjustments."));
+	if (primaryButton) primaryButton.prop("disabled", false);
+	return true;
+}
+
 function renderLoanAdjustmentRows(dialog, rows, currency) {
 	const precision = cint(frappe.defaults.get_default("currency_precision")) || 2;
 	const payrollPeriod = `${frappe.datetime.str_to_user(dialog.frm.doc.start_date)} - ${frappe.datetime.str_to_user(dialog.frm.doc.end_date)}`;
@@ -13,20 +64,26 @@ function renderLoanAdjustmentRows(dialog, rows, currency) {
 		.map((row, index) => {
 			const employee = escapeLoanAdjustmentHTML(row.employee);
 			const employeeName = escapeLoanAdjustmentHTML(row.employee_name);
+			const scheduledThisMonth = flt(
+				row.hr_default_amount ?? row.scheduled_amount,
+				precision,
+			);
+			const defaultHrAmount = flt(row.scheduled_amount, precision);
 			const currentMonthNet = flt(row.gross_pay - row.other_deductions, precision);
-			const estimatedNet = flt(row.gross_pay - row.other_deductions - row.scheduled_amount, precision);
+			const estimatedNet = flt(row.gross_pay - row.other_deductions - defaultHrAmount, precision);
 			return `<tr data-index="${index}">
 				<td><strong>${employee}</strong><br>${employeeName}</td>
 				<td class="text-right">${format_currency(currentMonthNet, currency)}</td>
 				<td class="text-right estimated-net-pay" data-index="${index}">${format_currency(estimatedNet, currency)}</td>
 				<td class="text-right">${format_currency(row.scheduled_amount, currency)}</td>
-				<td><input class="form-control input-sm hr-loan-amount" type="number" min="0" step="${1 / 10 ** precision}" value="${flt(row.scheduled_amount, precision)}" data-index="${index}"></td>
-				<td><select class="form-control input-sm loan-schedule-choice" data-index="${index}"><option value=""></option><option value="Yes">Yes</option><option value="No">No</option></select></td>
+				<td class="text-right">${format_currency(scheduledThisMonth, currency)}</td>
+				<td><input class="form-control input-sm hr-loan-amount" type="number" min="0" step="${1 / 10 ** precision}" value="${defaultHrAmount}" data-index="${index}"></td>
+				<td><select class="form-control input-sm loan-schedule-choice" data-index="${index}"><option value="Yes" selected>Yes</option><option value="No">No</option></select></td>
 				<td class="text-center"><input class="exclude-loan-employee" type="checkbox" aria-label="${__("Exclude {0} from payroll", [employee])}" data-index="${index}"></td>
 			</tr>`;
 		})
 		.join("")
-		: `<tr><td colspan="7" class="text-muted">${__("No employees meet the loan repayment threshold.")}</td></tr>`;
+		: `<tr><td colspan="8" class="text-muted">${__("No employees meet the loan repayment threshold.")}</td></tr>`;
 
 	dialog.fields_dict.employee_rows.$wrapper.html(`
 		<div class="loan-adjustment-table-wrap">
@@ -42,6 +99,7 @@ function renderLoanAdjustmentRows(dialog, rows, currency) {
 						<th class="text-right">${__("Net salary for current month (before loan deduction)")}</th>
 						<th class="text-right">${__("Estimated net after HR loan deduction")}</th>
 						<th class="text-right">${__("Scheduled loan deduction")}</th>
+						<th class="text-right">${__("Scheduled this month deduction")}</th>
 						<th>${__("Loan deduction by HR")}</th>
 						<th>${__("Increase repayment schedule")}</th>
 						<th>${__("Exclude from payroll")}</th>
@@ -52,8 +110,18 @@ function renderLoanAdjustmentRows(dialog, rows, currency) {
 		</div>`);
 
 	const wrapper = dialog.fields_dict.employee_rows.$wrapper;
+	wrapper.find(".hr-loan-amount").each(function () {
+		const input = $(this);
+		const index = cint(input.attr("data-index"));
+		const defaultValue = flt(rows[index]?.scheduled_amount, precision);
+		if (input.val() === "" || !Number.isFinite(Number(input.val()))) {
+			input.val(defaultValue);
+		}
+	});
 	wrapper.off("click.loanAdjustment", ".loan-adjustment-refresh");
 	wrapper.off("input.loanAdjustment", ".hr-loan-amount");
+	wrapper.off("change.loanAdjustment", ".loan-schedule-choice");
+	wrapper.off("change.loanAdjustment", ".exclude-loan-employee");
 	wrapper.on("click.loanAdjustment", ".loan-adjustment-refresh", () =>
 		refreshLoanAdjustmentRows(dialog, currency),
 	);
@@ -67,7 +135,15 @@ function renderLoanAdjustmentRows(dialog, rows, currency) {
 			: null;
 		const display = netPay === null ? "-" : format_currency(netPay, currency);
 		wrapper.find(`.estimated-net-pay[data-index="${index}"]`).text(display);
+		updateLoanAdjustmentWarningStatus(dialog, rows);
 	});
+	wrapper.on("change.loanAdjustment", ".loan-schedule-choice", () => {
+		updateLoanAdjustmentWarningStatus(dialog, rows);
+	});
+	wrapper.on("change.loanAdjustment", ".exclude-loan-employee", () => {
+		updateLoanAdjustmentWarningStatus(dialog, rows);
+	});
+	updateLoanAdjustmentWarningStatus(dialog, rows);
 }
 
 function fetchLoanAdjustmentCandidates(frm) {
@@ -139,6 +215,18 @@ function showLoanAdjustmentDialog(frm, response) {
 	dialog.set_primary_action(__("Apply and Continue"), async () => {
 		let adjustmentValues;
 		try {
+			const negativeEmployees = getLoanAdjustmentNegativeEmployees(dialog, dialog.loan_adjustment_rows);
+			if (negativeEmployees.length) {
+				const details = negativeEmployees
+					.map(({ employee, netAfterAdjustment }) => `${escapeLoanAdjustmentHTML(employee)} (${format_currency(netAfterAdjustment, frm.doc.currency)})`)
+					.join("<br>");
+				frappe.msgprint({
+					title: __("Warning"),
+					message: `${__("Net salary remains negative for the following employee(s) after HR loan adjustment:")}<br><br>${details}<br><br>${__("Adjust the HR loan amount or exclude the employee before continuing.")}`,
+					indicator: "orange",
+				});
+				return;
+			}
 			adjustmentValues = collectLoanAdjustmentRows(dialog);
 		} catch (error) {
 			frappe.msgprint(error.message);
@@ -147,59 +235,17 @@ function showLoanAdjustmentDialog(frm, response) {
 		const primaryButton = dialog.get_primary_btn();
 		primaryButton.prop("disabled", true);
 		dialog.hide();
-		let completionEvent;
-		let onComplete;
 		try {
-			await runStandardGetEmployeeDetails(frm, adjustmentValues.excludedEmployees);
-
-			completionEvent = "loan_repayment_adjustment_complete";
-			let requestQueued = false;
-			let earlyCompletion = null;
-			const handleCompletion = (message) => {
-				frappe.realtime.off(completionEvent, onComplete);
-				if (message.status === "error") {
-					frappe.msgprint(message.error || __("The loan adjustment failed."));
-					return;
-				}
-				if (message.skipped?.length) {
-					frappe.msgprint({
-						title: __("Some employees were skipped"),
-						message: message.skipped
-							.map((item) => `${escapeLoanAdjustmentHTML(item.employee)}: ${escapeLoanAdjustmentHTML(item.reason)}`)
-							.join("<br>"),
-					});
-				}
-			};
-			onComplete = (message) => {
-				if (message.payroll_entry !== frm.doc.name) return;
-				if (!requestQueued) {
-					earlyCompletion = message;
-					return;
-				}
-				handleCompletion(message);
-			};
-			frappe.realtime.on(completionEvent, onComplete);
-
-			const result = await frappe.call({
-				method: "informatics_custom_apps.ripl_customized_apps.payroll_loan_adjustment.apply_loan_repayment_adjustments",
-				args: {
-					payroll_entry: frm.doc.name,
-					adjustments: adjustmentValues.adjustments,
-					excluded_employees: adjustmentValues.excludedEmployees,
-				},
-				freeze: false,
+			frm.doc.loan_repayment_adjustment_data = JSON.stringify({
+				adjustments: adjustmentValues.adjustments,
+				excluded_employees: adjustmentValues.excludedEmployees,
 			});
-			if (!result.message?.queued) {
-				throw new Error(__("The loan adjustment job was not queued."));
-			}
-			requestQueued = true;
-			if (earlyCompletion) {
-				handleCompletion(earlyCompletion);
-			}
+			await runStandardGetEmployeeDetails(frm, adjustmentValues.excludedEmployees);
+			// frappe.show_alert({
+			// 	message: __("Payroll employees are ready. Loan adjustments and logs will be created when you click Create Salary Slips."),
+			// 	indicator: "blue",
+			// });
 		} catch (error) {
-			if (completionEvent && onComplete) {
-				frappe.realtime.off(completionEvent, onComplete);
-			}
 			frappe.msgprint(error.message || __("Unable to apply the loan adjustment."));
 		}
 	});
