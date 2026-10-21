@@ -1,6 +1,13 @@
 const PR_METHOD_PATH =
 	"informatics_custom_apps.ripl_customized_apps.report.payment_requisition.payment_requisition";
 
+// Payment Request fields the user selects per vendor (must match NATURE_FIELD / SECTION_FIELD in the .py)
+// [fieldname, label]: the field is found by fieldname first, then by its label (handles custom_nature etc.)
+const PR_VENDOR_FIELDS = [
+	["nature", "Nature"],
+	["section", "Section"],
+];
+
 function pr_link_options(doctype, txt, filters) {
 	return frappe.db.get_link_options(doctype, txt, filters).then((opts) =>
 		(opts || []).map((o) => ({
@@ -127,8 +134,8 @@ function pr_show_filter_labels(report) {
 }
 
 function pr_inject_style() {
-	$("#pr-style, #pr-style-v2, #pr-style-v3").remove();
-	if (document.getElementById("pr-style-v4")) return;
+	$("#pr-style, #pr-style-v2, #pr-style-v3, #pr-style-v4, #pr-style-v5, #pr-style-v6").remove();
+	if (document.getElementById("pr-style-v7")) return;
 	const css = `
 		.pr-flabel {
 			display: block !important;
@@ -150,29 +157,36 @@ function pr_inject_style() {
 		.pr-wide .pr-fixed { table-layout: fixed; width: 100%; }
 		.pr-wide .pr-fixed td, .pr-wide .pr-fixed th { overflow-wrap: anywhere; word-break: break-word; white-space: normal; vertical-align: middle; }
 		.pr-wide .pr-remarks > div { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-		.pr-btn-pay { color: #fff !important; font-weight: 600 !important; border: none !important; background: #2563eb !important; }
-		.pr-btn-pay:hover { background: #1d4ed8 !important; }
+		.pr-btn-pay { color: #fff !important; font-weight: 600 !important; border: none !important; background: #3b82f6 !important; }
+		.pr-btn-pay:hover { background: #2563eb !important; }
+		.pr-wide .modal-content { background: #f8fafc; }
+		.pr-wide .modal-body { background: #f8fafc; }
 		.pr-btn-pay[disabled] { opacity: .4; cursor: not-allowed; }
-		.pr-card { border: 3px solid var(--pc); border-radius: 12px; margin-bottom: 32px; overflow: hidden;
-			box-shadow: 0 4px 14px rgba(0,0,0,.25); background: var(--pt); }
+		.pr-card { border: 2px solid var(--pc); border-left-width: 10px; border-radius: 12px; margin-bottom: 30px;
+			overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,.08); background: var(--pt); }
 		.pr-card-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 16px;
-			background: var(--pc); color: #fff; }
-		.pr-card-title b { color: #fff; }
-		.pr-card-title .text-muted { color: #f3f4f6 !important; }
+			background: color-mix(in srgb, var(--pc) 24%, #fff); color: #111827; border-bottom: 2px solid var(--pc); }
+		.pr-card-title b { color: color-mix(in srgb, var(--pc) 65%, #000); }
+		.pr-card-title .text-muted { color: #6b7280 !important; }
 		.pr-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; height: 28px;
 			padding: 0 8px; border-radius: 14px; background: #fff; color: var(--pc); font-weight: 700; font-size: 13px; }
 		.pr-card-body { padding: 14px 16px; background: var(--pt); color: #111827; }
 		.pr-card-body .text-muted { color: #6b7280 !important; }
 		.pr-card-body table { background: #fff; color: #111827; }
-		.pr-card-body .pr-stat-box { background: #fff; border: 1px solid #d1d5db; border-radius: 8px; padding: 6px 12px; }
+		.pr-card-body .pr-stat-box { background: #fff; border: 1px solid var(--pc); border-radius: 8px; padding: 6px 12px; }
 		.pr-amt { font-weight: 700 !important; border-width: 2px !important; border-style: solid !important; color: #111827 !important; }
 		.pr-amt.pr-full { border-color: #16a34a !important; background: #dcfce7 !important; }
 		.pr-amt.pr-part { border-color: #ea580c !important; background: #ffedd5 !important; }
-		.pr-amt.pr-zero { border-color: #9ca3af !important; background: #e5e7eb !important; }
+		.pr-amt.pr-zero { border-color: #d1d5db !important; background: #f3f4f6 !important; }
 		.pr-legend { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; font-size: 12px; }
 		.pr-legend span.sw { display: inline-block; width: 14px; height: 14px; border-radius: 3px; margin-right: 5px; vertical-align: middle; border: 2px solid; }
+		.pr-vf { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end; background: #fff; border: 1px solid var(--pc);
+			border-radius: 8px; padding: 10px 14px 4px; margin-bottom: 12px; }
+		.pr-vf .pr-vf-slot { min-width: 220px; flex: 1 1 220px; max-width: 320px; }
+		.pr-vf .frappe-control { margin-bottom: 8px !important; }
+		.pr-vf .pr-vf-copy { margin-bottom: 12px; }
 	`;
-	$("<style id='pr-style-v4'>").text(css).appendTo("head");
+	$("<style id='pr-style-v7'>").text(css).appendTo("head");
 }
 
 const PR_PAYABLE_TYPES = ["Purchase Invoice", "Journal Entry"];
@@ -225,31 +239,28 @@ function pr_start_payment() {
 		args: { company: pr_company(), rows: rows },
 		freeze: true,
 		callback(r) {
-			frappe.call({
-				method: "frappe.client.get_list",
-				args: {
-					doctype: "Mode of Payment Account",
-					parent: "Mode of Payment",
-					filters: { company: pr_company() },
-					fields: ["parent"],
-					limit_page_length: 0,
-				},
-				callback(m) {
-					const modes = [...new Set((m.message || []).map((x) => x.parent))];
-					pr_show_dialog(rows, r.message || [], modes);
-				},
+			// load the Payment Request meta so Nature / Section use the exact field definitions (type, options, label)
+			frappe.model.with_doctype("Payment Request", () => {
+				const all_fields = (frappe.get_meta("Payment Request") || {}).fields || [];
+				const vendor_fields = PR_VENDOR_FIELDS.map(
+					([fieldname, label]) =>
+						frappe.meta.get_docfield("Payment Request", fieldname) ||
+						all_fields.find((df) => (df.label || "").trim().toLowerCase() === label.toLowerCase())
+				).filter(Boolean);
+				pr_show_dialog(rows, r.message || [], vendor_fields);
 			});
 		},
 	});
 }
 
-function pr_show_dialog(rows, summary, modes) {
-	modes = modes || [];
+function pr_show_dialog(rows, summary, vendor_fields) {
+	vendor_fields = vendor_fields || [];
 	pr_inject_style();
 	const esc = frappe.utils.escape_html;
 	const link = (type, no) =>
 		`<a href="/app/${frappe.router.slug(type)}/${encodeURIComponent(no)}" target="_blank">${esc(no)}</a>`;
 	const gkey = (r) => `${r.party}||${r.party_account}`;
+	const blank = (v) => v === null || v === undefined || String(v).trim() === "";
 
 	const sumMap = {};
 	summary.forEach((s) => (sumMap[`${s.party}||${s.party_account}`] = s));
@@ -261,7 +272,7 @@ function pr_show_dialog(rows, summary, modes) {
 		const k = gkey(r);
 		if (!(k in gIndex)) {
 			gIndex[k] = groups.length;
-			groups.push({ key: k, rows: [], paid: [], first: r });
+			groups.push({ key: k, rows: [], paid: [], first: r, ctrls: {} });
 		}
 		groups[gIndex[k]].rows.push(r);
 	});
@@ -289,8 +300,19 @@ function pr_show_dialog(rows, summary, modes) {
 				${stat(__("Invoices Due (Credit)"), "", format_currency(invTotal))}
 				${stat(__("Advance Available (Debit)"), flt(s.advance_total) ? "text-success" : "", format_currency(s.advance_total))}
 				${stat(__("Request Amount"), "pr-pay", "")}
-			</div>
-			<table class="table table-bordered table-sm pr-fixed" style="margin-bottom:8px">
+			</div>`;
+
+		if (vendor_fields.length) {
+			h += `<div class="pr-vf">
+				${vendor_fields.map((df) => `<div class="pr-vf-slot" data-g="${gi}" data-k="${df.fieldname}"></div>`).join("")}
+				${groups.length > 1
+					? `<button type="button" class="btn btn-default btn-xs pr-vf-copy" tabindex="-1" data-g="${gi}"
+						title="${__("Copy these values to all other vendors")}">${__("Copy to all vendors")}</button>`
+					: ""}
+			</div>`;
+		}
+
+		h += `<table class="table table-bordered table-sm pr-fixed" style="margin-bottom:8px">
 				<thead><tr><th style="width:24%">${__("Invoice")}</th><th>${__("PO No")}</th><th style="width:95px">${__("Due Date")}</th>
 				<th class="text-right" style="width:120px">${__("Due Amount")}</th><th class="text-right" style="width:150px">${__("Request Amount")}</th></tr></thead><tbody>`;
 		g.rows.forEach((r) => {
@@ -358,6 +380,55 @@ function pr_show_dialog(rows, summary, modes) {
 		return ok ? out : null;
 	};
 
+	// Nature / Section chosen per vendor; only vendors that actually have an amount to request are validated
+	const collect_vendor_fields = (out) => {
+		const payingKeys = new Set(out.map((r) => gkey(r)));
+		const result = {};
+		const missing = [];
+		const conflicts = [];
+
+		groups.forEach((g) => {
+			if (!payingKeys.has(g.key)) return;
+			const party = g.first.party;
+			const vals = {};
+			const miss = [];
+			vendor_fields.forEach((df) => {
+				const v = g.ctrls[df.fieldname] ? g.ctrls[df.fieldname].get_value() : "";
+				vals[df.fieldname] = v;
+				if (blank(v)) miss.push(__(df.label));
+			});
+			if (miss.length) {
+				missing.push(`<b>${esc(g.first.supplier_name || party)}</b>: ${miss.map(esc).join(", ")}`);
+				return;
+			}
+			if (result[party] && vendor_fields.some((df) => result[party][df.fieldname] !== vals[df.fieldname])) {
+				conflicts.push(esc(g.first.supplier_name || party));
+				return;
+			}
+			result[party] = vals;
+		});
+
+		if (missing.length) {
+			frappe.msgprint({
+				title: __("Please select Nature and Section for each vendor"),
+				message: missing.join("<br>"),
+				indicator: "red",
+			});
+			return null;
+		}
+		if (conflicts.length) {
+			frappe.msgprint({
+				title: __("Different values for the same supplier"),
+				message: __("{0} appears under more than one payable account. Use the same Nature and Section in each card.", [
+					conflicts.join(", "),
+				]),
+				indicator: "red",
+			});
+			return null;
+		}
+		return result;
+	};
+
 	const recalc = () => {
 		let gp = 0;
 		d.$wrapper.find(".pr-card").each(function () {
@@ -383,14 +454,14 @@ function pr_show_dialog(rows, summary, modes) {
 		cb(v);
 	};
 
-	const call = (out, v, cb) =>
+	const call = (out, v, vendor_values, cb) =>
 		frappe.call({
 			method: `${PR_METHOD_PATH}.create_payment_requests`,
 			args: {
 				company: pr_company(),
 				rows: out,
 				posting_date: v.posting_date || frappe.datetime.get_today(),
-				mode_of_payment: v.mode_of_payment || "",
+				vendor_fields: vendor_values,
 			},
 			freeze: true,
 			freeze_message: __("Creating payment request..."),
@@ -400,8 +471,10 @@ function pr_show_dialog(rows, summary, modes) {
 	const submitAll = () => {
 		const out = collect();
 		if (!out) return;
+		const vendor_values = collect_vendor_fields(out);
+		if (!vendor_values) return;
 		common((v) =>
-			call(out, v, (res) => {
+			call(out, v, vendor_values, (res) => {
 				changed = true;
 				d.hide();
 				frappe.msgprint({
@@ -421,13 +494,6 @@ function pr_show_dialog(rows, summary, modes) {
 		size: "extra-large",
 		fields: [
 			{ fieldname: "posting_date", label: __("Request Date"), fieldtype: "Date", default: frappe.datetime.get_today(), reqd: 1 },
-			{ fieldtype: "Column Break" },
-			{
-				fieldname: "mode_of_payment", label: __("Mode of Payment"), fieldtype: "Link", options: "Mode of Payment",
-				get_query: () => ({
-					filters: { name: ["in", modes.length ? modes : ["__none__"]], enabled: 1 },
-				}),
-			},
 			{ fieldtype: "Section Break" },
 			{ fieldname: "body", fieldtype: "HTML", options: html },
 		],
@@ -443,6 +509,55 @@ function pr_show_dialog(rows, summary, modes) {
 	d.$wrapper.addClass("pr-wide");
 	d.$wrapper.on("input", ".pr-amt", recalc);
 	d.show();
+
+	// per-vendor Nature / Section controls (built after the dialog is in the DOM)
+	groups.forEach((g, gi) => {
+		vendor_fields.forEach((df) => {
+			const $p = d.$wrapper.find(`.pr-vf-slot[data-g="${gi}"][data-k="${df.fieldname}"]`);
+			if (!$p.length) return;
+			const c = frappe.ui.form.make_control({
+				df: {
+					fieldtype: df.fieldtype,
+					fieldname: df.fieldname,
+					label: __(df.label),
+					options: df.options,
+					reqd: 1,
+				},
+				parent: $p,
+				render_input: true,
+			});
+			c.refresh();
+			g.ctrls[df.fieldname] = c;
+		});
+	});
+
+	// copy one vendor's Nature / Section to every other vendor
+	d.$wrapper.on("click", ".pr-vf-copy", function () {
+		const src = groups[$(this).data("g")];
+		groups.forEach((g) => {
+			if (g === src) return;
+			vendor_fields.forEach((df) => {
+				const v = src.ctrls[df.fieldname] && src.ctrls[df.fieldname].get_value();
+				if (!blank(v) && g.ctrls[df.fieldname]) g.ctrls[df.fieldname].set_value(v);
+			});
+		});
+	});
+
+	// Keyboard flow: Nature -> Section -> amounts (top to bottom) -> next vendor -> primary button.
+	// Document links are skipped by Tab so they never steal focus between fields.
+	d.$wrapper.find(".pr-card a").attr("tabindex", "-1");
+	d.$wrapper.on("focus", ".pr-amt", function () {
+		this.select();
+	});
+	d.$wrapper.on("keydown", ".pr-amt", function (e) {
+		if (e.key !== "Enter") return;
+		e.preventDefault();
+		const all = d.$wrapper.find(".pr-amt").toArray();
+		const next = all[all.indexOf(this) + 1];
+		if (next) next.focus();
+		else d.get_primary_btn().focus();
+	});
+	setTimeout(() => d.$wrapper.find(".pr-vf input, .pr-vf select").first().focus(), 300);
 
 	d.$wrapper
 		.find(".modal-footer .btn-primary, .modal-footer .btn-modal-primary")
