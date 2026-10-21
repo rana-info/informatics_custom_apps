@@ -1,0 +1,313 @@
+{
+ "actions": [],
+ "allow_copy": 1,
+ "creation": "2026-10-17 12:00:00.000000",
+ "default_view": "List",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "gate_entry_tab",
+  "maintenance_type",
+  "branch",
+  "gate_entry",
+  "abbr",
+  "location",
+  "segment",
+  "card_number",
+  "transporter",
+  "entry_type",
+  "supplier",
+  "column_break_peid",
+  "company",
+  "vehicle_owner",
+  "vehicle_type",
+  "driver",
+  "driver_name",
+  "column_break_vdzk",
+  "date",
+  "time",
+  "vehicle_number",
+  "section_break_azvi",
+  "column_break_dsqr",
+  "purchase_orders",
+  "get_items",
+  "items",
+  "weighment_section",
+  "weighment_date",
+  "column_break_bxey",
+  "inward_date",
+  "column_break_fniz",
+  "outward_date",
+  "section_break_azvi8",
+  "tare_weight",
+  "column_break_axjc",
+  "gross_weight",
+  "column_break_tvpm",
+  "net_weight",
+  "tab_break_rbvj"
+ ],
+ "fields": [
+  {
+   "fieldname": "gate_entry_tab",
+   "fieldtype": "Tab Break",
+   "label": "Gate Entry"
+  },
+  {
+   "description": "Select Maintenance Type",
+   "fieldname": "maintenance_type",
+   "fieldtype": "Select",
+   "label": "Maintenance Type",
+   "options": "\nCreate\nUpdate"
+  },
+  {
+   "depends_on": "eval:doc.maintenance_type===\"Update\";",
+   "description": "Select Gate Entry",
+   "fieldname": "gate_entry",
+   "fieldtype": "Link",
+   "label": "Gate Entry",
+   "mandatory_depends_on": "eval:doc.maintenance_type==\"Update\"",
+   "options": "Gate Entry"
+  },
+  {
+   "fieldname": "branch",
+   "fieldtype": "Link",
+   "label": "Branch",
+   "options": "Branch"
+  },
+  {
+   "depends_on": "eval:doc.branch",
+   "fetch_from": "branch.plant_abbr",
+   "fieldname": "abbr",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Abbr",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.branch",
+   "fetch_from": "branch.custom_location",
+   "fieldname": "location",
+   "fieldtype": "Link",
+   "label": "Location",
+   "options": "Location",
+   "read_only": 1
+  },
+  {
+   "fieldname": "segment",
+   "fieldtype": "Link",
+   "label": "Segment",
+   "mandatory_depends_on": "eval:doc.maintenance_type==\"Create\"",
+   "options": "Segment"
+  },
+  {
+   "depends_on": "eval:doc.maintenance_type===\"Update\"",
+   "description": "Auto-assigned on Create from the plant's free cards",
+   "fieldname": "card_number",
+   "fieldtype": "Link",
+   "label": "Card Number",
+   "options": "Card Details",
+   "read_only": 1
+  },
+  {
+   "fieldname": "transporter",
+   "fieldtype": "Link",
+   "label": "Transporter",
+   "options": "Supplier"
+  },
+  {
+   "default": "Inward",
+   "fieldname": "entry_type",
+   "fieldtype": "Select",
+   "label": "Entry Type",
+   "options": "\nOutward\nInward"
+  },
+  {
+   "depends_on": "eval:doc.entry_type == \"Inward\"",
+   "fieldname": "supplier",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Supplier",
+   "mandatory_depends_on": "eval:doc.entry_type != \"Outward\"",
+   "options": "Supplier",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_peid",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fetch_from": "branch.company",
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company",
+   "mandatory_depends_on": "eval:doc.maintenance_type==\"Create\""
+  },
+  {
+   "fieldname": "vehicle_owner",
+   "fieldtype": "Select",
+   "label": "Vehicle Owner",
+   "options": "Company Owned\nThird Party"
+  },
+  {
+   "fieldname": "vehicle_type",
+   "fieldtype": "Link",
+   "label": "Vehicle Type",
+   "options": "Vehicle Type"
+  },
+  {
+   "fieldname": "driver",
+   "fieldtype": "Link",
+   "label": "Driver",
+   "options": "Driver"
+  },
+  {
+   "fieldname": "driver_name",
+   "fieldtype": "Data",
+   "label": "Driver Name"
+  },
+  {
+   "fieldname": "column_break_vdzk",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "date",
+   "fieldtype": "Date",
+   "label": "Date"
+  },
+  {
+   "fieldname": "time",
+   "fieldtype": "Time",
+   "label": "Time"
+  },
+  {
+   "fieldname": "vehicle_number",
+   "fieldtype": "Data",
+   "label": "Vehicle Number"
+  },
+  {
+   "fieldname": "section_break_azvi",
+   "fieldtype": "Section Break"
+  },
+  {
+   "depends_on": "supplier",
+   "fieldname": "column_break_dsqr",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:doc.supplier",
+   "fieldname": "purchase_orders",
+   "fieldtype": "Table",
+   "label": "Purchase Orders",
+   "options": "Purchase Orders",
+   "reqd": 1
+  },
+  {
+   "fieldname": "get_items",
+   "fieldtype": "Button",
+   "label": "Get Items"
+  },
+  {
+   "depends_on": "supplier",
+   "fieldname": "items",
+   "fieldtype": "Table",
+   "label": "Purchase Details",
+   "options": "Purchase Details"
+  },
+  {
+   "fieldname": "section_break_azvi8",
+   "fieldtype": "Section Break",
+   "label": " Weight Details"
+  },
+  {
+   "fieldname": "tare_weight",
+   "fieldtype": "Float",
+   "label": "Tare Weight (In Kg)",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_axjc",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "gross_weight",
+   "fieldtype": "Float",
+   "label": "Gross Weight (In Kg)",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_tvpm",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "net_weight",
+   "fieldtype": "Float",
+   "label": "Net Weight (In Kg)",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "tab_break_rbvj",
+   "fieldtype": "Tab Break"
+  },
+  {
+   "fieldname": "weighment_section",
+   "fieldtype": "Section Break",
+   "label": "Weighment"
+  },
+  {
+   "fieldname": "weighment_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Weighment Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_bxey",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "inward_date",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Inward Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_fniz",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "outward_date",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Outward Date",
+   "reqd": 1
+  }
+ ],
+ "hide_toolbar": 1,
+ "index_web_pages_for_search": 1,
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-10-17 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "RIPL Customized Apps",
+ "name": "ZZMaintenance",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "read_only": 1,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
