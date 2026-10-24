@@ -1519,8 +1519,7 @@ class PurchaseManagementSystem(Document):
         Only called for is_completed entries.
         Note: Rake Bill update is handled separately in correct_manual_entry."""
         for row in self.manual_entry_items:
-            # Convert accepted qty to KG before adding to PO received qty
-            accepted_qty_kg = self.convert_to_kg(row.new_accepted_qty, row.uom)
+            accepted_qty = row.new_accepted_qty or 0
 
             old_qty = frappe.db.get_value(
                 "Purchase Order Item",
@@ -1532,7 +1531,7 @@ class PurchaseManagementSystem(Document):
                 "Purchase Order Item",
                 row.purchase_order_item,
                 "gate_entry_received_qty",
-                old_qty + accepted_qty_kg,
+                old_qty + accepted_qty,
                 update_modified=False,
             )
 
