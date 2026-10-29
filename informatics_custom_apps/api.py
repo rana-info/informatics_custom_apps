@@ -27,6 +27,23 @@ def reopen_loan(loan_name, reason):
 @frappe.whitelist()
 def make_purchase_receipt_paddy(master, Items):
     try:
+        existing = frappe.db.get_value(
+            "Purchase Receipt",
+            {
+                "supplier": master.get("supplier"),
+                "bill_no": master.get("bill_no"),
+                "company": master.get("company"),
+                "docstatus": ["<", 2],
+            },
+            "name",
+        )
+        if existing:
+            return {
+                "status": "success",
+                "message": "Purchase Receipt Already Exists",
+                "purchase_receipt": existing,
+            }
+
         purchase_receipt = frappe.new_doc("Purchase Receipt")
         purchase_receipt.set_posting_time = 1
         purchase_receipt.posting_date = master.get("posting_date")
@@ -43,7 +60,6 @@ def make_purchase_receipt_paddy(master, Items):
         purchase_receipt.custom_commission = master.get("custom_commission")
 
         for item in Items:
-            # Fetch purchase_order_item automatically
             purchase_order_item = frappe.db.get_value(
                 "Purchase Order Item",
                 {
@@ -115,10 +131,10 @@ def make_purchase_receipt_paddy(master, Items):
                 "purchase_receipt": purchase_receipt.name
             }
 
-    except Exception as e:
+    except Exception:
+        frappe.db.rollback()
         frappe.log_error(frappe.get_traceback(), "Purchase Receipt Creation Error")
-        frappe.local.response["Purchase_Receipt"] = "Not Created Purchase Receipt"
-        return {"status": "error", "message": str(e)}
+        raise
 
 
 @frappe.whitelist()

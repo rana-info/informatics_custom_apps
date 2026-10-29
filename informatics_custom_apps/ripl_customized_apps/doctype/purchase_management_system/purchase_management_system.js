@@ -542,7 +542,10 @@ frappe.ui.form.on("Purchase Management System", {
 				row.uom                = d.uom;
 
 				if (auto_qty) {
-					row.new_accepted_qty = auto_qty;
+					row.new_accepted_qty =
+						(d.uom || "").trim().toLowerCase() === "quintal"
+							? auto_qty / 100
+							: auto_qty;
 				}
 			});
 

@@ -13,6 +13,11 @@ PAYMENT_REQUEST_TYPE = "Outward"
 CHUNK_SIZE = 5000
 EPSILON = 0.005
 
+# Fieldnames on Payment Request that the user selects per vendor
+NATURE_FIELD = "custom_nature"
+SECTION_FIELD = "section"
+VENDOR_FIELDS = (NATURE_FIELD, SECTION_FIELD)
+
 
 def execute(filters=None):
 	args = {
@@ -89,7 +94,6 @@ class PaymentRequisitionReport(ReceivablePayableReport):
 			if self.filters.get("company"):
 				open_pi = open_pi.where(pi.company == self.filters.company)
 			self.qb_selection_filter.append(ple.against_voucher_no.isin(open_pi))
-
 
 		plants = as_list(self.filters.get("plant"))
 		segments = as_list(self.filters.get("segment"))
@@ -390,7 +394,19 @@ def _validate_open_invoices(company, rows):
 	return {name: inv.currency or company_currency for name, inv in invoices.items()}
 
 
-def _create_payment_requests(company, rows, request_date, currencies, mode_of_payment=None):
+def _validate_vendor_fields(rows, vendor_fields):
+	"""Nature and Section are mandatory for every vendor in the selection."""
+	meta = frappe.get_meta("Payment Request")
+	for party in dict.fromkeys(r["party"] for r in rows):
+		vf = vendor_fields.get(party) or {}
+		for f in VENDOR_FIELDS:
+			if meta.has_field(f) and not vf.get(f):
+				frappe.throw(
+					_("Please select {0} for supplier {1}.").format(_(meta.get_label(f)), party)
+				)
+
+
+def _create_payment_requests(company, rows, request_date, currencies, vendor_fields):
 	meta = frappe.get_meta("Payment Request")
 	has_party_name = meta.has_field("party_name")
 	has_email_to = meta.has_field("email_to")
@@ -408,6 +424,7 @@ def _create_payment_requests(company, rows, request_date, currencies, mode_of_pa
 	created = []
 	for r in rows:
 		supplier = suppliers.get(r["party"]) or frappe._dict()
+		vf = vendor_fields.get(r["party"]) or {}
 
 		pr = frappe.new_doc("Payment Request")
 		pr.payment_request_type = PAYMENT_REQUEST_TYPE
@@ -425,12 +442,15 @@ def _create_payment_requests(company, rows, request_date, currencies, mode_of_pa
 			pr.party_name = supplier.get("supplier_name")
 		if has_email_to and supplier.get("email_id"):
 			pr.email_to = supplier.email_id
-		if mode_of_payment:
-			pr.mode_of_payment = mode_of_payment
 
 		for f, v in (r.get("_dims") or {}).items():
 			if meta.has_field(f):
 				pr.set(f, v)
+
+		# user-selected values win over anything copied from the invoice dimensions
+		for f in VENDOR_FIELDS:
+			if meta.has_field(f):
+				pr.set(f, vf.get(f))
 
 		pr.insert()
 		created.append(pr.name)
@@ -439,9 +459,14 @@ def _create_payment_requests(company, rows, request_date, currencies, mode_of_pa
 
 
 @frappe.whitelist()
-def create_payment_requests(company, rows, posting_date=None, mode_of_payment=None):
+def create_payment_requests(company, rows, posting_date=None, vendor_fields=None):
+	"""
+	rows: [{party, party_account, voucher_no, bill_type, pay_amount}, ...]
+	vendor_fields: {"<supplier>": {"nature": "...", "section": "..."}, ...}
+	"""
 	frappe.has_permission("Payment Request", "create", throw=True)
 	rows = frappe.parse_json(rows)
+	vendor_fields = frappe.parse_json(vendor_fields) if vendor_fields else {}
 
 	for r in rows:
 		if r["bill_type"] not in PAYABLE_VOUCHER_TYPES:
@@ -455,6 +480,7 @@ def create_payment_requests(company, rows, posting_date=None, mode_of_payment=No
 	if not rows:
 		return {"payment_requests": []}
 
+	_validate_vendor_fields(rows, vendor_fields)
 	currencies = _validate_open_invoices(company, rows)
 
 	dim_map = _rows_dimensions(rows, _dimension_fields())
@@ -462,6 +488,6 @@ def create_payment_requests(company, rows, posting_date=None, mode_of_payment=No
 		r["_dims"] = dim_map.get((r["voucher_no"], r["party_account"], r["party"]), {})
 
 	created = _create_payment_requests(
-		company, rows, posting_date or nowdate(), currencies, mode_of_payment
+		company, rows, posting_date or nowdate(), currencies, vendor_fields
 	)
 	return {"payment_requests": created}
