@@ -158,8 +158,18 @@ class ZZMaintenance(Document):
 		return pr
 
 	def _release_card(self, card_name):
-		if card_name and frappe.db.exists("Card Details", card_name):
-			frappe.db.set_value("Card Details", card_name, "is_assigned", 0, update_modified=False)
+		if not card_name:
+			return
+
+		card_docname = frappe.db.get_value("Card Details", card_name, "name")
+		if not card_docname:
+			card_docname = frappe.db.get_value(
+				"Card Details", {"card_number": card_name}, "name"
+			)
+		if card_docname:
+			frappe.db.set_value(
+				"Card Details", card_docname, "is_assigned", 0, update_modified=False
+			)
 
 	@frappe.whitelist()
 	def map_gate_entry_data(self):
@@ -297,6 +307,7 @@ class ZZMaintenance(Document):
 
 			self._update_outward_delivery_notes(weighment)
 			self._finalize_flags(gate_entry, weighment)
+			self._release_card(gate_entry.card_number)
 			self._notify(
 				"Data Updated Successfully",
 				f"Data Updated Successfully: {gate_entry.name}, {weighment.name}",
