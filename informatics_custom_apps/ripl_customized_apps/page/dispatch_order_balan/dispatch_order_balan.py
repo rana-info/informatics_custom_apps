@@ -1,242 +1,396 @@
+import datetime
+
 import frappe
 from frappe.utils import flt, getdate, nowdate
+
+LITRE_UOMS = {"litre", "litres", "ltr", "ltrs", "liter", "liters", "l"}
+
+ALLOCATION_ITEM_FIELD_MAP = {
+    "Ethanol-SFG-Mfg": "ethanol_from_fci",
+}
+ALLOCATION_FEEDSTOCK_KEYWORDS = (
+    ("dfg", "ethanol_from_dfg"),
+    ("maize", "ethanol_from_maize"),
+    ("fci", "ethanol_from_fci"),
+)
 
 
 @frappe.whitelist()
 def get_page_data(filters=None):
     filters = frappe._dict(frappe.parse_json(filters) or {})
-    as_on = filters.get("date") or nowdate()
-    filters["date"] = as_on
+    as_on = str(getdate(filters.get("date") or nowdate()))
 
-    quarters_meta = frappe.db.sql("""
+    quarters = _get_active_quarters(as_on)
+    rows, items_map = _get_dispatch_rows(filters, as_on)
+    allocations = _get_quarter_allocations(rows, items_map, quarters)
+
+    return {
+        "as_on": as_on,
+        "quarters": quarters,
+        "items": [i for i in items_map.values()],
+        "rows": rows,
+        "allocations": allocations,
+        "today_summary": get_item_wise_stock_dispatch(filters, as_on, items_map),
+    }
+
+
+def _get_active_quarters(as_on):
+    quarters_meta = frappe.db.sql(
+        """
         SELECT quarter, start_date, end_date
         FROM `tabEthanol Supply Quarter`
         WHERE start_date <= %(as_on)s
         ORDER BY start_date ASC
-    """, {"as_on": as_on}, as_dict=True)
+        """,
+        {"as_on": as_on},
+        as_dict=True,
+    )
 
-    active_quarters = []
-    for q in quarters_meta:
-        if getdate(q.start_date) <= getdate(as_on):
-            active_quarters.append({
-                "quarter":       q.quarter,
-                "start_date":    str(q.start_date),
-                "end_date":      str(q.end_date),
-                "effective_end": str(min(getdate(q.end_date), getdate(as_on))),
-            })
+    as_on_d = getdate(as_on)
+    quarters = [
+        {
+            "quarter": q.quarter,
+            "start_date": str(q.start_date),
+            "end_date": str(q.end_date),
+            "effective_end": str(min(getdate(q.end_date), as_on_d)),
+        }
+        for q in quarters_meta
+    ]
 
-    if not active_quarters:
-        import datetime
-        d = getdate(as_on)
-        qs_m = ((d.month - 1) // 3) * 3 + 1
-        qs = datetime.date(d.year, qs_m, 1)
-        active_quarters = [{
-            "quarter":       f"Q{(qs_m-1)//3+1} {d.year}",
-            "start_date":    str(qs),
-            "end_date":      str(as_on),
-            "effective_end": str(as_on),
-        }]
+    if not quarters:
+        qs_m = ((as_on_d.month - 1) // 3) * 3 + 1
+        qs = datetime.date(as_on_d.year, qs_m, 1)
+        quarters = [
+            {
+                "quarter": f"Q{(qs_m - 1) // 3 + 1} {as_on_d.year}",
+                "start_date": str(qs),
+                "end_date": as_on,
+                "effective_end": as_on,
+            }
+        ]
+    return quarters
 
-    conditions = " AND di.po_date <= %(date)s"
+
+def _get_dispatch_rows(filters, as_on):
+    """
+    One row per (Dispatch Order, Item).
+
+    Delivery Notes are pre-aggregated per (dispatch order, item) in a derived
+    table and joined once. The old query joined every Delivery Note Item row
+    onto every Dispatch Order Item row, which multiplied rows (and could
+    double count supplied qty when a dispatch order had the same item twice).
+    """
+    params = {"date": as_on}
+    where = ["di.docstatus = 1", "di.po_date <= %(date)s"]
+    dn_item_cond = ""
+
     if filters.get("company"):
-        conditions += " AND di.company = %(company)s"
+        where.append("di.company = %(company)s")
+        params["company"] = filters.company
     if filters.get("plant"):
-        conditions += " AND di.branch = %(plant)s"
+        where.append("di.branch = %(plant)s")
+        params["plant"] = filters.plant
     if filters.get("customer"):
-        conditions += " AND di.customer_name = %(customer)s"
+        where.append("di.customer_name = %(customer)s")
+        params["customer"] = filters.customer
     if filters.get("po_no"):
-        conditions += " AND di.po_no LIKE %(po_no)s"
-        filters["po_no"] = f"%{filters['po_no']}%"
+        where.append("di.po_no LIKE %(po_no)s")
+        params["po_no"] = f"%{filters.po_no}%"
     if filters.get("item_code"):
-        conditions += " AND dii.item_code = %(item_code)s"
+        where.append("dii.item_code = %(item_code)s")
+        dn_item_cond = " AND dni.item_code = %(item_code)s"
+        params["item_code"] = filters.item_code
 
-    q_sums_sql = ""
-    for q in active_quarters:
-        safe = _q_fieldname(q["quarter"])
-        q_sums_sql += (
-            f", SUM(CASE WHEN dn.is_return = 0 "
-            f"AND dn.posting_date BETWEEN %(q_start_{safe})s AND %(q_eff_{safe})s "
-            f"THEN dni.qty ELSE 0 END) AS `q_supplied_{safe}`"
-        )
-        filters[f"q_start_{safe}"] = q["start_date"]
-        filters[f"q_eff_{safe}"]   = q["effective_end"]
-
-    base_rows = frappe.db.sql(f"""
+    base_rows = frappe.db.sql(
+        f"""
         SELECT
             di.company,
-            di.branch                                                   AS plant,
+            di.branch        AS plant,
             di.customer_name,
             di.po_no,
             di.po_date,
-            di.name                                                     AS dispatch_order,
-            dii.name                                                    AS doi_name,
+            di.name          AS dispatch_order,
             dii.item_code,
             it.item_name,
-            dii.qty                                                     AS order_qty,
-            dii.uom,
-            IFNULL(SUM(CASE WHEN dn.is_return = 0
-                     AND dn.posting_date <= %(date)s THEN dni.qty ELSE 0 END), 0)
-                                                                        AS supplied_qty
-            {q_sums_sql}
+            it.disabled      AS item_disabled,
+            it.stock_uom     AS stock_uom,
+            SUM(dii.qty)     AS order_qty,
+            MAX(dii.uom)     AS uom,
+            IFNULL(MAX(s.supplied_qty), 0) AS supplied_qty
         FROM `tabDispatch Order` di
         INNER JOIN `tabDispatch Order Item` dii ON dii.parent = di.name
         LEFT JOIN `tabItem` it ON it.name = dii.item_code
-        LEFT JOIN `tabDelivery Note Item` dni
-            ON dni.custom_dispatch_order = di.name
-            AND dni.item_code = dii.item_code
-        LEFT JOIN `tabDelivery Note` dn
-            ON dn.name = dni.parent AND dn.docstatus = 1
-        WHERE di.docstatus = 1 {conditions}
-        GROUP BY dii.name
+        LEFT JOIN (
+            SELECT dni.custom_dispatch_order AS dispatch_order,
+                   dni.item_code,
+                   SUM(dni.qty) AS supplied_qty
+            FROM `tabDelivery Note Item` dni
+            INNER JOIN `tabDelivery Note` dn ON dn.name = dni.parent
+            WHERE dn.docstatus = 1
+              AND dn.is_return = 0
+              AND dn.posting_date <= %(date)s
+              AND IFNULL(dni.custom_dispatch_order, '') != ''
+              {dn_item_cond}
+            GROUP BY dni.custom_dispatch_order, dni.item_code
+        ) s ON s.dispatch_order = di.name AND s.item_code = dii.item_code
+        WHERE {" AND ".join(where)}
+        GROUP BY di.name, dii.item_code
         ORDER BY it.item_name ASC, di.customer_name ASC, di.po_date DESC
-    """, {**filters, "date": as_on}, as_dict=True)
+        """,
+        params,
+        as_dict=True,
+    )
 
     rows = []
+    items_map = {}
     for r in base_rows:
         order_qty = flt(r.order_qty)
-        supplied  = flt(r.supplied_qty)
-        row_out = {
-            "company":        r.company or "",
-            "plant":          r.plant or "",
-            "customer_name":  r.customer_name or "",
-            "po_no":          r.po_no or "",
-            "po_date":        str(r.po_date) if r.po_date else "",
-            "dispatch_order": r.dispatch_order,
-            "item_code":      r.item_code,
-            "item_name":      r.item_name or r.item_code,
-            "order_qty":      order_qty,
-            "supplied_qty":   supplied,
-            "pending_qty":    order_qty - supplied,
-            "uom":            r.uom or "",
-        }
-        for q in active_quarters:
-            safe = _q_fieldname(q["quarter"])
-            row_out[f"q_supplied_{safe}"] = flt(r.get(f"q_supplied_{safe}") or 0)
-        rows.append(row_out)
+        supplied = flt(r.supplied_qty)
+        pending = order_qty - supplied
+        item_name = r.item_name or r.item_code
 
-    quarters_out = []
-    for q in active_quarters:
-        safe = _q_fieldname(q["quarter"])
-        total_supplied = sum(r.get(f"q_supplied_{safe}", 0) for r in rows)
-        quarters_out.append({**q, "fieldname": f"q_supplied_{safe}", "total_supplied": total_supplied})
+        rows.append(
+            {
+                "company": r.company or "",
+                "plant": r.plant or "",
+                "customer_name": r.customer_name or "",
+                "po_no": r.po_no or "",
+                "po_date": str(r.po_date) if r.po_date else "",
+                "dispatch_order": r.dispatch_order,
+                "item_code": r.item_code,
+                "item_name": item_name,
+                "order_qty": order_qty,
+                "supplied_qty": supplied,
+                "pending_qty": pending,
+                "uom": r.uom or "",
+            }
+        )
 
-    items_map = {}
-    for r in rows:
-        ic = r["item_code"]
-        if ic not in items_map:
-            items_map[ic] = {"item_code": ic, "item_name": r["item_name"], "uom": r["uom"],
-                             "order_qty": 0.0, "supplied_qty": 0.0, "pending_qty": 0.0}
-        items_map[ic]["order_qty"]    += r["order_qty"]
-        items_map[ic]["supplied_qty"] += r["supplied_qty"]
-        items_map[ic]["pending_qty"]  += r["pending_qty"]
+        it = items_map.get(r.item_code)
+        if not it:
+            it = items_map[r.item_code] = {
+                "item_code": r.item_code,
+                "item_name": item_name,
+                "uom": r.uom or "",
+                "order_qty": 0.0,
+                "supplied_qty": 0.0,
+                "pending_qty": 0.0,
+                "disabled": bool(r.item_disabled),
+                "stock_uom": r.stock_uom or "",
+            }
+        it["order_qty"] += order_qty
+        it["supplied_qty"] += supplied
+        it["pending_qty"] += pending
 
-    item_codes = list(items_map.keys())
-    today_summary = get_item_wise_stock_dispatch(filters, item_codes=item_codes)
-
-    return {
-        "as_on":         as_on,
-        "quarters":      quarters_out,
-        "items":         list(items_map.values()),
-        "rows":          rows,
-        "today_summary": today_summary,
-    }
+    return rows, items_map
 
 
-def _q_fieldname(quarter_label):
-    return "".join(ch if ch.isalnum() else "_" for ch in str(quarter_label))
+def get_item_wise_stock_dispatch(filters=None, as_on=None, items_map=None):
+    """
+    closing_qty  = stock as on `as_on` (Stock Ledger Entry up to that date)
+    dispatch_qty = Delivery Note qty dispatched ON `as_on`
+    stock_qty    = closing_qty + dispatch_qty  (stock before that day's dispatch)
+    balance_qty  = closing_qty                 (stock after dispatch)
 
-
-def get_item_wise_stock_dispatch(filters=None, item_codes=None):
+    Stock is read from Stock Ledger Entry instead of Bin. Bin only holds the
+    current balance, so it never changed with the date filter.
+    """
     filters = filters or frappe._dict()
-    as_on = filters.get("date") or nowdate()
+    as_on = str(getdate(as_on or filters.get("date") or nowdate()))
+    items_map = items_map or {}
 
-    if item_codes is not None:
-        if not item_codes:
-            return []
-        item_condition = "name IN %(item_codes)s AND disabled = 0"
-        item_values = {"item_codes": item_codes}
-    else:
-        item_condition = "disabled = 0"
-        item_values = {}
-        if filters.get("item_code"):
-            item_condition += " AND name = %(item_code)s"
-            item_values["item_code"] = filters.item_code
-
-    items = frappe.db.sql(f"""
-        SELECT name AS item_code, item_name, stock_uom AS uom
-        FROM `tabItem` WHERE {item_condition} ORDER BY item_name ASC
-    """, item_values, as_dict=True)
-
+    items = sorted(
+        (i for i in items_map.values() if not i.get("disabled")),
+        key=lambda i: (i["item_name"] or "").lower(),
+    )
     if not items:
         return []
 
-    codes  = [i.item_code for i in items]
-    values = {"item_codes": codes, "as_on": as_on}
+    item_codes = tuple(i["item_code"] for i in items)
+    closing = _get_closing_stock(filters, as_on, item_codes)
+    dispatched = _get_dispatch_on_date(filters, as_on, item_codes)
 
-    stock_join = stock_company_clause = stock_plant_clause = ""
-    dispatch_join = dispatch_company_clause = dispatch_plant_clause = ""
-    warehouse_clause = dispatch_warehouse_clause = ""
-
-    if filters.get("warehouse"):
-        warehouse_clause          = " AND b.warehouse = %(warehouse)s"
-        dispatch_warehouse_clause = " AND dni.warehouse = %(warehouse)s"
-        values["warehouse"] = filters.warehouse
-
-    if filters.get("company") or filters.get("plant"):
-        stock_join = "INNER JOIN `tabWarehouse` wh ON wh.name = b.warehouse"
-        if filters.get("company"):
-            stock_company_clause = " AND wh.company = %(company)s"
-            values["company"] = filters.company
-        if filters.get("plant"):
-            stock_plant_clause = " AND wh.custom_branch = %(plant)s"
-            values["plant"] = filters.plant
-        dispatch_join = "LEFT JOIN `tabDispatch Order` do ON do.name = dni.custom_dispatch_order"
-        if filters.get("company"):
-            dispatch_company_clause = " AND do.company = %(company)s"
-        if filters.get("plant"):
-            dispatch_plant_clause = " AND do.branch = %(plant)s"
-
-    combined = frappe.db.sql(f"""
-        SELECT i.name AS item_code,
-               IFNULL(b.stock_qty, 0)    AS stock_qty,
-               IFNULL(d.dispatch_qty, 0) AS dispatch_qty
-        FROM (SELECT name FROM `tabItem` WHERE name IN %(item_codes)s) i
-        LEFT JOIN (
-            SELECT b.item_code, SUM(b.actual_qty) AS stock_qty
-            FROM `tabBin` b {stock_join}
-            WHERE b.item_code IN %(item_codes)s
-              {warehouse_clause} {stock_company_clause} {stock_plant_clause}
-            GROUP BY b.item_code
-        ) b ON b.item_code = i.name
-        LEFT JOIN (
-            SELECT dni.item_code,
-                   SUM(CASE WHEN dn.is_return = 1 THEN 0 ELSE dni.qty END) AS dispatch_qty
-            FROM `tabDelivery Note Item` dni
-            INNER JOIN `tabDelivery Note` dn ON dn.name = dni.parent
-            {dispatch_join}
-            WHERE dni.item_code IN %(item_codes)s
-              AND dn.posting_date = %(as_on)s AND dn.docstatus = 1
-              {dispatch_warehouse_clause} {dispatch_company_clause} {dispatch_plant_clause}
-            GROUP BY dni.item_code
-        ) d ON d.item_code = i.name
-    """, values, as_dict=True)
-
-    combo_map = {r.item_code: r for r in combined}
     data = []
-    totals = frappe._dict(item_code="TOTAL", item_name="", uom="",
-                          stock_qty=0.0, dispatch_qty=0.0, balance_qty=0.0, as_on=as_on)
+    totals = {
+        "item_code": "TOTAL",
+        "item_name": "",
+        "uom": "",
+        "stock_qty": 0.0,
+        "stock_kl": 0.0,
+        "dispatch_qty": 0.0,
+        "balance_qty": 0.0,
+        "balance_kl": 0.0,
+        "as_on": as_on,
+    }
 
     for item in items:
-        c = combo_map.get(item.item_code, frappe._dict(stock_qty=0, dispatch_qty=0))
-        sq = flt(c.stock_qty)
-        dq = flt(c.dispatch_qty)
-        bq = sq - dq
-        data.append({"item_code": item.item_code, "item_name": item.item_name,
-                     "uom": item.uom, "stock_qty": sq, "dispatch_qty": dq,
-                     "balance_qty": bq, "as_on": as_on})
-        totals.stock_qty    += sq
-        totals.dispatch_qty += dq
-        totals.balance_qty  += bq
+        code = item["item_code"]
+        bal = flt(closing.get(code))
+        disp = flt(dispatched.get(code))
+        stock = bal + disp
 
-    data.append(dict(totals))
+        is_litre = (item.get("stock_uom") or "").strip().lower() in LITRE_UOMS
+        stock_kl = stock / 1000.0 if is_litre else None
+        balance_kl = bal / 1000.0 if is_litre else None
+
+        data.append(
+            {
+                "item_code": code,
+                "item_name": item["item_name"],
+                "uom": item.get("stock_uom") or item["uom"],
+                "stock_qty": stock,
+                "stock_kl": stock_kl,
+                "dispatch_qty": disp,
+                "balance_qty": bal,
+                "balance_kl": balance_kl,
+                "as_on": as_on,
+            }
+        )
+        totals["stock_qty"] += stock
+        totals["dispatch_qty"] += disp
+        totals["balance_qty"] += bal
+        if is_litre:
+            totals["stock_kl"] += stock_kl
+            totals["balance_kl"] += balance_kl
+
+    data.append(totals)
     return data
+
+
+def _get_closing_stock(filters, as_on, item_codes):
+    params = {"as_on": as_on, "item_codes": item_codes}
+    join = ""
+    cond = ""
+
+    if filters.get("warehouse"):
+        cond += " AND sle.warehouse = %(warehouse)s"
+        params["warehouse"] = filters.warehouse
+    if filters.get("company"):
+        # SLE carries company itself, no Warehouse join needed
+        cond += " AND sle.company = %(company)s"
+        params["company"] = filters.company
+    if filters.get("plant"):
+        join = "INNER JOIN `tabWarehouse` wh ON wh.name = sle.warehouse"
+        cond += " AND wh.custom_branch = %(plant)s"
+        params["plant"] = filters.plant
+
+    res = frappe.db.sql(
+        f"""
+        SELECT sle.item_code, SUM(sle.actual_qty) AS qty
+        FROM `tabStock Ledger Entry` sle
+        {join}
+        WHERE sle.item_code IN %(item_codes)s
+          AND sle.is_cancelled = 0
+          AND sle.posting_date <= %(as_on)s
+          {cond}
+        GROUP BY sle.item_code
+        """,
+        params,
+        as_dict=True,
+    )
+    return {r.item_code: flt(r.qty) for r in res}
+
+
+def _get_dispatch_on_date(filters, as_on, item_codes):
+    params = {"as_on": as_on, "item_codes": item_codes}
+    join = ""
+    cond = ""
+
+    if filters.get("warehouse"):
+        cond += " AND dni.warehouse = %(warehouse)s"
+        params["warehouse"] = filters.warehouse
+
+    if filters.get("company") or filters.get("plant"):
+        join = "INNER JOIN `tabDispatch Order` do ON do.name = dni.custom_dispatch_order"
+        if filters.get("company"):
+            cond += " AND do.company = %(company)s"
+            params["company"] = filters.company
+        if filters.get("plant"):
+            cond += " AND do.branch = %(plant)s"
+            params["plant"] = filters.plant
+
+    res = frappe.db.sql(
+        f"""
+        SELECT dni.item_code, SUM(dni.qty) AS qty
+        FROM `tabDelivery Note Item` dni
+        INNER JOIN `tabDelivery Note` dn ON dn.name = dni.parent
+        {join}
+        WHERE dni.item_code IN %(item_codes)s
+          AND dn.docstatus = 1
+          AND dn.is_return = 0
+          AND dn.posting_date = %(as_on)s
+          {cond}
+        GROUP BY dni.item_code
+        """,
+        params,
+        as_dict=True,
+    )
+    return {r.item_code: flt(r.qty) for r in res}
+
+
+def _allocation_field_for(item_code, item_name):
+    field = ALLOCATION_ITEM_FIELD_MAP.get(item_code) or ALLOCATION_ITEM_FIELD_MAP.get(item_name)
+    if field:
+        return field
+    text = f"{item_code} {item_name}".lower()
+    for keyword, field in ALLOCATION_FEEDSTOCK_KEYWORDS:
+        if keyword in text:
+            return field
+    return None
+
+
+def _parse_supply_year(value):
+    try:
+        start, end = str(value).split("/")
+        return getdate(start.strip()), getdate(end.strip())
+    except Exception:
+        return None, None
+
+
+def _get_quarter_allocations(rows, items_map, quarters):
+    plants = sorted({r["plant"] for r in rows if r["plant"]})
+    item_fields = {}
+    for code, it in items_map.items():
+        field = _allocation_field_for(code, it["item_name"])
+        if field:
+            item_fields[code] = field
+    if not plants or not item_fields:
+        return {}
+
+    recs = frappe.db.sql(
+        """
+        SELECT ea.ethanol_supply_year,
+               aq.quarter,
+               SUM(aq.ethanol_from_dfg)   AS ethanol_from_dfg,
+               SUM(aq.ethanol_from_maize) AS ethanol_from_maize,
+               SUM(aq.ethanol_from_fci)   AS ethanol_from_fci
+        FROM `tabEthanol Allocation` ea
+        INNER JOIN `tabEthanol Allocation Quarter` aq
+            ON aq.parent = ea.name
+            AND aq.parenttype = 'Ethanol Allocation'
+            AND aq.parentfield = 'allocation'
+        WHERE ea.docstatus < 2
+          AND ea.plant IN %(plants)s
+        GROUP BY ea.ethanol_supply_year, aq.quarter
+        """,
+        {"plants": tuple(plants)},
+        as_dict=True,
+    )
+
+    allocations = {code: {} for code in item_fields}
+    for rec in recs:
+        start, end = _parse_supply_year(rec.ethanol_supply_year)
+        if not start:
+            continue
+        label = (rec.quarter or "").strip().upper()
+        for q in quarters:
+            q_start = getdate(q["start_date"])
+            if not (start <= q_start <= end):
+                continue
+            idx = ((q_start.year - start.year) * 12 + q_start.month - start.month) // 3 + 1
+            if f"Q{idx}" != label:
+                continue
+            for code, field in item_fields.items():
+                bucket = allocations[code]
+                bucket[q["quarter"]] = bucket.get(q["quarter"], 0.0) + flt(rec.get(field))
+    return allocations

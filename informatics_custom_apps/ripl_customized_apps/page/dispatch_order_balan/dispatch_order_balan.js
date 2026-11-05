@@ -12,11 +12,12 @@ class DispatchOrderBalancePage {
 		this.page       = page;
 		this.data       = null;
 		this._timer     = null;
+		this._req       = 0;
 		this.view_mode  = 'quarter';
 		this.show_zero  = true;
 		this.active_key = null;
 		this.selected_quarter = null;
-		this.expanded_quarters = new Set(); // NEW: tracks which quarter blocks are expanded
+		this.expanded_quarters = new Set();
 
 		this._inject_styles();
 		this._build_layout();
@@ -132,6 +133,8 @@ class DispatchOrderBalancePage {
 		th.dob3-col-ord  { background-color:#ddeeff !important; border-left:3px solid #6aace8 !important; }
 		th.dob3-col-supt { background-color:#d8f5e4 !important; border-left:3px solid #5dc483 !important; }
 		th.dob3-col-pend { background-color:#ffebd9 !important; border-left:3px solid #e09055 !important; }
+		.dob3-col-alloc { background-color:#f7f2ff; border-left:3px solid #cdb9ee !important; }
+		th.dob3-col-alloc { background-color:#eadcff !important; border-left:3px solid #9b6ae0 !important; }
 		.dob3-val-pend-pos  { color:#C0392B; font-weight:700; }
 		.dob3-val-pend-neg  { color:#D35400; font-weight:700; }
 		.dob3-val-pend-zero { color:#27AE60; }
@@ -151,7 +154,6 @@ class DispatchOrderBalancePage {
 		.dob3-subrow:hover td:not(.dob3-rowlabel) { background-color: rgba(43,122,212,.08) !important; filter:none; }
 		.dob3-subrow:hover td.dob3-rowlabel { background-color:#e3edf9 !important; }
 
-		/* Quarter-mode 3-level layout */
 		.dob3-qblock {
 			background: #fff; border: 2px solid #d5dde5; border-radius: 12px;
 			box-shadow: 0 3px 10px rgba(31,39,46,.06); margin-bottom: 18px; overflow: hidden;
@@ -205,7 +207,7 @@ class DispatchOrderBalancePage {
 		.dob3-item-dialog .dob3-tbl thead th { position: sticky !important; top: 0; z-index: 10; }
 		.dob3-item-dialog .dob3-dialog-pad { padding: 16px 18px 18px; }
 
-		.dob3-summary { max-width: 520px; }
+		.dob3-summary { max-width: 560px; }
 		.dob3-sum-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 		.dob3-sum-tbl th {
 			background: #EEF2FA; color: #3A4A60; font-weight: 700; font-size: 10px;
@@ -325,9 +327,12 @@ class DispatchOrderBalancePage {
 	}
 
 	_build_quarter_pills(quarters) {
+		if (this.selected_quarter && !(quarters || []).some(q => q.quarter === this.selected_quarter)) {
+			this.selected_quarter = null;
+		}
 		this.$qpills.empty();
 		if (!quarters || !quarters.length) { this.$qpill_row.hide(); return; }
-		const $all = $(`<button class="dob3-qpill dob3-qpill-all dob3-active">All Quarters</button>`)
+		const $all = $(`<button class="dob3-qpill dob3-qpill-all${this.selected_quarter ? '' : ' dob3-active'}">All Quarters</button>`)
 			.appendTo(this.$qpills).on('click', () => {
 				this.selected_quarter = null;
 				this.$qpills.find('.dob3-qpill').removeClass('dob3-active');
@@ -335,10 +340,10 @@ class DispatchOrderBalancePage {
 				this._render_main();
 			});
 		for (const q of quarters) {
-			const $p = $(`<button class="dob3-qpill">${_esc(q.quarter)}</button>`)
+			const $p = $(`<button class="dob3-qpill${this.selected_quarter === q.quarter ? ' dob3-active' : ''}">${_esc(q.quarter)}</button>`)
 				.appendTo(this.$qpills).on('click', () => {
 					this.selected_quarter = q.quarter;
-					this.expanded_quarters.add(q.quarter); // NEW: auto-expand the quarter being filtered to
+					this.expanded_quarters.add(q.quarter);
 					this.$qpills.find('.dob3-qpill').removeClass('dob3-active');
 					$p.addClass('dob3-active');
 					this._render_main();
@@ -367,6 +372,7 @@ class DispatchOrderBalancePage {
 		this.selected_quarter = null;
 		this.$qpills.find('.dob3-qpill').removeClass('dob3-active');
 		this.$qpills.find('.dob3-qpill-all').addClass('dob3-active');
+		clearTimeout(this._timer);
 		this.refresh();
 	}
 
@@ -388,15 +394,15 @@ class DispatchOrderBalancePage {
 
 	refresh() {
 		this._show_skeleton();
+		const req = ++this._req;
 		frappe.call({
 			method: 'informatics_custom_apps.ripl_customized_apps.page.dispatch_order_balan.dispatch_order_balan.get_page_data',
 			args:   { filters: this._get_filters() },
 			callback: (r) => {
+				if (req !== this._req) return;
 				this.data = r.message || {};
 				this.active_key = null;
 
-				// NEW: default-expand the most recent (current) quarter so its
-				// items are visible without an extra click; other quarters stay collapsed.
 				const quarters = this.data.quarters || [];
 				this.expanded_quarters = quarters.length
 					? new Set([quarters[quarters.length - 1].quarter])
@@ -407,6 +413,7 @@ class DispatchOrderBalancePage {
 				this._render_summary(this.data.today_summary, this.data.as_on);
 			},
 			error: () => {
+				if (req !== this._req) return;
 				this.$main.html(`<div class="dob3-empty"><i class="fa fa-exclamation-triangle"></i>Failed to load data.</div>`);
 			},
 		});
@@ -418,14 +425,20 @@ class DispatchOrderBalancePage {
 		this.$summary.empty(); this.$sec_sum.text('');
 	}
 
-	/* ── MAIN TABLE HEADERS (3 columns: Ordered / Supplied / Pending) ── */
-	_th(first_label) {
+	_th(first_label, with_alloc) {
 		return `<tr>
 			<th class="dob3-rowlabel" style="text-align:left;background:#e8eef4 !important;border-right:3px solid #8fa8bb !important;">${first_label}</th>
+			${with_alloc ? '<th class="dob3-col-alloc">Allocated (KLR)</th>' : ''}
 			<th class="dob3-col-ord">Ordered</th>
 			<th class="dob3-col-supt">Supplied</th>
 			<th class="dob3-col-pend">Pending</th>
 		</tr>`;
+	}
+
+	_alloc_for(item_code, labels) {
+		const a = (this.data.allocations || {})[item_code];
+		if (!a) return null;
+		return labels.reduce((sum, l) => sum + (a[l] || 0), 0);
 	}
 
 	_render_main() {
@@ -449,12 +462,6 @@ class DispatchOrderBalancePage {
 			: quarters;
 	}
 
-	/* ═══════════════════════════════════════════════════
-	   QUARTER MODE  — 3-level inline drill
-	   Quarter block (click header to expand/collapse)
-	     └─ Item rows (click to expand Customer panel)
-	          └─ Customer rows (click to open PO dialog)
-	═══════════════════════════════════════════════════ */
 	_render_quarter_mode(all_rows) {
 		const quarters = this._visible_quarters();
 		const $wrap = $(`<div></div>`);
@@ -476,11 +483,10 @@ class DispatchOrderBalancePage {
 
 	_render_quarter_block($wrap, q, q_rows) {
 		const agg = _agg(q_rows);
-		const expanded = this.expanded_quarters.has(q.quarter); // NEW
+		const expanded = this.expanded_quarters.has(q.quarter);
 
 		const $block = $(`<div class="dob3-qblock"></div>`).appendTo($wrap);
 
-		// Quarter header bar — now clickable to expand/collapse
 		const $hdr = $(`<div class="dob3-qhdr${expanded ? ' dob3-qhdr-open' : ''}">
 			<span class="dob3-qchev">›</span>
 			<i class="fa fa-calendar" style="opacity:.7;"></i>
@@ -502,13 +508,19 @@ class DispatchOrderBalancePage {
 			this._render_main();
 		});
 
-		if (!expanded) return; // collapsed — don't render the items table
+		if (!expanded) return;
 
-		// Item table inside this quarter
 		const item_map = _group(q_rows, r => r.item_code);
 		const item_entries = Object.entries(item_map).map(([ic, i_rows]) => ({
 			key: ic, label: i_rows[0].item_name || ic, rows: i_rows, agg: _agg(i_rows),
 		}));
+		const present = new Set(item_entries.map(e => e.key));
+		(this.data.items || []).forEach(it => {
+			if (present.has(it.item_code)) return;
+			if (this._alloc_for(it.item_code, [q.quarter])) {
+				item_entries.push({ key: it.item_code, label: it.item_name || it.item_code, rows: [], agg: _agg([]) });
+			}
+		});
 		const visible_items = this.show_zero ? item_entries : item_entries.filter(e => e.agg.pending > 0);
 
 		if (!visible_items.length) {
@@ -517,13 +529,17 @@ class DispatchOrderBalancePage {
 		}
 
 		const $tbl_wrap = $(`<div class="dob3-table-wrap" style="border-radius:0;border:none;border-top:2px solid #aab8c3;"></div>`).appendTo($block);
-		const $tbody = $(`<table class="dob3-sumtbl"><thead>${this._th('Item')}</thead><tbody></tbody></table>`).appendTo($tbl_wrap).find('tbody');
+		const $tbody = $(`<table class="dob3-sumtbl"><thead>${this._th('Item', true)}</thead><tbody></tbody></table>`).appendTo($tbl_wrap).find('tbody');
 
 		const q_key = q.quarter;
+		let alloc_total = 0, has_alloc = false;
 		visible_items.forEach(e => {
 			const a   = e.agg;
 			const epc = _pend_cls(a.pending);
 			const composite_key = q_key + '|||' + e.key;
+			const alloc = this._alloc_for(e.key, [q.quarter]);
+			alloc_total += alloc || 0;
+			has_alloc = has_alloc || alloc != null;
 			const is_active = this.active_key === composite_key;
 
 			const $row = $(`<tr class="dob3-itemrow${is_active ? ' dob3-itemrow-active' : ''}" data-ckey="${_esc(composite_key)}">
@@ -532,14 +548,14 @@ class DispatchOrderBalancePage {
 					<div class="dob3-sub">${_esc(e.key)}</div>
 					<span class="dob3-chev">›</span>
 				</td>
+				<td class="dob3-col-alloc">${_kl(alloc)}</td>
 				<td class="dob3-col-ord">${_n(a.order)}</td>
 				<td class="dob3-col-supt">${_n(a.supplied)}</td>
 				<td class="dob3-col-pend ${epc}">${_n(a.pending)}</td>
 			</tr>`).appendTo($tbody);
 
-			// If this item is active, render customer panel as a full-width row below
 			if (is_active) {
-				const $panel_row = $(`<tr><td colspan="4" style="padding:0;border-top:none;"></td></tr>`).appendTo($tbody);
+				const $panel_row = $(`<tr><td colspan="5" style="padding:0;border-top:none;"></td></tr>`).appendTo($tbody);
 				this._render_customer_panel($panel_row.find('td'), e.rows, q_key, e.label);
 			}
 
@@ -549,10 +565,10 @@ class DispatchOrderBalancePage {
 			});
 		});
 
-		// Quarter total row
 		const ta = _agg(visible_items.map(e => e.rows).flat());
 		$(`<tr class="dob3-totalrow">
 			<td class="dob3-rowlabel">Total</td>
+			<td class="dob3-col-alloc">${has_alloc ? _n(alloc_total) : '—'}</td>
 			<td class="dob3-col-ord">${_n(ta.order)}</td>
 			<td class="dob3-col-supt">${_n(ta.supplied)}</td>
 			<td class="dob3-col-pend ${_pend_cls(ta.pending)}">${_n(ta.pending)}</td>
@@ -573,13 +589,6 @@ class DispatchOrderBalancePage {
 			return;
 		}
 
-		// FIX: build the title block and the table-wrap as two SEPARATE appends
-		// directly onto $card, instead of creating both as sibling root nodes in
-		// one jQuery-parsed multi-root string and then trying to `.find()` one
-		// out of the other. `.find()` only searches descendants — siblings
-		// inside the same parsed collection are never descendants of each other —
-		// so the previous code's `$tbl_wrap` was always empty and the table was
-		// being appended to nothing. That's why the customer panel never showed.
 		$(`<div style="padding:12px 16px 4px;">
 			<div class="dob3-card-title" style="font-size:13px;margin-bottom:8px;">
 				<i class="fa fa-users" style="color:#27AE60;"></i>
@@ -614,10 +623,6 @@ class DispatchOrderBalancePage {
 		</tr>`).appendTo($tbody);
 	}
 
-	/* ═══════════════════════════════════════════════════
-	   ITEM MODE  — same as before:
-	   Item summary → Customer panel → PO dialog
-	═══════════════════════════════════════════════════ */
 	_render_item_mode(all_rows) {
 		const filter_rows = this.selected_quarter
 			? (() => {
@@ -646,6 +651,8 @@ class DispatchOrderBalancePage {
 
 	_render_item_summary_table($wrap, entries) {
 		let totals = { order:0, supplied:0, pending:0 };
+		let alloc_total = 0, has_alloc = false;
+		const q_labels = this._visible_quarters().map(q => q.quarter);
 		let body = '';
 
 		entries.forEach(e => {
@@ -653,6 +660,9 @@ class DispatchOrderBalancePage {
 			totals.order    += a.order;
 			totals.supplied += a.supplied;
 			totals.pending  += a.pending;
+			const alloc = this._alloc_for(e.key, q_labels);
+			alloc_total += alloc || 0;
+			has_alloc = has_alloc || alloc != null;
 			const pc        = _pend_cls(a.pending);
 			const is_active = this.active_key === e.key;
 			body += `<tr class="dob3-sumrow${is_active ? ' dob3-sumrow-active' : ''}" data-key="${_esc(e.key)}">
@@ -661,6 +671,7 @@ class DispatchOrderBalancePage {
 					<div class="dob3-sub">${_esc(e.sub)}</div>
 					<span class="dob3-chev">›</span>
 				</td>
+				<td class="dob3-col-alloc">${_kl(alloc)}</td>
 				<td class="dob3-col-ord">${_n(a.order)}</td>
 				<td class="dob3-col-supt">${_n(a.supplied)}</td>
 				<td class="dob3-col-pend ${pc}">${_n(a.pending)}</td>
@@ -669,6 +680,7 @@ class DispatchOrderBalancePage {
 
 		body += `<tr class="dob3-totalrow">
 			<td class="dob3-rowlabel">Total</td>
+			<td class="dob3-col-alloc">${has_alloc ? _n(alloc_total) : '—'}</td>
 			<td class="dob3-col-ord">${_n(totals.order)}</td>
 			<td class="dob3-col-supt">${_n(totals.supplied)}</td>
 			<td class="dob3-col-pend ${_pend_cls(totals.pending)}">${_n(totals.pending)}</td>
@@ -683,7 +695,7 @@ class DispatchOrderBalancePage {
 				</div>
 				<div class="dob3-table-wrap">
 					<table class="dob3-sumtbl">
-						<thead>${this._th('Item')}</thead>
+						<thead>${this._th('Item', true)}</thead>
 						<tbody>${body}</tbody>
 					</table>
 				</div>
@@ -755,7 +767,6 @@ class DispatchOrderBalancePage {
 	}
 
 	_po_table(rows) {
-		/* Group by PO No → aggregate per PO */
 		const po_map = _group(rows, r => r.po_no || '—');
 		const po_entries = Object.entries(po_map).map(([po_no, po_rows]) => ({
 			po_no, rows: po_rows, agg: _agg(po_rows),
@@ -865,12 +876,12 @@ class DispatchOrderBalancePage {
 
 	_render_summary(data, as_on) {
 		if (!data || !data.length) {
-			this.$sec_sum.text("Today's Stock & Dispatch");
+			this.$sec_sum.text("Stock & Dispatch");
 			this.$summary.html(`<div class="dob3-empty" style="padding:16px;">No data.</div>`);
 			return;
 		}
 		const dl = (data[0] && data[0].as_on) || as_on;
-		this.$sec_sum.html(`Today&#39;s Stock &amp; Dispatch
+		this.$sec_sum.html(`Stock &amp; Dispatch
 			<span style="font-weight:500;font-size:11px;color:#8796A8;text-transform:none;letter-spacing:0;">
 				— ${frappe.datetime.str_to_user(dl)}
 			</span>`);
@@ -881,18 +892,18 @@ class DispatchOrderBalancePage {
 			const bc   = b < 0 ? 'cv-bal-neg' : b > 0 ? 'cv-bal-pos' : 'cv-bal-zero';
 			return `<tr${is_t ? ' class="dob3-total"' : ''}>
 				<td>${is_t ? '<strong>Total</strong>' : _esc(d.item_name || d.item_code)}</td>
-				<td>${_n(d.stock_qty)}</td>
+				<td>${_kl(d.stock_kl)}</td>
 				<td>${_n(d.dispatch_qty)}</td>
-				<td class="${bc}">${_n(b)}</td>
+				<td class="${bc}">${_kl(d.balance_kl)}</td>
 			</tr>`;
 		}).join('');
 
 		this.$summary.html(`
-			<div class="dob3-card" style="max-width:520px;">
+			<div class="dob3-card" style="max-width:560px;">
 				<table class="dob3-sum-tbl">
 					<thead><tr>
 						<th style="text-align:left">Item</th>
-						<th>Stock</th><th>Dispatched Today</th><th>Balance</th>
+						<th>Stock (KLR)</th><th>Dispatched</th><th>Balance (KLR)</th>
 					</tr></thead>
 					<tbody>${rows_html}</tbody>
 				</table>
@@ -1036,7 +1047,6 @@ class DispatchOrderBalancePage {
 	}
 }
 
-/* ── UTILITIES ── */
 function _group(arr, key_fn) {
 	const map = {};
 	for (const item of arr) {
@@ -1061,6 +1071,8 @@ function _pend_cls(v) {
 }
 
 function _n(v) { const n = parseFloat(v); return isNaN(n) ? '' : n.toFixed(3); }
+
+function _kl(v) { return v == null ? '—' : _n(v); }
 
 function _esc(v) { return frappe.utils.escape_html(String(v == null ? '' : v)); }
 
