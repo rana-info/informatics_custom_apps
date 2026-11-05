@@ -197,9 +197,10 @@ class ZZMaintenance(Document):
 				if not self.get(field):
 					frappe.throw(f"{frappe.bold(field.replace('_', ' ').capitalize())} is mandatory for this transaction")
 
-		for k in self.items or []:
-			if not k.accepted_quantity:
-				frappe.throw("Accepted qty in row {} can't be zero".format(k.idx))
+		if self.entry_type == "Inward":
+			for k in self.items or []:
+				if not k.accepted_quantity:
+					frappe.throw("Accepted qty in row {} can't be zero".format(k.idx))
 
 		# Whole method runs in one DB transaction: any throw below rolls back
 		# the card assignment as well.
@@ -252,24 +253,33 @@ class ZZMaintenance(Document):
 	def update_transaction(self):
 		if not self.gate_entry:
 			frappe.throw("Gate Entry is mandatory for Update")
-		if self.entry_type != "Inward":
-			frappe.throw("Only <b>Inward</b> Entries are allowed to update")
 
-		for field in REQUIRED_FIELDS:
-			if not self.get(field):
-				frappe.throw(f"{frappe.bold(field.replace('_', ' ').capitalize())} is mandatory for this transaction")
+		if self.entry_type == "Inward":
+			for field in REQUIRED_FIELDS:
+				if not self.get(field):
+					frappe.throw(f"{frappe.bold(field.replace('_', ' ').capitalize())} is mandatory for this transaction")
 
-		for k in self.items or []:
-			if not k.accepted_quantity:
-				frappe.throw("Accepted qty in row {} can't be zero".format(k.idx))
+			for k in self.items or []:
+				if not k.accepted_quantity:
+					frappe.throw("Accepted qty in row {} can't be zero".format(k.idx))
+		elif self.entry_type == "Outward":
+			for field in ("weighment_date", "outward_date", "tare_weight", "gross_weight", "net_weight"):
+				if not self.get(field):
+					frappe.throw(f"{frappe.bold(field.replace('_', ' ').capitalize())} is mandatory for this transaction")
+			if self.gross_weight <= self.tare_weight or self.net_weight <= 0:
+				frappe.throw("Gross weight must be greater than tare weight and net weight must be positive")
+		else:
+			frappe.throw("Entry Type must be Inward or Outward")
 
 		# only a draft Purchase Receipt may be replaced (no stock / GL entries exist yet)
-		old_pr = self._get_pr(self.gate_entry)
-		if old_pr and frappe.db.get_value("Purchase Receipt", old_pr, "docstatus") != 0:
-			frappe.throw(
-				"Purchase Receipt {} is already <b>submitted</b>. Update is allowed only while the "
-				"Purchase Receipt is in <b>Draft</b>.".format(frappe.bold(get_link_to_form("Purchase Receipt", old_pr)))
-			)
+		old_pr = None
+		if self.entry_type == "Inward":
+			old_pr = self._get_pr(self.gate_entry)
+			if old_pr and frappe.db.get_value("Purchase Receipt", old_pr, "docstatus") != 0:
+				frappe.throw(
+					"Purchase Receipt {} is already <b>submitted</b>. Update is allowed only while the "
+					"Purchase Receipt is in <b>Draft</b>.".format(frappe.bold(get_link_to_form("Purchase Receipt", old_pr)))
+				)
 
 		started = now_datetime()
 
@@ -278,9 +288,22 @@ class ZZMaintenance(Document):
 			pr_meta = self._delete_purchase_receipt(old_pr)
 
 		gate_entry = frappe.get_doc("Gate Entry", self.gate_entry)
-		modified_g, modified_by_g = gate_entry.modified, gate_entry.modified_by
 		scalars, child_tables = self._split()
 
+		if self.entry_type == "Outward":
+			self._update_without_hooks(gate_entry, scalars, skip_blank=("card_number", "segment"))
+			weighment = frappe.get_doc("Weighment", {"gate_entry_number": gate_entry.name})
+			self._update_without_hooks(weighment, scalars, skip_blank=("card_number", "segment"))
+
+			self._update_outward_delivery_notes(weighment)
+			self._finalize_flags(gate_entry, weighment)
+			self._notify(
+				"Data Updated Successfully",
+				f"Data Updated Successfully: {gate_entry.name}, {weighment.name}",
+			)
+			return True
+
+		modified_g, modified_by_g = gate_entry.modified, gate_entry.modified_by
 		self._copy_to(gate_entry, scalars, child_tables, only_changed=True,
 			skip_blank=("card_number", "segment"))
 		self._save_silently(gate_entry)
@@ -297,7 +320,7 @@ class ZZMaintenance(Document):
 			self._save_silently(weighment)
 			self._notify("Data Updated Successfully", f"Data Updated Successfully: {weighment.name}")
 
-		# ---- 4. Re-create Purchase Receipt with the same ID
+		# ---- 4. Re-create the inward Purchase Receipt with the same ID.
 		pr_name = old_pr
 		if weighment:
 			self._ensure_purchase_receipt(weighment, gate_entry.name)
@@ -323,6 +346,68 @@ class ZZMaintenance(Document):
 		])
 
 		return True
+
+	def _update_without_hooks(self, doc, scalars, skip_blank=()):
+		"""Update outward fields directly, avoiding costly submit hooks and child-table rewrites."""
+		meta = frappe.get_meta(doc.doctype)
+		values = {
+			key: value for key, value in scalars.items()
+			if meta.has_field(key) and (key not in skip_blank or value)
+		}
+		values = {
+			key: value for key, value in values.items()
+			if doc.get(key) != value
+		}
+		if values:
+			frappe.db.set_value(doc.doctype, doc.name, values, update_modified=False)
+			for key, value in values.items():
+				doc.set(key, value)
+
+	def _update_outward_delivery_notes(self, weighment):
+		"""Apply the final outward net weight to its weighment and draft delivery notes."""
+		if not weighment.delivery_note_details:
+			frappe.throw("No Delivery Note Details are linked to Weighment {}".format(weighment.name))
+
+		details_by_note = {}
+		for detail in weighment.delivery_note_details:
+			if not detail.delivery_note or not detail.item:
+				frappe.throw("Delivery Note and Item are required in Weighment {}".format(weighment.name))
+			details_by_note.setdefault(detail.delivery_note, set()).add(detail.item)
+
+		for delivery_note_name, item_codes in details_by_note.items():
+			delivery_note = frappe.get_doc("Delivery Note", delivery_note_name)
+			if delivery_note.docstatus != 0:
+				frappe.throw(
+					"Delivery Note {} is not in Draft. Cancel or amend it before updating the outward weighment.".format(
+						frappe.bold(get_link_to_form("Delivery Note", delivery_note_name))
+					)
+				)
+
+			matching_items = [
+				item for item in delivery_note.items if item.item_code in item_codes
+			]
+			if not matching_items:
+				frappe.throw(
+					"No matching items found in Delivery Note {}".format(
+						get_link_to_form("Delivery Note", delivery_note_name)
+					)
+				)
+
+			for detail in weighment.delivery_note_details:
+				if detail.delivery_note == delivery_note_name:
+					frappe.db.set_value(
+						"Delivery Note Details",
+						detail.name,
+						"qty",
+						self.net_weight,
+						update_modified=False,
+					)
+
+			for item in matching_items:
+				item.qty = self.net_weight
+			self._save_silently(delivery_note)
+
+		return list(details_by_note)
 
 	def _save_silently(self, doc):
 		"""Save without Version row and without permission / after-submit blockers."""
