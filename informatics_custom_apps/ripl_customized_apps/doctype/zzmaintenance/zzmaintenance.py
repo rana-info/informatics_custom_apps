@@ -94,10 +94,11 @@ class ZZMaintenance(Document):
 
 	def _populate_contact_and_location(self, doc):
 		location = self.location or frappe.db.get_value("Branch", self.branch, "custom_location")
+		transporter = self.transporter or doc.get("transporter")
 		transporter_name = (
-			frappe.db.get_value("Supplier", self.transporter, "supplier_name")
-			if self.transporter else None
-		)
+			frappe.db.get_value("Supplier", transporter, "supplier_name")
+			if transporter else None
+		) or self.transporter_name or doc.get("transporter_name")
 		driver_name = self.driver_name
 		driver_contact = self.driver_contact
 		if self.vehicle_owner == "Company Owned" and self.driver:
@@ -108,30 +109,47 @@ class ZZMaintenance(Document):
 				driver_name = driver.full_name
 				driver_contact = driver.cell_number
 		self._set_if_field_exists(doc, "location", location)
-		self._set_if_field_exists(doc, "transporter", self.transporter)
+		self._set_if_field_exists(doc, "transporter", transporter)
 		self._set_if_field_exists(doc, "transporter_name", transporter_name)
 		self._set_if_field_exists(doc, "driver_name", driver_name)
 		self._set_if_field_exists(doc, "driver_contact", driver_contact)
 
-	def _persist_transporter(self, doc):
-		if not self.transporter:
+	def _persist_transporter(self, doc, source_doc=None):
+		transporter = (
+			self.transporter
+			or (source_doc.get("transporter") if source_doc else None)
+			or doc.get("transporter")
+		)
+		if not transporter:
 			return
 
-		transporter_name = frappe.db.get_value(
-			"Supplier", self.transporter, "supplier_name"
+		transporter_name = (
+			frappe.db.get_value("Supplier", transporter, "supplier_name")
+			or self.transporter_name
+			or (source_doc.get("transporter_name") if source_doc else None)
+			or doc.get("transporter_name")
 		)
+		if not transporter_name:
+			frappe.throw(f"Supplier {frappe.bold(transporter)} has no Supplier Name")
 		values = {
 			fieldname: value
 			for fieldname, value in (
-				("transporter", self.transporter),
+				("transporter", transporter),
 				("transporter_name", transporter_name),
 			)
-			if value and doc.meta.has_field(fieldname)
+			if doc.meta.has_field(fieldname)
 		}
 		if values:
 			frappe.db.set_value(doc.doctype, doc.name, values, update_modified=False)
 			for fieldname, value in values.items():
 				doc.set(fieldname, value)
+			saved_values = frappe.db.get_value(
+				doc.doctype, doc.name, list(values), as_dict=True
+			)
+			if any(saved_values.get(field) != value for field, value in values.items()):
+				frappe.throw(
+					f"Could not persist transporter details on {doc.doctype} {doc.name}"
+				)
 
 	def _populate_weighment_delivery_notes(self, weighment):
 		weighment.set("delivery_notes", [])
@@ -328,7 +346,6 @@ class ZZMaintenance(Document):
 		gate_entry.set("modified", creation)
 		gate_entry.insert(ignore_permissions=True)
 		gate_entry.submit()
-		self._persist_transporter(gate_entry)
 		self._stamp(gate_entry, creation)
 		self._notify("Gate Entry Created", f"Gate Entry Created: {gate_entry.name}")
 
@@ -359,6 +376,8 @@ class ZZMaintenance(Document):
 			if self.entry_type == "Inward":
 				# Purchase Receipts are created only for inward transactions.
 				self._ensure_purchase_receipt(weighment, gate_entry.name)
+
+		self._persist_transporter(gate_entry, weighment)
 
 		# nothing after this point may flip the flag back
 		self._finalize_flags(gate_entry, weighment)
@@ -410,9 +429,18 @@ class ZZMaintenance(Document):
 		scalars, child_tables = self._split()
 
 		if self.entry_type == "Outward":
-			self._update_without_hooks(gate_entry, scalars, skip_blank=("card_number", "segment"))
+			self._update_without_hooks(
+				gate_entry,
+				scalars,
+				skip_blank=("card_number", "segment", "transporter", "transporter_name"),
+			)
 			weighment = frappe.get_doc("Weighment", {"gate_entry_number": gate_entry.name})
-			self._update_without_hooks(weighment, scalars, skip_blank=("card_number", "segment"))
+			self._update_without_hooks(
+				weighment,
+				scalars,
+				skip_blank=("card_number", "segment", "transporter", "transporter_name"),
+			)
+			self._persist_transporter(gate_entry, weighment)
 
 			self._update_outward_delivery_notes(weighment)
 			self._finalize_flags(gate_entry, weighment)
