@@ -4,7 +4,7 @@
 import frappe
 from frappe.model.document import Document
 from datetime import datetime
-from frappe.utils import get_link_to_form, now_datetime
+from frappe.utils import flt, get_link_to_form, now_datetime
 from frappe.utils.data import get_time, getdate
 
 # Keys that must never be copied from this Single doc to Gate Entry / Weighment
@@ -25,6 +25,38 @@ REQUIRED_FIELDS = [
 
 
 RELEASE_CARD_AFTER_COMPLETE = True
+
+
+@frappe.whitelist()
+def get_delivery_notes_for_item_group(doctype, txt, searchfield, start, page_len, filters):
+	filters = frappe.parse_json(filters) if isinstance(filters, str) else (filters or {})
+	branch = filters.get("branch")
+	item_group = filters.get("item_group")
+	if not branch or not item_group:
+		return []
+
+	search_text = f"%{txt or ''}%"
+	return frappe.db.sql(
+		"""
+		SELECT DISTINCT dn.name, dn.customer, dn.branch
+		FROM `tabDelivery Note` dn
+		INNER JOIN `tabDelivery Note Item` dni ON dni.parent = dn.name
+		WHERE dn.docstatus = 0
+			AND dn.branch = %(branch)s
+			AND (dn.custom_weighment IS NULL OR dn.custom_weighment = '')
+			AND dni.item_group = %(item_group)s
+			AND (dn.name LIKE %(search_text)s OR dn.customer LIKE %(search_text)s)
+		ORDER BY dn.name
+		LIMIT %(page_len)s OFFSET %(start)s
+		""",
+		{
+			"branch": branch,
+			"item_group": item_group,
+			"search_text": search_text,
+			"page_len": page_len,
+			"start": start,
+		},
+	)
 
 
 
@@ -55,6 +87,72 @@ class ZZMaintenance(Document):
 			target.set(table_field, [])
 			for row in rows:
 				target.append(table_field, {k: v for k, v in row.items() if k not in SKIP_ROW_KEYS})
+
+	def _set_if_field_exists(self, doc, fieldname, value):
+		if value is not None and doc.meta.has_field(fieldname):
+			doc.set(fieldname, value)
+
+	def _populate_contact_and_location(self, doc):
+		location = self.location or frappe.db.get_value("Branch", self.branch, "custom_location")
+		transporter_name = (
+			frappe.db.get_value("Supplier", self.transporter, "supplier_name")
+			if self.transporter else None
+		)
+		driver_name = self.driver_name
+		driver_contact = self.driver_contact
+		if self.vehicle_owner == "Company Owned" and self.driver:
+			driver = frappe.db.get_value(
+				"Driver", self.driver, ["full_name", "cell_number"], as_dict=True
+			)
+			if driver:
+				driver_name = driver.full_name
+				driver_contact = driver.cell_number
+		self._set_if_field_exists(doc, "location", location)
+		self._set_if_field_exists(doc, "transporter", self.transporter)
+		self._set_if_field_exists(doc, "transporter_name", transporter_name)
+		self._set_if_field_exists(doc, "driver_name", driver_name)
+		self._set_if_field_exists(doc, "driver_contact", driver_contact)
+
+	def _persist_transporter(self, doc):
+		if not self.transporter:
+			return
+
+		transporter_name = frappe.db.get_value(
+			"Supplier", self.transporter, "supplier_name"
+		)
+		values = {
+			fieldname: value
+			for fieldname, value in (
+				("transporter", self.transporter),
+				("transporter_name", transporter_name),
+			)
+			if value and doc.meta.has_field(fieldname)
+		}
+		if values:
+			frappe.db.set_value(doc.doctype, doc.name, values, update_modified=False)
+			for fieldname, value in values.items():
+				doc.set(fieldname, value)
+
+	def _populate_weighment_delivery_notes(self, weighment):
+		weighment.set("delivery_notes", [])
+		seen_notes = set()
+		for row in self.delivery_note or []:
+			if row.delivery_note and row.delivery_note not in seen_notes:
+				weighment.append("delivery_notes", {"delivery_note": row.delivery_note})
+				seen_notes.add(row.delivery_note)
+
+		net_weight = flt(self.net_weight)
+		self._set_if_field_exists(weighment, "total_weight", net_weight)
+		self._set_if_field_exists(
+			weighment,
+			"minimum_permissible_weight",
+			net_weight,
+		)
+		self._set_if_field_exists(
+			weighment,
+			"maximum_permissible_weight",
+			net_weight,
+		)
 
 	def _creation_dt(self):
 		return safe_parse_datetime(f"{getdate(self.date)} {get_time(self.time)}")
@@ -221,12 +319,16 @@ class ZZMaintenance(Document):
 		# ---- Gate Entry
 		gate_entry = frappe.new_doc("Gate Entry")
 		self._copy_to(gate_entry, scalars, child_tables)
+		if self.entry_type == "Outward":
+			gate_entry.is_weighment_required = self.is_weighment_required or "Yes"
+		self._populate_contact_and_location(gate_entry)
 		gate_entry.segment = self.segment
 		gate_entry.card_number = card_number
 		gate_entry.set("creation", creation)
 		gate_entry.set("modified", creation)
 		gate_entry.insert(ignore_permissions=True)
 		gate_entry.submit()
+		self._persist_transporter(gate_entry)
 		self._stamp(gate_entry, creation)
 		self._notify("Gate Entry Created", f"Gate Entry Created: {gate_entry.name}")
 
@@ -236,6 +338,10 @@ class ZZMaintenance(Document):
 				self.tare_weight, self.gross_weight, self.net_weight]):
 			weighment = frappe.new_doc("Weighment")
 			self._copy_to(weighment, scalars, child_tables)
+			if self.entry_type == "Outward":
+				weighment.is_weighment_required = self.is_weighment_required or "Yes"
+			self._populate_contact_and_location(weighment)
+			self._populate_weighment_delivery_notes(weighment)
 			weighment.gate_entry_number = gate_entry.name
 			weighment.is_completed = 1
 			for fld, val in (("card_number", card_number), ("segment", self.segment)):
@@ -245,11 +351,14 @@ class ZZMaintenance(Document):
 			weighment.set("modified", creation)
 			weighment.insert(ignore_permissions=True)
 			weighment.submit()
+			if self.entry_type == "Outward":
+				self._update_outward_delivery_notes(weighment)
 			self._stamp(weighment, creation)
 			self._notify("Weighment Created", f"Weighment Created: {weighment.name}")
 
-			# ---- Purchase Receipt (same as System Maintenance)
-			self._ensure_purchase_receipt(weighment, gate_entry.name)
+			if self.entry_type == "Inward":
+				# Purchase Receipts are created only for inward transactions.
+				self._ensure_purchase_receipt(weighment, gate_entry.name)
 
 		# nothing after this point may flip the flag back
 		self._finalize_flags(gate_entry, weighment)
@@ -394,6 +503,9 @@ class ZZMaintenance(Document):
 					)
 				)
 
+			if delivery_note.meta.has_field("custom_weighment"):
+				delivery_note.custom_weighment = weighment.name
+
 			matching_items = [
 				item for item in delivery_note.items if item.item_code in item_codes
 			]
@@ -419,6 +531,74 @@ class ZZMaintenance(Document):
 			self._save_silently(delivery_note)
 
 		return list(details_by_note)
+
+	@frappe.whitelist()
+	def get_delivery_note_items(self):
+		if not self.branch:
+			frappe.throw("Select a Plant before selecting Delivery Notes")
+		if not self.item_group:
+			frappe.throw("Select an Item Group before selecting Delivery Notes")
+
+		selected_notes = list(dict.fromkeys(
+			row.delivery_note for row in self.delivery_note or [] if row.delivery_note
+		))
+		if not selected_notes:
+			frappe.throw("Select at least one Delivery Note")
+
+		valid_notes = frappe.db.sql(
+			"""
+			SELECT DISTINCT dn.name
+			FROM `tabDelivery Note` dn
+			INNER JOIN `tabDelivery Note Item` dni ON dni.parent = dn.name
+			WHERE dn.name IN %(selected_notes)s
+				AND dn.branch = %(branch)s
+				AND dn.docstatus = 0
+				AND (dn.custom_weighment IS NULL OR dn.custom_weighment = '')
+				AND dni.item_group = %(item_group)s
+			""",
+			{
+				"selected_notes": tuple(selected_notes),
+				"branch": self.branch,
+				"item_group": self.item_group,
+			},
+		)
+		valid_note_set = {row[0] for row in valid_notes}
+		ineligible_notes = [name for name in selected_notes if name not in valid_note_set]
+		if ineligible_notes:
+			frappe.throw(
+				"These Delivery Notes must be Draft, unlinked to a Weighment, belong to Plant {}, and contain Item Group {}: {}".format(
+					frappe.bold(self.branch), frappe.bold(self.item_group), ", ".join(ineligible_notes)
+				)
+			)
+
+		item_fields = ["parent", "item_code", "item_name", "qty", "uom", "total_weight"]
+		if frappe.get_meta("Delivery Note Item").has_field("custom_total_package_weight"):
+			item_fields.append("custom_total_package_weight")
+
+		items = frappe.get_all(
+			"Delivery Note Item",
+			filters={
+				"parent": ["in", selected_notes],
+				"item_group": self.item_group,
+			},
+			fields=item_fields,
+			order_by="parent asc, idx asc",
+		)
+		if not items:
+			frappe.throw("No item rows found in the selected Delivery Notes")
+
+		return [
+			{
+				"delivery_note": item.parent,
+				"item": item.item_code,
+				"item_name": item.item_name,
+				"qty": item.qty,
+				"uom": item.uom,
+				"total_weight": flt(item.get("custom_total_package_weight"))
+					+ flt(item.get("total_weight")),
+			}
+			for item in items
+		]
 
 	def _save_silently(self, doc):
 		"""Save without Version row and without permission / after-submit blockers."""
