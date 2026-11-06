@@ -175,9 +175,9 @@ class ZZMaintenance(Document):
 		if self.branch:
 			conditions.append("branch = %(branch)s")
 			values["branch"] = self.branch
-		if self.location:
-			conditions.append("location = %(location)s")
-			values["location"] = self.location
+		# if self.location:
+		# 	conditions.append("location = %(location)s")
+		# 	values["location"] = self.location
 
 		card = frappe.db.sql(
 			f"""
