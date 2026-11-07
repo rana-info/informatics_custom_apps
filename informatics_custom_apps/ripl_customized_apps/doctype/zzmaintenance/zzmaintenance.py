@@ -118,17 +118,17 @@ class ZZMaintenance(Document):
 
 	def _persist_transporter(self, doc, source_doc=None):
 		transporter = (
-			self.transporter
-			or (source_doc.get("transporter") if source_doc else None)
+			(source_doc.get("transporter") if source_doc else None)
+			or self.transporter
 			or doc.get("transporter")
 		)
 		if not transporter:
 			return
 
 		transporter_name = (
-			frappe.db.get_value("Supplier", transporter, "supplier_name")
+			(source_doc.get("transporter_name") if source_doc else None)
+			or frappe.db.get_value("Supplier", transporter, "supplier_name")
 			or self.transporter_name
-			or (source_doc.get("transporter_name") if source_doc else None)
 			or doc.get("transporter_name")
 		)
 		if not transporter_name:
@@ -536,6 +536,23 @@ class ZZMaintenance(Document):
 			if delivery_note.meta.has_field("custom_weighment"):
 				delivery_note.custom_weighment = weighment.name
 
+			transporter = weighment.transporter or self.transporter
+			transporter_name = (
+				weighment.transporter_name
+				or (
+					frappe.db.get_value("Supplier", transporter, "supplier_name")
+					if transporter else None
+				)
+				or self.transporter_name
+			)
+			delivery_note_values = {}
+			if transporter and delivery_note.meta.has_field("transporter"):
+				delivery_note.transporter = transporter
+				delivery_note_values["transporter"] = transporter
+			if transporter_name and delivery_note.meta.has_field("transporter_name"):
+				delivery_note.transporter_name = transporter_name
+				delivery_note_values["transporter_name"] = transporter_name
+
 			for detail in details:
 				matching_items = [
 					item for item in delivery_note.items
@@ -566,6 +583,18 @@ class ZZMaintenance(Document):
 					item.qty = qty
 
 			self._save_silently(delivery_note)
+			if delivery_note_values:
+				saved_values = frappe.db.get_value(
+					"Delivery Note", delivery_note.name,
+					list(delivery_note_values), as_dict=True,
+				)
+				if any(
+					saved_values.get(field) != value
+					for field, value in delivery_note_values.items()
+				):
+					frappe.throw(
+						f"Could not persist transporter details on Delivery Note {delivery_note.name}"
+					)
 
 		return list(details_by_note)
 
