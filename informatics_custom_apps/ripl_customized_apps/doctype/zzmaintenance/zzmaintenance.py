@@ -1,6 +1,8 @@
 # Copyright (c) 2026, Dexciss and contributors
 # For license information, please see license.txt
 
+from math import ceil
+
 import frappe
 from frappe.model.document import Document
 from datetime import datetime
@@ -520,9 +522,9 @@ class ZZMaintenance(Document):
 		for detail in weighment.delivery_note_details:
 			if not detail.delivery_note or not detail.item:
 				frappe.throw("Delivery Note and Item are required in Weighment {}".format(weighment.name))
-			details_by_note.setdefault(detail.delivery_note, set()).add(detail.item)
+			details_by_note.setdefault(detail.delivery_note, []).append(detail)
 
-		for delivery_note_name, item_codes in details_by_note.items():
+		for delivery_note_name, details in details_by_note.items():
 			delivery_note = frappe.get_doc("Delivery Note", delivery_note_name)
 			if delivery_note.docstatus != 0:
 				frappe.throw(
@@ -534,31 +536,48 @@ class ZZMaintenance(Document):
 			if delivery_note.meta.has_field("custom_weighment"):
 				delivery_note.custom_weighment = weighment.name
 
-			matching_items = [
-				item for item in delivery_note.items if item.item_code in item_codes
-			]
-			if not matching_items:
-				frappe.throw(
-					"No matching items found in Delivery Note {}".format(
-						get_link_to_form("Delivery Note", delivery_note_name)
+			for detail in details:
+				matching_items = [
+					item for item in delivery_note.items
+					if item.item_code == detail.item and item.uom == detail.uom
+				]
+				if not matching_items:
+					frappe.throw(
+						"No matching item {} with UOM {} found in Delivery Note {}".format(
+							frappe.bold(detail.item),
+							frappe.bold(detail.uom or "not set"),
+							get_link_to_form("Delivery Note", delivery_note_name),
+						)
 					)
+
+				qty = self._qty_for_uom(self.net_weight, detail.uom)
+				if qty is None:
+					continue
+
+				frappe.db.set_value(
+					"Delivery Note Details",
+					detail.name,
+					"qty",
+					qty,
+					update_modified=False,
 				)
+				detail.qty = qty
+				for item in matching_items:
+					item.qty = qty
 
-			for detail in weighment.delivery_note_details:
-				if detail.delivery_note == delivery_note_name:
-					frappe.db.set_value(
-						"Delivery Note Details",
-						detail.name,
-						"qty",
-						self.net_weight,
-						update_modified=False,
-					)
-
-			for item in matching_items:
-				item.qty = self.net_weight
 			self._save_silently(delivery_note)
 
 		return list(details_by_note)
+
+	def _qty_for_uom(self, net_weight, uom):
+		unit = (uom or "").strip().casefold()
+		if unit in {"quintal", "quintals"}:
+			return ceil(flt(net_weight) / 100)
+		if unit in {"klr", "kiloliter", "kilolitre", "kiloliters", "kilolitres"}:
+			return ceil(flt(net_weight) / 1000)
+		if unit in {"ltr", "liter", "litre", "liters", "litres","nos","NOS","meter","METER","case","CASE","box","BOX","bag","BAG","tonne","TONNE",}:
+			return None
+		return flt(net_weight)
 
 	@frappe.whitelist()
 	def get_delivery_note_items(self):
