@@ -116,42 +116,53 @@ class ZZMaintenance(Document):
 		self._set_if_field_exists(doc, "driver_name", driver_name)
 		self._set_if_field_exists(doc, "driver_contact", driver_contact)
 
-	def _persist_transporter(self, doc, source_doc=None):
-		transporter = (
-			(source_doc.get("transporter") if source_doc else None)
-			or self.transporter
-			or doc.get("transporter")
-		)
+	def _transporter_details(self):
+		"""Transporter chosen in ZZMaintenance is the only source of truth."""
+		transporter = self.transporter
 		if not transporter:
-			return
-
-		transporter_name = (
-			(source_doc.get("transporter_name") if source_doc else None)
-			or frappe.db.get_value("Supplier", transporter, "supplier_name")
-			or self.transporter_name
-			or doc.get("transporter_name")
-		)
-		if not transporter_name:
+			return None
+		fields = ["supplier_name"]
+		if frappe.get_meta("Supplier").has_field("gst_transporter_id"):
+			fields.append("gst_transporter_id")
+		supplier = frappe.db.get_value("Supplier", transporter, fields, as_dict=True)
+		if not supplier or not supplier.supplier_name:
 			frappe.throw(f"Supplier {frappe.bold(transporter)} has no Supplier Name")
-		values = {
-			fieldname: value
-			for fieldname, value in (
-				("transporter", transporter),
-				("transporter_name", transporter_name),
-			)
-			if doc.meta.has_field(fieldname)
+		return {
+			"transporter": transporter,
+			"transporter_name": supplier.supplier_name,
+			"gst_transporter_id": supplier.get("gst_transporter_id"),
 		}
-		if values:
-			frappe.db.set_value(doc.doctype, doc.name, values, update_modified=False)
-			for fieldname, value in values.items():
-				doc.set(fieldname, value)
-			saved_values = frappe.db.get_value(
-				doc.doctype, doc.name, list(values), as_dict=True
+
+	def _write_transporter(self, doctype, name, details):
+		meta = frappe.get_meta(doctype)
+		values = {f: v for f, v in details.items() if v and meta.has_field(f)}
+		if not values:
+			return
+		frappe.db.set_value(doctype, name, values, update_modified=False)
+		saved = frappe.db.get_value(doctype, name, list(values), as_dict=True)
+		if any(saved.get(f) != v for f, v in values.items()):
+			frappe.throw(f"Could not persist transporter details on {doctype} {name}")
+
+	def _persist_transporter(self, gate_entry=None, weighment=None):
+		"""Force ZZMaintenance transporter on Gate Entry, Weighment and its Delivery Notes.
+		Call this as the LAST step so no hook can overwrite it."""
+		details = self._transporter_details()
+		if not details:
+			return
+		if gate_entry:
+			self._write_transporter("Gate Entry", gate_entry.name, details)
+			gate_entry.transporter = details["transporter"]
+			gate_entry.transporter_name = details["transporter_name"]
+		if weighment:
+			self._write_transporter("Weighment", weighment.name, details)
+			weighment.transporter = details["transporter"]
+			weighment.transporter_name = details["transporter_name"]
+			notes = dict.fromkeys(
+				d.delivery_note for d in (weighment.get("delivery_note_details") or [])
+				if d.delivery_note
 			)
-			if any(saved_values.get(field) != value for field, value in values.items()):
-				frappe.throw(
-					f"Could not persist transporter details on {doc.doctype} {doc.name}"
-				)
+			for dn in notes:
+				self._write_transporter("Delivery Note", dn, details)
 
 	def _populate_weighment_delivery_notes(self, weighment):
 		weighment.set("delivery_notes", [])
@@ -379,13 +390,15 @@ class ZZMaintenance(Document):
 				# Purchase Receipts are created only for inward transactions.
 				self._ensure_purchase_receipt(weighment, gate_entry.name)
 
-		self._persist_transporter(gate_entry, weighment)
-
 		# nothing after this point may flip the flag back
 		self._finalize_flags(gate_entry, weighment)
 
 		if RELEASE_CARD_AFTER_COMPLETE:
 			self._release_card(card_number)
+
+		# LAST step: force the ZZMaintenance transporter on Gate Entry, Weighment
+		# and Delivery Notes so no hook can overwrite it.
+		self._persist_transporter(gate_entry, weighment)
 
 		return True
 
@@ -442,11 +455,14 @@ class ZZMaintenance(Document):
 				scalars,
 				skip_blank=("card_number", "segment", "transporter", "transporter_name"),
 			)
-			self._persist_transporter(gate_entry, weighment)
 
 			self._update_outward_delivery_notes(weighment)
 			self._finalize_flags(gate_entry, weighment)
 			self._release_card(gate_entry.card_number)
+
+			# LAST step: force the ZZMaintenance transporter, replacing any existing value
+			self._persist_transporter(gate_entry, weighment)
+
 			self._notify(
 				"Data Updated Successfully",
 				f"Data Updated Successfully: {gate_entry.name}, {weighment.name}",
@@ -481,6 +497,9 @@ class ZZMaintenance(Document):
 
 		self._finalize_flags(gate_entry, weighment)
 
+		# LAST data step: force the ZZMaintenance transporter, replacing any existing value
+		self._persist_transporter(gate_entry, weighment)
+
 		# ---- 5. Put back original modified stamps
 		frappe.db.set_value("Gate Entry", gate_entry.name, "modified", modified_g, update_modified=False)
 		frappe.db.set_value("Gate Entry", gate_entry.name, "modified_by", modified_by_g, update_modified=False)
@@ -514,7 +533,11 @@ class ZZMaintenance(Document):
 				doc.set(key, value)
 
 	def _update_outward_delivery_notes(self, weighment):
-		"""Apply the final outward net weight to its weighment and draft delivery notes."""
+		"""Apply the final outward net weight to its weighment and draft delivery notes.
+
+		Transporter details are NOT handled here; _persist_transporter writes them
+		as the very last step of the flow.
+		"""
 		if not weighment.delivery_note_details:
 			frappe.throw("No Delivery Note Details are linked to Weighment {}".format(weighment.name))
 
@@ -535,23 +558,6 @@ class ZZMaintenance(Document):
 
 			if delivery_note.meta.has_field("custom_weighment"):
 				delivery_note.custom_weighment = weighment.name
-
-			transporter = weighment.transporter or self.transporter
-			transporter_name = (
-				weighment.transporter_name
-				or (
-					frappe.db.get_value("Supplier", transporter, "supplier_name")
-					if transporter else None
-				)
-				or self.transporter_name
-			)
-			delivery_note_values = {}
-			if transporter and delivery_note.meta.has_field("transporter"):
-				delivery_note.transporter = transporter
-				delivery_note_values["transporter"] = transporter
-			if transporter_name and delivery_note.meta.has_field("transporter_name"):
-				delivery_note.transporter_name = transporter_name
-				delivery_note_values["transporter_name"] = transporter_name
 
 			for detail in details:
 				matching_items = [
@@ -583,18 +589,6 @@ class ZZMaintenance(Document):
 					item.qty = qty
 
 			self._save_silently(delivery_note)
-			if delivery_note_values:
-				saved_values = frappe.db.get_value(
-					"Delivery Note", delivery_note.name,
-					list(delivery_note_values), as_dict=True,
-				)
-				if any(
-					saved_values.get(field) != value
-					for field, value in delivery_note_values.items()
-				):
-					frappe.throw(
-						f"Could not persist transporter details on Delivery Note {delivery_note.name}"
-					)
 
 		return list(details_by_note)
 
