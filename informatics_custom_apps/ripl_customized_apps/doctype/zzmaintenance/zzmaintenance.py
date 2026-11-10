@@ -96,11 +96,11 @@ class ZZMaintenance(Document):
 
 	def _populate_contact_and_location(self, doc):
 		location = self.location or frappe.db.get_value("Branch", self.branch, "custom_location")
-		transporter = self.transporter or doc.get("transporter")
+		transporter = self.transporter if self.vehicle_owner == "Third Party" else None
 		transporter_name = (
 			frappe.db.get_value("Supplier", transporter, "supplier_name")
 			if transporter else None
-		) or self.transporter_name or doc.get("transporter_name")
+		) or (self.transporter_name if transporter else None)
 		driver_name = self.driver_name
 		driver_contact = self.driver_contact
 		if self.vehicle_owner == "Company Owned" and self.driver:
@@ -111,13 +111,17 @@ class ZZMaintenance(Document):
 				driver_name = driver.full_name
 				driver_contact = driver.cell_number
 		self._set_if_field_exists(doc, "location", location)
-		self._set_if_field_exists(doc, "transporter", transporter)
-		self._set_if_field_exists(doc, "transporter_name", transporter_name)
+		if doc.meta.has_field("transporter"):
+			doc.set("transporter", transporter or "")
+		if doc.meta.has_field("transporter_name"):
+			doc.set("transporter_name", transporter_name or "")
 		self._set_if_field_exists(doc, "driver_name", driver_name)
 		self._set_if_field_exists(doc, "driver_contact", driver_contact)
 
 	def _transporter_details(self):
-		"""Transporter chosen in ZZMaintenance is the only source of truth."""
+		"""Return transporter details only for third-party vehicles."""
+		if self.vehicle_owner != "Third Party":
+			return None
 		transporter = self.transporter
 		if not transporter:
 			return None
@@ -143,11 +147,44 @@ class ZZMaintenance(Document):
 		if any(saved.get(f) != v for f, v in values.items()):
 			frappe.throw(f"Could not persist transporter details on {doctype} {name}")
 
+	def _clear_transporter(self, doctype, name):
+		meta = frappe.get_meta(doctype)
+		fields = ("transporter", "transporter_name", "gst_transporter_id")
+		values = {field: "" for field in fields if meta.has_field(field)}
+		if not values:
+			return
+		frappe.db.set_value(doctype, name, values, update_modified=False)
+		saved = frappe.db.get_value(doctype, name, list(values), as_dict=True)
+		if any(saved.get(field) for field in values):
+			frappe.throw(f"Could not clear transporter details on {doctype} {name}")
+
 	def _persist_transporter(self, gate_entry=None, weighment=None):
-		"""Force ZZMaintenance transporter on Gate Entry, Weighment and its Delivery Notes.
-		Call this as the LAST step so no hook can overwrite it."""
+		"""Persist transporter only for third-party vehicles, after document hooks."""
 		details = self._transporter_details()
 		if not details:
+			if gate_entry:
+				self._clear_transporter("Gate Entry", gate_entry.name)
+				for field in ("transporter", "transporter_name"):
+					if gate_entry.meta.has_field(field):
+						gate_entry.set(field, "")
+			if weighment:
+				self._clear_transporter("Weighment", weighment.name)
+				for field in ("transporter", "transporter_name"):
+					if weighment.meta.has_field(field):
+						weighment.set(field, "")
+				notes = {
+					d.delivery_note
+					for d in (weighment.get("delivery_note_details") or [])
+					if d.delivery_note
+				}
+			else:
+				notes = set()
+			notes.update(
+				row.delivery_note for row in (self.delivery_note or [])
+				if row.delivery_note
+			)
+			for dn in notes:
+				self._clear_transporter("Delivery Note", dn)
 			return
 		if gate_entry:
 			self._write_transporter("Gate Entry", gate_entry.name, details)

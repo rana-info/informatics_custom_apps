@@ -4,6 +4,9 @@
 frappe.ui.form.on("ZZMaintenance", {
     refresh: function (frm) {
         frm.disable_save();
+        if (frm.is_new() && !frm.doc.vehicle_owner) {
+            frm.set_value("vehicle_owner", "Third Party");
+        }
         frm.trigger("set_driver_field_behavior");
         frm.trigger("set_default_weighment_required");
 
@@ -112,13 +115,14 @@ frappe.ui.form.on("ZZMaintenance", {
     vehicle_owner: function (frm) {
         frm.trigger("set_driver_field_behavior");
         if (frm.doc.vehicle_owner === "Company Owned") {
+            frm.set_value("transporter", null);
             frm.trigger("driver");
-            return;
+        } else {
+            frm.set_value("driver", null);
+            frm.set_value("driver_name", null);
+            frm.set_value("driver_contact", null);
         }
-
-        frm.set_value("driver", null);
-        frm.set_value("driver_name", null);
-        frm.set_value("driver_contact", null);
+        frm.refresh_fields();
     },
 
     driver: function (frm) {
