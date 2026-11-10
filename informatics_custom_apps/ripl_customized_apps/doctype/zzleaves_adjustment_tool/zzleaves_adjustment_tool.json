@@ -9,6 +9,7 @@
   "section_break_nfkp",
   "company",
   "leave_period",
+  "remarks",
   "status",
   "column_break_hwcz",
   "branch",
@@ -90,13 +91,18 @@
    "fieldtype": "Link",
    "label": "Plant",
    "options": "Branch"
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Data",
+   "label": "Remarks"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-08-21 14:50:18.901421",
+ "modified": "2026-11-10 12:18:34.851977",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "zzLeaves Adjustment Tool",
