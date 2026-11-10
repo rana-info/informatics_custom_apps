@@ -198,6 +198,10 @@ class zzLeavesAdjustmentTool(Document):
             lle_doc = frappe.get_doc(ledger_dict)
             lle_doc.flags.ignore_permissions = 1
             lle_doc.submit()
+            
+            tool_remarks = (self.remarks or "").strip()
+            if tool_remarks:
+                allocation_doc.db_set("custom_remarks", tool_remarks)
 
             text = _("{0} leaves were allocated via Leave Adjustment Tool on {1}").format(
                 frappe.bold(count),
@@ -299,6 +303,9 @@ def process_cancellation(docname):
                 frappe.bold(formatdate(nowdate()))
             )
             alloc_doc.add_comment(comment_type="Info", text=cancel_text)
+            
+            if(doc.remarks or "").strip():
+                frappe.db.set_value("Leave Allocation", row.leave_allocation, {"custom_remarks": ""},update_modified=False)
 
         row.db_set("status", "Cancelled")
         row.db_set("remarks", "Allocation reversed on cancellation")
