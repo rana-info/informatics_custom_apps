@@ -117,6 +117,7 @@
    "read_only": 1
   },
   {
+   "depends_on": "eval:doc.vehicle_owner==\"Third Party\"",
    "fieldname": "transporter",
    "fieldtype": "Link",
    "label": "Transporter",
@@ -152,6 +153,7 @@
    "options": "Company"
   },
   {
+   "default": "Third Party",
    "fieldname": "vehicle_owner",
    "fieldtype": "Select",
    "label": "Vehicle Owner",
