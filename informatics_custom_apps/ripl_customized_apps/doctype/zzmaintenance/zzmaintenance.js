@@ -4,6 +4,11 @@
 frappe.ui.form.on("ZZMaintenance", {
     refresh: function (frm) {
         frm.disable_save();
+        if (frm.is_new() && !frm.doc.vehicle_owner) {
+            frm.set_value("vehicle_owner", "Third Party");
+        }
+        frm.trigger("set_driver_field_behavior");
+        frm.trigger("set_default_weighment_required");
 
         frm.set_query("gate_entry", () => ({
             filters: { company: frm.doc.company, branch: frm.doc.branch }
@@ -39,6 +44,16 @@ frappe.ui.form.on("ZZMaintenance", {
             return { filters };
         });
 
+        frm.set_query("delivery_note", "delivery_note", function () {
+            return {
+                query: "informatics_custom_apps.ripl_customized_apps.doctype.zzmaintenance.zzmaintenance.get_delivery_notes_for_item_group",
+                filters: {
+                    branch: frm.doc.branch,
+                    item_group: frm.doc.item_group
+                }
+            };
+        });
+
         frm.trigger("set_fields_read_only");
         frm.trigger("make_custom_buttons");
     },
@@ -71,7 +86,18 @@ frappe.ui.form.on("ZZMaintenance", {
     maintenance_type: function (frm) {
         frm.trigger("make_custom_buttons");
         frm.events.clear_fields(frm);
+        frm.trigger("set_default_weighment_required");
         frm.events.set_fields_read_only(frm);
+    },
+
+    entry_type: function (frm) {
+        frm.trigger("set_default_weighment_required");
+    },
+
+    set_default_weighment_required: function (frm) {
+        if (frm.doc.entry_type === "Outward" && !frm.doc.is_weighment_required) {
+            frm.set_value("is_weighment_required", "Yes");
+        }
     },
 
     company: function (frm) {
@@ -83,6 +109,44 @@ frappe.ui.form.on("ZZMaintenance", {
                 frm.set_value("location", null);
                 frm.set_value("abbr", null);
             }
+        });
+    },
+
+    vehicle_owner: function (frm) {
+        frm.trigger("set_driver_field_behavior");
+        if (frm.doc.vehicle_owner === "Company Owned") {
+            frm.set_value("transporter", null);
+            frm.trigger("driver");
+        } else {
+            frm.set_value("driver", null);
+            frm.set_value("driver_name", null);
+            frm.set_value("driver_contact", null);
+        }
+        frm.refresh_fields();
+    },
+
+    driver: function (frm) {
+        if (frm.doc.vehicle_owner !== "Company Owned") return;
+        if (!frm.doc.driver) {
+            frm.set_value("driver_name", null);
+            frm.set_value("driver_contact", null);
+            return;
+        }
+
+        const selected_driver = frm.doc.driver;
+        frappe.db.get_value("Driver", selected_driver, ["full_name", "cell_number"])
+            .then((result) => {
+                if (frm.doc.vehicle_owner !== "Company Owned" || frm.doc.driver !== selected_driver) return;
+                const driver = result.message || {};
+                frm.set_value("driver_name", driver.full_name || "");
+                frm.set_value("driver_contact", driver.cell_number || "");
+            });
+    },
+
+    set_driver_field_behavior: function (frm) {
+        const company_owned = frm.doc.vehicle_owner === "Company Owned";
+        ["driver_name", "driver_contact"].forEach((field) => {
+            frm.set_df_property(field, "read_only", company_owned);
         });
     },
 
@@ -163,6 +227,22 @@ frappe.ui.form.on("ZZMaintenance", {
                 if (r.message) {
                     frm.refresh_field("items");
                 }
+            }
+        });
+    },
+
+    get_delivery_note_items: function (frm) {
+        frm.call({
+            method: "get_delivery_note_items",
+            doc: frm.doc,
+            freeze: true,
+            freeze_message: __("Getting Delivery Note Items..."),
+            callback: function (r) {
+                if (!r.message) return;
+
+                frm.clear_table("delivery_note_details");
+                r.message.forEach((row) => frm.add_child("delivery_note_details", row));
+                frm.refresh_field("delivery_note_details");
             }
         });
     }
