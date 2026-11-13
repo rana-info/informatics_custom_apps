@@ -68,39 +68,39 @@ class SalesManagementTool(Document):
         if validator:
             validator()
 
-        api_response_warning_types = {
-            "Reset Second Weight (Not Manual)",
-            "Reset Second Weight (Manual)",
-            "Wrong Item Group",
-            "Wrong Delivery Note",
-            "Inward/Outward Wrong Entry (Manual)",
-            "Wrong Segment",
-            "Change First Weight(Tare)",
-        }
+        # api_response_warning_types = {
+        #     "Reset Second Weight (Not Manual)",
+        #     "Reset Second Weight (Manual)",
+        #     "Wrong Item Group",
+        #     "Wrong Delivery Note",
+        #     "Inward/Outward Wrong Entry (Manual)",
+        #     "Wrong Segment",
+        #     "Change First Weight(Tare)",
+        # }
 
-        if self.correction_type in api_response_warning_types:
+        # if self.correction_type in api_response_warning_types:
 
-            weighment_name = frappe.db.get_value(
-                "Weighment",
-                {
-                    "gate_entry_number": self.gate_entry,
-                    "docstatus": ["<", 2]
-                },
-                "name"
-            )
+        #     weighment_name = frappe.db.get_value(
+        #         "Weighment",
+        #         {
+        #             "gate_entry_number": self.gate_entry,
+        #             "docstatus": ["<", 2]
+        #         },
+        #         "name"
+        #     )
 
-            if weighment_name:
-                api_data_updated = frappe.db.get_value(
-                    "Weighment",
-                    weighment_name,
-                    "api_data_updated"
-                )
+        #     if weighment_name:
+        #         api_data_updated = frappe.db.get_value(
+        #             "Weighment",
+        #             weighment_name,
+        #             "api_data_updated"
+        #         )
 
-                if api_data_updated == 1:
-                    frappe.throw(
-                        f"Warning: API Response is already sent for this record. ",
-                        title="API Response Already Sent",
-                    )
+        #         if api_data_updated == 1:
+        #             frappe.throw(
+        #                 f"Warning: API Response is already sent for this record. ",
+        #                 title="API Response Already Sent",
+        #             )
 
     def validate(self):
         """Initial data validation and prerequisite checks."""
