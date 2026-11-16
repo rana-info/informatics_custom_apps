@@ -26,7 +26,7 @@ def update_rejected_warehouse(purchase_receipt):
 
     pr.save(ignore_permissions=True)
 
-    frappe.db.commit()
+    #frappe.db.commit()
 
     return {
         "warehouse": rejected_warehouse
@@ -44,7 +44,7 @@ def update_itc_claim_period(purchase_invoice, itc_claim_period):
         update_modified=False
     )
 
-    frappe.db.commit()
+    #frappe.db.commit()
 
     return {
         "itc_claim_period": itc_claim_period
@@ -78,7 +78,7 @@ def update_transporter(sales_invoice, transporter):
         update_modified=False
     )
 
-    frappe.db.commit()
+    #frappe.db.commit()
 
     return "Success"
 

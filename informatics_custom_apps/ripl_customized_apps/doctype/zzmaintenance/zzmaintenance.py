@@ -252,9 +252,9 @@ class ZZMaintenance(Document):
 			SELECT name, card_number
 			FROM `tabCard Details`
 			WHERE {' AND '.join(conditions)}
-			ORDER BY creation ASC
+			ORDER BY RAND()
 			LIMIT 1
-			FOR UPDATE
+			FOR UPDATE SKIP LOCKED
 			""",
 			values,
 			as_dict=True,
