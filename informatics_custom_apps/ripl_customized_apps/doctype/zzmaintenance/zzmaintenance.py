@@ -629,15 +629,32 @@ class ZZMaintenance(Document):
 
 		return list(details_by_note)
 
+	# def _qty_for_uom(self, net_weight, uom):
+	# 	unit = (uom or "").strip().casefold()
+	# 	if unit in {"quintal", "quintals"}:
+	# 		return ceil(flt(net_weight) / 100)
+	# 	if unit in {"klr", "kiloliter", "kilolitre", "kiloliters", "kilolitres"}:
+	# 		return ceil(flt(net_weight) / 1000)
+	# 	if unit in {"ltr", "liter", "litre", "liters", "litres","nos","NOS","meter","METER","case","CASE","box","BOX","bag","BAG","tonne","TONNE",}:
+	# 		return None
+	# 	return flt(net_weight)
+ 
+ 
 	def _qty_for_uom(self, net_weight, uom):
 		unit = (uom or "").strip().casefold()
+		net_weight = flt(net_weight)
+
 		if unit in {"quintal", "quintals"}:
-			return ceil(flt(net_weight) / 100)
+			return flt(net_weight / 100, 6)
+
 		if unit in {"klr", "kiloliter", "kilolitre", "kiloliters", "kilolitres"}:
-			return ceil(flt(net_weight) / 1000)
-		if unit in {"ltr", "liter", "litre", "liters", "litres","nos","NOS","meter","METER","case","CASE","box","BOX","bag","BAG","tonne","TONNE",}:
+			return flt(net_weight / 1000, 6)
+
+		if unit in {"ltr", "liter", "litre", "liters", "litres", "nos", "meter",
+					"case", "box", "bag", "tonne"}:
 			return None
-		return flt(net_weight)
+
+		return net_weight
 
 	@frappe.whitelist()
 	def get_delivery_note_items(self):
