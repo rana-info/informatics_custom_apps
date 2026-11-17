@@ -334,7 +334,6 @@
   },
   {
    "default": "Yes",
-   "depends_on": "eval:doc.entry_type == \"Outward\"",
    "fieldname": "is_weighment_required",
    "fieldtype": "Select",
    "label": "Is Weighment Required",
@@ -351,7 +350,7 @@
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-11-17 10:28:20.395130",
+ "modified": "2026-11-17 16:48:15.379777",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "ZZMaintenance",

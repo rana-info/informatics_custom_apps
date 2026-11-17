@@ -1,7 +1,6 @@
 # Copyright (c) 2026, Dexciss and contributors
 # For license information, please see license.txt
 
-from math import ceil
 
 import frappe
 from frappe.model.document import Document
@@ -651,7 +650,7 @@ class ZZMaintenance(Document):
 		# ---- Gate Entry
 		gate_entry = frappe.new_doc("Gate Entry")
 		self._copy_to(gate_entry, scalars, child_tables)
-		if self.entry_type == "Outward":
+		if gate_entry.meta.has_field("is_weighment_required"):
 			gate_entry.is_weighment_required = self.is_weighment_required or "Yes"
 		self._populate_contact_and_location(gate_entry)
 		gate_entry.segment = self.segment
@@ -669,7 +668,7 @@ class ZZMaintenance(Document):
 				self.tare_weight, self.gross_weight, self.net_weight]):
 			weighment = frappe.new_doc("Weighment")
 			self._copy_to(weighment, scalars, child_tables)
-			if self.entry_type == "Outward":
+			if weighment.meta.has_field("is_weighment_required"):
 				weighment.is_weighment_required = self.is_weighment_required or "Yes"
 			self._populate_contact_and_location(weighment)
 			self._populate_weighment_delivery_notes(weighment)
@@ -763,13 +762,13 @@ class ZZMaintenance(Document):
 			self._update_without_hooks(
 				gate_entry,
 				scalars,
-				skip_blank=("card_number", "segment", "transporter", "transporter_name"),
+				skip_blank=("card_number", "segment", "transporter", "transporter_name", "is_weighment_required"),
 			)
 			weighment = frappe.get_doc("Weighment", {"gate_entry_number": gate_entry.name})
 			self._update_without_hooks(
 				weighment,
 				scalars,
-				skip_blank=("card_number", "segment", "transporter", "transporter_name"),
+				skip_blank=("card_number", "segment", "transporter", "transporter_name", "is_weighment_required"),
 			)
 
 			self._update_outward_delivery_notes(weighment)
@@ -787,7 +786,7 @@ class ZZMaintenance(Document):
 
 		modified_g, modified_by_g = gate_entry.modified, gate_entry.modified_by
 		self._copy_to(gate_entry, scalars, child_tables, only_changed=True,
-			skip_blank=("card_number", "segment"))
+			skip_blank=("card_number", "segment", "is_weighment_required"))
 		self._save_silently(gate_entry)
 		self._notify("Data Updated Successfully", f"Data Updated Successfully: {gate_entry.name}")
 
@@ -798,7 +797,7 @@ class ZZMaintenance(Document):
 			modified_w, modified_by_w = weighment.modified, weighment.modified_by
 
 			self._copy_to(weighment, scalars, child_tables, only_changed=True,
-				skip_blank=("card_number", "segment"))
+				skip_blank=("card_number", "segment", "is_weighment_required"))
 			self._save_silently(weighment)
 			self._notify("Data Updated Successfully", f"Data Updated Successfully: {weighment.name}")
 
