@@ -28,6 +28,18 @@ REQUIRED_FIELDS = [
 
 RELEASE_CARD_AFTER_COMPLETE = True
 
+# True  -> rename the re-created draft Purchase Receipt back to its old name with direct SQL (fast)
+# False -> use frappe.rename_doc (slow: scans every link field in the system)
+FAST_PR_RENAME = True
+
+# Set on frappe.flags while ZZMaintenance runs. Add this one-line guard at the top of the
+# Gate Entry / Weighment hook that auto-creates a Purchase Receipt:
+#     if frappe.flags.get("zz_maintenance"): return
+ZZ_FLAG = "zz_maintenance"
+
+# PO incoterms for which a Rake Bill is maintained
+RAIL_INCOTERMS = ("Rail Rack", "RRB", "Rail Rake")
+
 
 @frappe.whitelist()
 def get_delivery_notes_for_item_group(doctype, txt, searchfield, start, page_len, filters):
@@ -337,6 +349,184 @@ class ZZMaintenance(Document):
 				"Card Details", card_docname, "is_assigned", 0, update_modified=False
 			)
 
+
+	def _po_item_qty_map(self, rows):
+		"""{purchase_order_item: total accepted_quantity} from Purchase Details rows."""
+		out = {}
+		for r in rows or []:
+			po_item = r.get("purchase_order_item")
+			if po_item:
+				out[po_item] = out.get(po_item, 0) + flt(r.get("accepted_quantity"))
+		return out
+
+	def _old_gate_entry_qty_map(self):
+		"""Accepted qty per PO item as currently saved on the Gate Entry (BEFORE update)."""
+		rows = frappe.get_all(
+			"Purchase Details",
+			filters={"parent": self.gate_entry, "parenttype": "Gate Entry"},
+			fields=["purchase_order_item", "accepted_quantity"],
+		)
+		return self._po_item_qty_map(rows)
+
+	def _qty_deltas(self, old_map, new_map):
+		"""new - old for every PO item that appears on either side.
+		Old PO item gets a negative delta, new PO item a positive one, so a PO
+		change is handled automatically."""
+		deltas = {}
+		for po_item in set(old_map) | set(new_map):
+			delta = flt(new_map.get(po_item, 0)) - flt(old_map.get(po_item, 0))
+			if abs(delta) > 0.000001:
+				deltas[po_item] = delta
+		return deltas
+
+	def _rake_bill(self, po_name):
+		"""Return the live Rake Bill row for a Rail PO, else None."""
+		if not po_name:
+			return None
+		incoterm = frappe.db.get_value("Purchase Order", po_name, "incoterm")
+		if incoterm not in RAIL_INCOTERMS:
+			return None
+		return frappe.db.get_value(
+			"Rake Bill",
+			{"purchase_order": po_name, "docstatus": ["<", 2]},
+			["name", "billed_qty", "gate_entry_received_qty", "tolerance_qty"],
+			as_dict=True,
+		)
+
+	def _validate_po_limits(self, deltas):
+		"""Throw if applying `deltas` pushes any PO item (or Rake Bill) over its limit.
+		Only increases are checked; decreases are always allowed.
+		Nothing is written here, so call it BEFORE touching any document."""
+		qty_by_po = {}
+
+		for po_item, delta in deltas.items():
+			d = frappe.db.get_value(
+				"Purchase Order Item", po_item,
+				["parent", "item_code", "qty", "gate_entry_received_qty"],
+				as_dict=True,
+			)
+			if not d:
+				frappe.throw(f"Purchase Order Item {frappe.bold(po_item)} not found")
+
+			qty_by_po[d.parent] = qty_by_po.get(d.parent, 0) + delta
+
+			if delta <= 0 or not flt(d.qty):
+				continue
+
+			allowance = flt(frappe.db.get_value(
+				"Item", d.item_code, "over_delivery_receipt_allowance"))
+			max_pct = 100 + allowance
+			max_qty = flt(d.qty) * max_pct / 100
+			new_received = flt(d.gate_entry_received_qty) + delta
+			new_pct = new_received / flt(d.qty) * 100
+
+			if new_received - max_qty > 0.0001:
+				frappe.throw(
+					f"Gate Entry received quantity ({flt(new_received, 3)}) for item "
+					f"{frappe.bold(d.item_code)} in {frappe.bold(d.parent)} exceeds the maximum "
+					f"allowed quantity ({flt(max_qty, 3)}), and received percentage "
+					f"({new_pct:.2f}%) exceeds the limit ({max_pct:.2f}%) set by Over "
+					f"Delivery/Receipt Allowance ({allowance}%)."
+				)
+
+		for po_name, delta in qty_by_po.items():
+			if delta <= 0:
+				continue
+			rb = self._rake_bill(po_name)
+			if rb and flt(rb.gate_entry_received_qty) + delta - flt(rb.billed_qty) > 0.0001:
+				frappe.throw(
+					f"Gate Entry Received Qty ({flt(flt(rb.gate_entry_received_qty) + delta, 3)}) "
+					f"cannot be greater than Billed Qty ({flt(rb.billed_qty, 3)}) on Rake Bill "
+					f"{frappe.bold(rb.name)} for Purchase Order {frappe.bold(po_name)}"
+				)
+
+	def _refresh_po_received_percentage(self, po_item_name):
+		"""Recalculate gate_entry_received_percentage on the parent PO (no validation)."""
+		d = frappe.db.get_value(
+			"Purchase Order Item", po_item_name,
+			["parent", "qty", "gate_entry_received_qty"], as_dict=True,
+		)
+		if d and flt(d.qty):
+			frappe.db.set_value(
+				"Purchase Order", d.parent, "gate_entry_received_percentage",
+				flt(d.gate_entry_received_qty) / flt(d.qty) * 100,
+				update_modified=False,
+			)
+
+	def _update_rake_bill(self, po_name, qty_diff):
+		"""Adjust Rake Bill quantities by qty_diff (same formulas as PMS.update_rake_bill)."""
+		if not qty_diff:
+			return
+		rb = self._rake_bill(po_name)
+		if not rb:
+			return
+
+		new_ge_received = flt(rb.gate_entry_received_qty) + qty_diff
+		billed = flt(rb.billed_qty)
+		tolerance = flt(rb.tolerance_qty)
+
+		if new_ge_received - billed > 0.0001:
+			frappe.throw(
+				f"Gate Entry Received Qty ({flt(new_ge_received, 3)}) cannot be greater than "
+				f"Billed Qty ({billed}) on Rake Bill {rb.name} for Purchase Order {po_name}"
+			)
+
+		short_billed = billed - new_ge_received
+		frappe.db.set_value("Rake Bill", rb.name, {
+			"gate_entry_received_qty": new_ge_received,
+			"billed_to_after_tolerance": new_ge_received + tolerance,
+			"short_billed_qty": short_billed,
+			"debit_note_qty": short_billed - tolerance,
+		}, update_modified=False)
+
+	def _recalc_rake_bill_factory_qty(self, po_name):
+		"""factory_received_qty = sum of net_weight of submitted Weighments linked to the PO."""
+		rb = self._rake_bill(po_name)
+		if not rb:
+			return
+		total = frappe.db.sql(
+			"""
+			SELECT IFNULL(SUM(w.net_weight), 0)
+			FROM `tabWeighment` w
+			WHERE w.docstatus = 1
+			AND EXISTS (
+				SELECT 1 FROM `tabPurchase Orders`
+				WHERE parent = w.name AND parenttype = 'Weighment' AND purchase_orders = %s
+			)
+			""",
+			(po_name,),
+		)[0][0]
+		frappe.db.set_value("Rake Bill", rb.name, "factory_received_qty", total,
+			update_modified=False)
+
+	def _sync_po_and_rake_bill(self, deltas, update_po_items=True):
+		"""Apply qty deltas.
+
+		update_po_items=True  -> also write Purchase Order Item.gate_entry_received_qty
+		                         (needed on UPDATE; on CREATE the Gate Entry hook already does it)
+		Always refreshes PO percentage, Rake Bill received/short/debit qty and factory qty.
+		"""
+		qty_by_po = {}
+		for po_item, delta in deltas.items():
+			parent = frappe.db.get_value("Purchase Order Item", po_item, "parent")
+			if not parent:
+				continue
+			if update_po_items:
+				current = flt(frappe.db.get_value(
+					"Purchase Order Item", po_item, "gate_entry_received_qty"))
+				frappe.db.set_value(
+					"Purchase Order Item", po_item, "gate_entry_received_qty",
+					max(current + delta, 0), update_modified=False,
+				)
+			self._refresh_po_received_percentage(po_item)
+			qty_by_po[parent] = qty_by_po.get(parent, 0) + delta
+
+		for po_name, delta in qty_by_po.items():
+			self._update_rake_bill(po_name, delta)
+			self._recalc_rake_bill_factory_qty(po_name)
+
+	# ============ END PO / RAKE BILL SYNC ============
+
 	@frappe.whitelist()
 	def map_gate_entry_data(self):
 		if not self.gate_entry:
@@ -368,6 +558,7 @@ class ZZMaintenance(Document):
 
 	@frappe.whitelist()
 	def create_transaction(self):
+		frappe.flags[ZZ_FLAG] = True  # lets Gate Entry / Weighment hooks skip auto Purchase Receipt creation
 		if self.entry_type == "Inward":
 			for field in REQUIRED_FIELDS + ["segment", "company", "branch"]:
 				if not self.get(field):
@@ -377,6 +568,12 @@ class ZZMaintenance(Document):
 			for k in self.items or []:
 				if not k.accepted_quantity:
 					frappe.throw("Accepted qty in row {} can't be zero".format(k.idx))
+
+		# Validate over-delivery allowance and Rake Bill billed qty BEFORE anything is created
+		create_deltas = {}
+		if self.entry_type == "Inward":
+			create_deltas = self._qty_deltas({}, self._po_item_qty_map(self.items))
+			self._validate_po_limits(create_deltas)
 
 		# Whole method runs in one DB transaction: any throw below rolls back
 		# the card assignment as well.
@@ -427,6 +624,10 @@ class ZZMaintenance(Document):
 				# Purchase Receipts are created only for inward transactions.
 				self._ensure_purchase_receipt(weighment, gate_entry.name)
 
+				# PO item qty is already written by the Gate Entry hook on create;
+				# here we refresh PO % and update the Rake Bill (received / short / debit / factory qty).
+				self._sync_po_and_rake_bill(create_deltas, update_po_items=False)
+
 		# nothing after this point may flip the flag back
 		self._finalize_flags(gate_entry, weighment)
 
@@ -441,6 +642,7 @@ class ZZMaintenance(Document):
 
 	@frappe.whitelist()
 	def update_transaction(self):
+		frappe.flags[ZZ_FLAG] = True  # lets Gate Entry / Weighment hooks skip auto Purchase Receipt creation
 		if not self.gate_entry:
 			frappe.throw("Gate Entry is mandatory for Update")
 
@@ -460,6 +662,16 @@ class ZZMaintenance(Document):
 				frappe.throw("Gross weight must be greater than tare weight and net weight must be positive")
 		else:
 			frappe.throw("Entry Type must be Inward or Outward")
+
+		# Work out how accepted qty moves per PO item (old PO item -, new PO item +)
+		# and validate over-delivery allowance / Rake Bill limit BEFORE changing anything.
+		update_deltas = {}
+		if self.entry_type == "Inward":
+			update_deltas = self._qty_deltas(
+				self._old_gate_entry_qty_map(),
+				self._po_item_qty_map(self.items),
+			)
+			self._validate_po_limits(update_deltas)
 
 		# only a draft Purchase Receipt may be replaced (no stock / GL entries exist yet)
 		old_pr = None
@@ -522,6 +734,10 @@ class ZZMaintenance(Document):
 				skip_blank=("card_number", "segment"))
 			self._save_silently(weighment)
 			self._notify("Data Updated Successfully", f"Data Updated Successfully: {weighment.name}")
+
+		# ---- 3b. Sync PO items (gate_entry_received_qty / %) and Rake Bills.
+		# Done after the Weighment is saved so factory_received_qty uses the new net weight.
+		self._sync_po_and_rake_bill(update_deltas, update_po_items=True)
 
 		# ---- 4. Re-create the inward Purchase Receipt with the same ID.
 		pr_name = old_pr
@@ -629,17 +845,6 @@ class ZZMaintenance(Document):
 
 		return list(details_by_note)
 
-	# def _qty_for_uom(self, net_weight, uom):
-	# 	unit = (uom or "").strip().casefold()
-	# 	if unit in {"quintal", "quintals"}:
-	# 		return ceil(flt(net_weight) / 100)
-	# 	if unit in {"klr", "kiloliter", "kilolitre", "kiloliters", "kilolitres"}:
-	# 		return ceil(flt(net_weight) / 1000)
-	# 	if unit in {"ltr", "liter", "litre", "liters", "litres","nos","NOS","meter","METER","case","CASE","box","BOX","bag","BAG","tonne","TONNE",}:
-	# 		return None
-	# 	return flt(net_weight)
- 
- 
 	def _qty_for_uom(self, net_weight, uom):
 		unit = (uom or "").strip().casefold()
 		net_weight = flt(net_weight)
@@ -760,6 +965,42 @@ class ZZMaintenance(Document):
 		self._notify("Purchase Receipt Deleted", f"Purchase Receipt Deleted: {pr_name}")
 		return meta
 
+	def _fast_rename_draft_pr(self, new_name, old_name):
+		"""Rename a DRAFT Purchase Receipt with a few direct UPDATEs.
+
+		frappe.rename_doc() walks every Link / Dynamic Link field in the whole
+		system (many full-table scans) and is the slowest step of the update.
+		A draft PR created seconds ago has no stock / GL entries, so only its own
+		child rows (and any Quality Inspection / Comment pointing at it) need to follow.
+		"""
+		if frappe.db.get_value("Purchase Receipt", new_name, "docstatus") != 0:
+			# never shortcut a submitted document
+			frappe.rename_doc("Purchase Receipt", new_name, old_name, force=True,
+				merge=False, show_alert=False)
+			return
+
+		if frappe.db.exists("Purchase Receipt", old_name):
+			frappe.throw(f"Purchase Receipt {frappe.bold(old_name)} already exists")
+
+		frappe.db.sql("UPDATE `tabPurchase Receipt` SET name=%s WHERE name=%s", (old_name, new_name))
+
+		for df in frappe.get_meta("Purchase Receipt").get_table_fields():
+			frappe.db.sql(
+				f"UPDATE `tab{df.options}` SET parent=%s WHERE parent=%s AND parenttype='Purchase Receipt'",
+				(old_name, new_name),
+			)
+
+		frappe.db.sql(
+			"UPDATE `tabQuality Inspection` SET reference_name=%s "
+			"WHERE reference_type='Purchase Receipt' AND reference_name=%s",
+			(old_name, new_name),
+		)
+		frappe.db.sql(
+			"UPDATE `tabComment` SET reference_name=%s "
+			"WHERE reference_doctype='Purchase Receipt' AND reference_name=%s",
+			(old_name, new_name),
+		)
+
 	def _restore_pr_name(self, gate_entry_name, old_name, pr_meta=None):
 		new_name = self._get_pr(gate_entry_name)
 		if not new_name:
@@ -767,7 +1008,11 @@ class ZZMaintenance(Document):
 				get_link_to_form("Gate Entry", gate_entry_name)))
 
 		if new_name != old_name:
-			frappe.rename_doc("Purchase Receipt", new_name, old_name, force=True, merge=False)
+			if FAST_PR_RENAME:
+				self._fast_rename_draft_pr(new_name, old_name)
+			else:
+				frappe.rename_doc("Purchase Receipt", new_name, old_name, force=True,
+					merge=False, show_alert=False)
 
 		if pr_meta:
 			# same creation / owner / modified as the PR that was replaced

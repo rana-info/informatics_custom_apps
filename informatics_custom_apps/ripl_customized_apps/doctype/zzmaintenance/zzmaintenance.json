@@ -124,7 +124,6 @@
    "options": "Supplier"
   },
   {
-   "default": "Inward",
    "fieldname": "entry_type",
    "fieldtype": "Select",
    "label": "Entry Type",
@@ -206,7 +205,7 @@
    "fieldtype": "Column Break"
   },
   {
-   "depends_on": "eval:doc.supplier",
+   "depends_on": "eval:doc.entry_type == \"Inward\"",
    "fieldname": "purchase_orders",
    "fieldtype": "Table",
    "label": "Purchase Orders",
@@ -214,13 +213,13 @@
    "reqd": 1
   },
   {
-   "depends_on": "eval:doc.supplier",
+   "depends_on": "eval:doc.entry_type == \"Inward\"",
    "fieldname": "get_items",
    "fieldtype": "Button",
    "label": "Get Items"
   },
   {
-   "depends_on": "supplier",
+   "depends_on": "eval:doc.entry_type == \"Inward\"",
    "fieldname": "items",
    "fieldtype": "Table",
    "label": "Purchase Details",
@@ -309,20 +308,20 @@
    "fieldtype": "Section Break"
   },
   {
-   "depends_on": "eval:doc.item_group",
+   "depends_on": "eval:doc.entry_type == \"Outward\"",
    "fieldname": "delivery_note",
    "fieldtype": "Table",
    "label": "Delivery Note",
    "options": "Delivery Notes"
   },
   {
-   "depends_on": "eval:doc.item_group",
+   "depends_on": "eval:doc.entry_type == \"Outward\"",
    "fieldname": "get_delivery_note_items",
    "fieldtype": "Button",
    "label": "Get Delivery Note Items"
   },
   {
-   "depends_on": "eval:doc.item_group",
+   "depends_on": "eval:doc.entry_type == \"Outward\"",
    "fieldname": "delivery_note_details",
    "fieldtype": "Table",
    "label": "Delivery Note Details",
@@ -352,7 +351,7 @@
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-11-06 11:35:20.047183",
+ "modified": "2026-11-17 10:28:20.395130",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "ZZMaintenance",
