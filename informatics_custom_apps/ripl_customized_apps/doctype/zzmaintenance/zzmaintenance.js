@@ -102,6 +102,7 @@ frappe.ui.form.on("ZZMaintenance", {
         });
 
         frm.doc.vehicle_owner = "Third Party";
+        frm.doc.is_weighment_required = "Yes";
 
         frm.refresh();     
         frm.dirty();
@@ -121,7 +122,7 @@ frappe.ui.form.on("ZZMaintenance", {
     },
 
     set_default_weighment_required: function (frm) {
-        if (frm.doc.entry_type === "Outward" && !frm.doc.is_weighment_required) {
+        if (!frm.doc.is_weighment_required) {
             frm.set_value("is_weighment_required", "Yes");
         }
     },
@@ -224,7 +225,7 @@ frappe.ui.form.on("ZZMaintenance", {
 
     clear_fields: function (frm) {
         const skip_types = ["Section Break", "Column Break", "Tab Break", "Button"];
-        const skip_fields = ["maintenance_type", "vehicle_owner", "time", "entry_type"];
+        const skip_fields = ["maintenance_type", "vehicle_owner", "time", "entry_type", "is_weighment_required"];
 
         frappe.get_meta(frm.doc.doctype).fields.forEach((df) => {
             if (skip_types.includes(df.fieldtype) || skip_fields.includes(df.fieldname)) return;
