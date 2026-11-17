@@ -349,12 +349,25 @@ class ZZMaintenance(Document):
 				"Card Details", card_docname, "is_assigned", 0, update_modified=False
 			)
 
+	# ============ PO / RAKE BILL SYNC (modelled on Purchase Management System) ============
+
+	def _row_po_item(self, r):
+		"""Purchase Order Item name for a Purchase Details row.
+		Falls back to (purchase_order, item_code) when purchase_order_item is blank."""
+		po_item = r.get("purchase_order_item")
+		if po_item:
+			return po_item
+		po, code = r.get("purchase_order"), r.get("item_code")
+		if po and code:
+			return frappe.db.get_value(
+				"Purchase Order Item", {"parent": po, "item_code": code}, "name")
+		return None
 
 	def _po_item_qty_map(self, rows):
 		"""{purchase_order_item: total accepted_quantity} from Purchase Details rows."""
 		out = {}
 		for r in rows or []:
-			po_item = r.get("purchase_order_item")
+			po_item = self._row_po_item(r)
 			if po_item:
 				out[po_item] = out.get(po_item, 0) + flt(r.get("accepted_quantity"))
 		return out
@@ -364,7 +377,7 @@ class ZZMaintenance(Document):
 		rows = frappe.get_all(
 			"Purchase Details",
 			filters={"parent": self.gate_entry, "parenttype": "Gate Entry"},
-			fields=["purchase_order_item", "accepted_quantity"],
+			fields=["purchase_order_item", "purchase_order", "item_code", "accepted_quantity"],
 		)
 		return self._po_item_qty_map(rows)
 
@@ -383,15 +396,23 @@ class ZZMaintenance(Document):
 		"""Return the live Rake Bill row for a Rail PO, else None."""
 		if not po_name:
 			return None
-		incoterm = frappe.db.get_value("Purchase Order", po_name, "incoterm")
-		if incoterm not in RAIL_INCOTERMS:
+		incoterm = (frappe.db.get_value("Purchase Order", po_name, "incoterm") or "").strip().casefold()
+		if incoterm not in {i.casefold() for i in RAIL_INCOTERMS}:
 			return None
-		return frappe.db.get_value(
+		rb = frappe.db.get_value(
 			"Rake Bill",
 			{"purchase_order": po_name, "docstatus": ["<", 2]},
 			["name", "billed_qty", "gate_entry_received_qty", "tolerance_qty"],
 			as_dict=True,
 		)
+		if not rb:
+			warned = frappe.flags.setdefault("zz_rb_warned", set())
+			if po_name not in warned:
+				warned.add(po_name)
+				frappe.msgprint(
+					f"Purchase Order {frappe.bold(po_name)} is a Rail PO but has no Rake Bill. "
+					f"Rake Bill was not updated.", indicator="orange", alert=True)
+		return rb
 
 	def _validate_po_limits(self, deltas):
 		"""Throw if applying `deltas` pushes any PO item (or Rake Bill) over its limit.
@@ -453,6 +474,26 @@ class ZZMaintenance(Document):
 				update_modified=False,
 			)
 
+	def _set_rake_bill_received(self, rb, new_received):
+		"""Write gate_entry_received_qty and the 3 fields derived from it on a Rake Bill."""
+		billed = flt(rb.billed_qty)
+		tolerance = flt(rb.tolerance_qty)
+		new_received = flt(new_received)
+
+		if new_received - billed > 0.0001:
+			frappe.throw(
+				f"Gate Entry Received Qty ({flt(new_received, 3)}) cannot be greater than "
+				f"Billed Qty ({billed}) on Rake Bill {rb.name}"
+			)
+
+		short_billed = billed - new_received
+		frappe.db.set_value("Rake Bill", rb.name, {
+			"gate_entry_received_qty": new_received,
+			"billed_to_after_tolerance": new_received + tolerance,
+			"short_billed_qty": short_billed,
+			"debit_note_qty": short_billed - tolerance,
+		}, update_modified=False)
+
 	def _update_rake_bill(self, po_name, qty_diff):
 		"""Adjust Rake Bill quantities by qty_diff (same formulas as PMS.update_rake_bill)."""
 		if not qty_diff:
@@ -460,24 +501,49 @@ class ZZMaintenance(Document):
 		rb = self._rake_bill(po_name)
 		if not rb:
 			return
+		self._set_rake_bill_received(rb, flt(rb.gate_entry_received_qty) + qty_diff)
 
-		new_ge_received = flt(rb.gate_entry_received_qty) + qty_diff
-		billed = flt(rb.billed_qty)
-		tolerance = flt(rb.tolerance_qty)
+	def _snapshot_po_state(self, deltas):
+		"""Record PO item received qty and Rake Bill received qty BEFORE anything is created."""
+		po_base, parents = {}, set()
+		for po_item in deltas:
+			d = frappe.db.get_value(
+				"Purchase Order Item", po_item, ["parent", "gate_entry_received_qty"], as_dict=True)
+			if d:
+				po_base[po_item] = flt(d.gate_entry_received_qty)
+				parents.add(d.parent)
+		rb_base = {}
+		for po in parents:
+			rb = self._rake_bill(po)
+			if rb:
+				rb_base[po] = flt(rb.gate_entry_received_qty)
+		return po_base, rb_base
 
-		if new_ge_received - billed > 0.0001:
-			frappe.throw(
-				f"Gate Entry Received Qty ({flt(new_ge_received, 3)}) cannot be greater than "
-				f"Billed Qty ({billed}) on Rake Bill {rb.name} for Purchase Order {po_name}"
+	def _apply_baseline_sync(self, deltas, snapshot):
+		"""CREATE flow: set PO item / PO % / Rake Bill to  baseline + delta.
+
+		Absolute (not incremental), so it gives the right result whether or not a
+		Gate Entry hook already wrote to the PO - nothing is ever counted twice.
+		"""
+		po_base, rb_base = snapshot
+		qty_by_po = {}
+		for po_item, delta in deltas.items():
+			parent = frappe.db.get_value("Purchase Order Item", po_item, "parent")
+			if not parent:
+				continue
+			frappe.db.set_value(
+				"Purchase Order Item", po_item, "gate_entry_received_qty",
+				max(flt(po_base.get(po_item, 0)) + delta, 0), update_modified=False,
 			)
+			self._refresh_po_received_percentage(po_item)
+			qty_by_po[parent] = qty_by_po.get(parent, 0) + delta
 
-		short_billed = billed - new_ge_received
-		frappe.db.set_value("Rake Bill", rb.name, {
-			"gate_entry_received_qty": new_ge_received,
-			"billed_to_after_tolerance": new_ge_received + tolerance,
-			"short_billed_qty": short_billed,
-			"debit_note_qty": short_billed - tolerance,
-		}, update_modified=False)
+		for po_name, delta in qty_by_po.items():
+			rb = self._rake_bill(po_name)
+			if rb:
+				base = rb_base.get(po_name, flt(rb.gate_entry_received_qty))
+				self._set_rake_bill_received(rb, base + delta)
+			self._recalc_rake_bill_factory_qty(po_name)
 
 	def _recalc_rake_bill_factory_qty(self, po_name):
 		"""factory_received_qty = sum of net_weight of submitted Weighments linked to the PO."""
@@ -574,6 +640,7 @@ class ZZMaintenance(Document):
 		if self.entry_type == "Inward":
 			create_deltas = self._qty_deltas({}, self._po_item_qty_map(self.items))
 			self._validate_po_limits(create_deltas)
+		create_snapshot = self._snapshot_po_state(create_deltas)
 
 		# Whole method runs in one DB transaction: any throw below rolls back
 		# the card assignment as well.
@@ -624,9 +691,9 @@ class ZZMaintenance(Document):
 				# Purchase Receipts are created only for inward transactions.
 				self._ensure_purchase_receipt(weighment, gate_entry.name)
 
-				# PO item qty is already written by the Gate Entry hook on create;
-				# here we refresh PO % and update the Rake Bill (received / short / debit / factory qty).
-				self._sync_po_and_rake_bill(create_deltas, update_po_items=False)
+				# Update PO item received qty + PO % and the Rake Bill (received / billed after
+				# tolerance / short billed / debit note / factory received qty).
+				self._apply_baseline_sync(create_deltas, create_snapshot)
 
 		# nothing after this point may flip the flag back
 		self._finalize_flags(gate_entry, weighment)
