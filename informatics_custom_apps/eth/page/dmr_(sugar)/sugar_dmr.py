@@ -5,6 +5,7 @@ Sugar DMR (Daily Manufacturing Report) - backend
 Source of formulas : DMR sheet of "DMR 2025-2026 Report" Excel
                      (daily row formulas = columns A..GL, printed report = GT..GX,
                       monthly report = HJ..HT)
+                     + DMR_Punch_18-11-2026.xlsx (calculation block, with ROUND() steps)
 Data comes from    : Sugar Process Data, zzStoppages, zzSteam And Power
 
 All maths uses the *Excel column letters* as keys (D = cane crushed, BF = bagasse qty,
@@ -15,6 +16,11 @@ Three columns are produced, exactly like the workbook:
     Period   -> Period From .. selected date             (row 8   of the sheet)
     To Date  -> Season start .. selected date            (row 7   of the sheet)
 
+Exports (whitelisted):
+    get_dmr_data      -> JSON for the page
+    export_dmr_excel  -> formatted .xlsx (landscape A4, fit to width)
+    export_dmr_pdf    -> formatted .pdf  (landscape A4, uses frappe's wkhtmltopdf)
+
 PLACE THIS FILE somewhere importable (no brackets in the path), e.g.
     <your_app>/<module>/sugar_dmr.py
 and set DMR_API in dmr-(sugar).js to  "<your_app>.<module>.sugar_dmr"
@@ -23,7 +29,7 @@ import io
 from datetime import date as _date
 
 import frappe
-from frappe.utils import add_days, flt, get_first_day, getdate
+from frappe.utils import add_days, cint, escape_html, flt, formatdate, get_first_day, getdate
 
 SPD = "Sugar Process Data"
 STP = "zzStoppages"
@@ -50,6 +56,16 @@ TARGETS = {
     "mill_ext": "95.50 - 96.25",
     "rme": "95.75 - 96.50",
 }
+
+# Headline figures (same as the tiles on the page): [title, row label in report]
+KPIS = [
+    ("Cane crushed", "Cane crushed"),
+    ("Sugar production", "Sugar production"),
+    ("Recovery", "Recovery (estd.)"),
+    ("Mill extraction", "Mill extraction"),
+    ("Hours worked", "Worked hours"),
+    ("Total stoppage", "Total stoppage"),
+]
 
 # Optional store-consumption fields. They are NOT in the DocTypes you sent, so the
 # section only appears when a field with this fieldname exists on Sugar Process Data.
@@ -164,6 +180,12 @@ def _g(row, key):
     return flt((row or {}).get(key))
 
 
+def _rnd(n, d=0):
+    """Excel ROUND: half away from zero."""
+    m = 10 ** d
+    return (1 if n >= 0 else -1) * int(abs(n) * m + 0.5 + 1e-9) / m
+
+
 def calc_day(s, p, m):
     s, p, m = s or {}, p or {}, m or {}
     d = {}
@@ -182,34 +204,49 @@ def calc_day(s, p, m):
     z = dict.fromkeys(["BF", "BG", "BI", "BE", "BH", "BJ", "BK", "BL", "BM", "BN", "BO", "BP",
                        "BR", "BS", "BU", "BV", "BW", "BX", "BY", "CA", "CB", "CC", "CD", "CE", "CF"], 0.0)
     if D > 0:
-        BK = C                                                   # BK = C      gross M.J. qty
-        BF = D + E - BK                                          # BF          bagasse qty
-        BD = (100 - T * O / P - S) if P else 0                   # BD          fibre % bagasse
-        BE = BF * BD / 100                                       # BE          bagasse fibre qty
-        BG = BF * S / 100                                        # BG          bagasse moisture qty
-        BI = BF * T / 100                                        # BI          bagasse pol qty
-        BH = BI * O / P if P else 0                              # BH          bagasse Bx qty
-        BJ = H * BK / 100                                        # BJ          dirt qty
-        BL = BK - BJ                                             # BL          net M.J. qty
-        BM = BL * M_ / 100                                       # BM          Bx in M.J.
-        BN = BL * N / 100                                        # BN          pol in M.J.
-        BO = BM - BN                                             # BO          N.S. in M.J.
-        BP = F * U / 100                                         # BP          press-cake pol qty
-        q = (W * 100 / V) if V else 0
-        BQ = q / (100 - q) if q < 100 else 0                     # BQ          molasses factor
-        BW = BO - BO * I / 100                                   # BW          N.S. in final molasses
-        BR = BW * BQ                                             # BR          loss in molasses
-        BS = (BR + BW) * 100 / V if V else 0                     # BS          molasses input qty
-        BU = V * BS / 100                                        # BU          final molasses Bx qty
-        BV = BS * W / 100                                        # BV          final molasses pol qty
-        BX = J * D / 100                                         # BX          unknown loss qty
-        BZ = (BN - BP - BX - BR) / D * 100                       # BZ          recovery % cane
-        BY = D * BZ / 100                                        # BY          available sugar qty
-        CD = BN - BP                                             # CD          clear juice pol qty
-        CL = (CK * 100 / CJ) if CJ else 0                        # CL          clear juice purity
-        CC = CD * 100 / CL if CL else 0                          # CC          clear juice Bx qty
-        CE = CC - CD                                             # CE          N.S. in clear juice
-        CF = CE * 100 / (V - W) if V > W else 0                  # CF          theoretical molasses
+        # ---- Bagasse
+        BK = C                                                   # C76  gross M.J. qty
+        BF = D + E - BK                                          # C68  bagasse qty
+        lr_pty = (P * 100 / O) if O else 0                       # E12/E10%  last roller purity
+        brix_bag = _rnd(T * 100 / lr_pty, 2) if lr_pty else 0    # E70  Brix % bagasse
+        BD = 100 - S - brix_bag                                  # E72  fibre % bagasse
+        BE = BF * BD / 100                                       # bagasse fibre qty (not in Excel)
+        BG = _rnd(BF * S / 100)                                  # C70  bagasse moisture qty
+        BI = _rnd(BF * T / 100)                                  # E68  bagasse pol qty
+        BH = BI * O / P if P else 0                              # bagasse Bx qty (not in Excel)
+
+        # ---- Mixed juice
+        BJ = _rnd(BK * H / 100)                                  # C78  dirt qty
+        BL = BK - BJ                                             # C80  net M.J. qty
+        BM = _rnd(BL * M_ / 100)                                 # E76  Bx in M.J.
+        BN = _rnd(BL * N / 100)                                  # E78  pol in M.J.
+        BO = BM - BN                                             # E80  N.S. in M.J.
+        BP = _rnd(F * U / 100)                                   # G76  press-cake pol qty
+
+        # ---- Clear juice
+        CL = _rnd(CK * 100 / CJ, 2) if CJ else 0                 # C64  clear juice purity
+        CD = BN - BP                                             # G78  pol in clear juice
+        CC = _rnd(CD * 100 / CL) if CL else 0                    # G80  Bx in clear juice
+        CE = CC - CD                                             # G82  N.S. in clear juice
+
+        # ---- Final molasses
+        fm_pty = _rnd(W * 100 / V, 2) if V else 0                # C86  F. molasses purity
+        BQ = _rnd(fm_pty / (100 - fm_pty), 3) if fm_pty < 100 else 0   # C88  molasses factor
+        BW = V - W                                               # C90  N.S. in final molasses %
+        CF = _rnd(CE * 100 / BW) if BW > 0 else 0                # C92  theoretical molasses
+        BR = _rnd(CE * BQ)                                       # C94  loss in molasses
+
+        # Not in Excel (blank cells there) - kept from the earlier version
+        ns_old = BO - BO * I / 100
+        BS = (ns_old * BQ + ns_old) * 100 / V if V else 0        # molasses input qty
+        BU = V * BS / 100                                        # final molasses Bx qty
+        BV = BS * W / 100                                        # final molasses pol qty
+
+        # ---- Recovery
+        BX = _rnd(D * J / 100)                                   # C100 unknown loss qty
+        BY = CD - BR - BX                                        # E100 available sugar
+        # E102 recovery % cane = ROUND(BY*100/D, 2) -> metrics() derives it from BY / D
+
         z.update(BF=BF, BG=BG, BI=BI, BE=BE, BH=BH, BJ=BJ, BK=BK, BL=BL, BM=BM, BN=BN, BO=BO,
                  BP=BP, BR=BR, BS=BS, BU=BU, BV=BV, BW=BW, BX=BX, BY=BY,
                  CA=G * V / 100, CB=G * W / 100, CC=CC, CD=CD, CE=CE, CF=CF)
@@ -533,8 +570,18 @@ def _fmt(v):
     return None if v is None else round(flt(v), 6)
 
 
+def _arg(v):
+    """open_url_post sends empty JS fields as the text 'undefined' / 'null' - treat them as blank."""
+    return None if v in (None, "", "undefined", "null", "None") else v
+
+
 def _build(company, plant, date, period_from=None, season_from=None, remarks="", note=""):
     frappe.has_permission(SPD, "read", throw=True)
+    company, plant, date = _arg(company), _arg(plant), _arg(date)
+    period_from, season_from = _arg(period_from), _arg(season_from)
+    remarks, note = _arg(remarks) or "", _arg(note) or ""
+    if not date:
+        frappe.throw("Date is required")
     to = getdate(date)
     sf = getdate(season_from) if season_from else _season_start(company, plant, to)
     pf = max(getdate(period_from) if period_from else get_first_day(to), sf)
@@ -580,7 +627,8 @@ def _build(company, plant, date, period_from=None, season_from=None, remarks="",
                         "target": TARGETS.get(key)})
         sections.append({"title": title, "type": "table", "rows": out})
 
-    # process analysis (Brix / Pol / Pty) block
+    # process analysis (Brix / Pol / Pty) block - first section, so the page chips,
+    # the Excel and the PDF all list it on top
     proc = []
     for label, bx, pol in PROCESS_ROWS:
         cols = []
@@ -588,7 +636,7 @@ def _build(company, plant, date, period_from=None, season_from=None, remarks="",
             b, p_ = _val(a, x, bx), _val(a, x, pol)
             cols.append({"bx": _fmt(b), "pol": _fmt(p_), "pty": _fmt(_pty(b, p_))})
         proc.append({"label": label, "cols": cols})
-    sections.insert(3, {"title": "Process Analysis (Brix / Pol / Purity)", "type": "process", "rows": proc})
+    sections.insert(0, {"title": "Process Analysis (Brix / Pol / Purity)", "type": "process", "rows": proc})
 
     crop = [flt(r.crop_day) for r in s_rows if getdate(r.date) == to and r.crop_day]
     return {
@@ -604,6 +652,112 @@ def _build(company, plant, date, period_from=None, season_from=None, remarks="",
 
 
 # --------------------------------------------------------------------------------------
+# EXPORT HELPERS  (shared by Excel and PDF)
+# --------------------------------------------------------------------------------------
+def _find_row(rep, label):
+    for s in rep["sections"]:
+        if s["type"] == "process":
+            continue
+        for r in s["rows"]:
+            if r["label"] == label:
+                return r
+    return None
+
+
+def _kpi_rows(rep):
+    out = []
+    for title, label in KPIS:
+        r = _find_row(rep, label)
+        if r:
+            out.append((title, r))
+    return out
+
+
+def _kpi_section(rep):
+    rows = [dict(r, label=t) for t, r in _kpi_rows(rep)]
+    return {"title": "Headline Figures", "type": "table", "rows": rows, "keep": True}
+
+
+def _z(v):
+    return v is None or v == "" or v == 0
+
+
+def _row_empty(r):
+    if "values" in r:
+        return all(_z(v) for v in r["values"])
+    if "cols" in r:
+        return all(_z(c["bx"]) and _z(c["pol"]) for c in r["cols"])
+    return False
+
+
+def _visible_rows(sec, with_empty):
+    """Same rule as the page: empty rows are hidden unless 'Show empty rows' is on."""
+    if with_empty or sec.get("keep"):
+        return sec["rows"]
+    return [r for r in sec["rows"] if not _row_empty(r)]
+
+
+class _Num:
+    """Number formatting that follows the site's number format (e.g. Indian 16,65,550.00)."""
+
+    def __init__(self):
+        fmt = frappe.db.get_default("number_format") or "#,###.##"
+        try:
+            from frappe.utils.data import get_number_format_info
+            dec, com, _ = get_number_format_info(fmt)
+        except Exception:
+            dec, com = ".", ","
+        self.dec, self.com = dec or ".", com
+        self.indian = "#,##,###" in fmt
+
+    def _group(self, ip):
+        if not self.com:
+            return ip
+        parts = []
+        if self.indian and len(ip) > 3:
+            tail, head = ip[-3:], ip[:-3]
+            while len(head) > 2:
+                parts.insert(0, head[-2:])
+                head = head[:-2]
+            if head:
+                parts.insert(0, head)
+            return self.com.join(parts + [tail])
+        while len(ip) > 3:
+            parts.insert(0, ip[-3:])
+            ip = ip[:-3]
+        parts.insert(0, ip)
+        return self.com.join(parts)
+
+    def __call__(self, v, dp=2, signed=False):
+        if v is None or v == "":
+            return ""
+        if isinstance(v, str):
+            return v
+        if signed:
+            if round(abs(v), dp) == 0:
+                return "\u2013"
+        elif v == 0:
+            return "\u2013"
+        s = "%.*f" % (dp, abs(v))
+        ip, _, fp = s.partition(".")
+        out = self._group(ip) + ((self.dec + fp) if dp else "")
+        if v < 0:
+            return "-" + out
+        return ("+" + out) if signed else out
+
+
+def _target_text(r, num):
+    t = r.get("target")
+    if t is None:
+        return ""
+    if isinstance(t, (int, float)):
+        d = (r.get("values") or [None])[0]
+        diff = num(d - t, r.get("dp", 2), signed=True) if d is not None else ""
+        return "Target %s%s" % (num(t, r.get("dp", 2)), " (%s)" % diff if diff else "")
+    return "Target %s" % t
+
+
+# --------------------------------------------------------------------------------------
 # WHITELISTED API
 # --------------------------------------------------------------------------------------
 @frappe.whitelist()
@@ -614,64 +768,401 @@ def get_dmr_data(company=None, plant=None, date=None, period_from=None, season_f
     return _build(company, plant, date, period_from, season_from, remarks, note)
 
 
+# ----------------------------------------------------------------------------- EXCEL
 @frappe.whitelist()
 def export_dmr_excel(company=None, plant=None, date=None, period_from=None, season_from=None,
-                     remarks="", note=""):
+                     remarks="", note="", with_empty=0):
     from openpyxl import Workbook
-    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.utils import get_column_letter
+    from openpyxl.worksheet.pagebreak import Break
+    from openpyxl.worksheet.properties import PageSetupProperties
 
+    if not date:
+        frappe.throw("Date is required")
+    with_empty = cint(with_empty)
     rep = _build(company, plant, date, period_from, season_from, remarks, note)
     m = rep["meta"]
+    secs = [_kpi_section(rep)] + rep["sections"]
+
     wb = Workbook()
     ws = wb.active
     ws.title = "DMR Sugar"
-    bold = Font(bold=True, name="Arial")
-    head_fill = PatternFill("solid", fgColor="D9E1F2")
+    ws.sheet_view.showGridLines = False
+    NCOL = 10                                    # A .. J
 
-    ws.append([(company or "") + "  " + (plant or "")])
-    ws.append(["DAILY MANUFACTURING REPORT - SUGAR", m["season"], "Date: " + m["date"],
-               "Crop day: %s" % m["crop_day"]])
-    ws.append(["Period: %s to %s" % (m["period_from"], m["date"]), "To date from: " + m["season_from"]])
-    for r in (1, 2, 3):
-        for c in ws[r]:
-            c.font = bold
-    ws.append([])
+    GREEN, INK, MUTE, AMBER, MUTED_NUM = "2F6B4F", "2B3A33", "74837B", "A8691C", "A9B6AF"
+    fill = lambda hx: PatternFill("solid", fgColor=hx)
+    F_TINT, F_HEAD, F_HERO, F_BAND = fill("EAF5EF"), fill("F6FAF8"), fill("F1F8F4"), fill(GREEN)
+    hair = Side(style="thin", color="E3EBE6")
+    thin = Side(style="thin", color="C3DCCD")
+    amber_line = Side(style="medium", color="E0A15A")
+    box = Side(style="thin", color="C3DCCD")
 
-    for sec in rep["sections"]:
-        ws.append([sec["title"]])
-        ws.cell(ws.max_row, 1).font = bold
-        if sec["type"] == "process":
-            ws.append(["Particulars", "Day Bx", "Day Pol", "Day Pty", "Period Bx", "Period Pol",
-                       "Period Pty", "To date Bx", "To date Pol", "To date Pty"])
-            hdr = ws.max_row
-            for r in sec["rows"]:
-                line = [r["label"]]
-                for c in r["cols"]:
-                    line += [c["bx"], c["pol"], c["pty"]]
-                ws.append(line)
+    def fnt(size=10, bold=False, color=INK, italic=False):
+        return Font(name="Calibri", size=size, bold=bold, color=color, italic=italic)
+
+    def merge(row, c1, c2, value=None, font=None, align=None, fill_=None):
+        if c2 > c1:
+            ws.merge_cells(start_row=row, start_column=c1, end_row=row, end_column=c2)
+        cell = ws.cell(row, c1, value)
+        if font:
+            cell.font = font
+        if align:
+            cell.alignment = align
+        if fill_:
+            for c in range(c1, c2 + 1):
+                ws.cell(row, c).fill = fill_
+        return cell
+
+    def numfmt(dp):
+        body = "#,##0" + (("." + "0" * dp) if dp else "")
+        return '%s;-%s;"\u2013"' % (body, body)
+
+    # ---- header block (rows 1-5)
+    for rr in range(1, 6):
+        for cc in range(1, NCOL + 1):
+            ws.cell(rr, cc).fill = F_HERO
+    org = (m["company"] or "") + (("   |   " + m["plant"]) if m["plant"] else "")
+    merge(1, 1, NCOL, org, fnt(10, color=MUTE), Alignment(vertical="center", indent=1))
+    merge(2, 1, NCOL, "DAILY MANUFACTURING REPORT: SUGAR", fnt(17, True, GREEN),
+          Alignment(vertical="center", indent=1))
+    merge(3, 1, NCOL, m["season"], fnt(10, color=MUTE), Alignment(vertical="center", indent=1))
+    ws.row_dimensions[2].height = 28
+    facts = [
+        (1, 1, "Report date", formatdate(m["date"])),
+        (2, 2, "Crop day", m["crop_day"]),
+        (3, 5, "Period", "%s  to  %s" % (formatdate(m["period_from"]), formatdate(m["date"]))),
+        (6, 8, "Season from", formatdate(m["season_from"])),
+    ]
+    for c1, c2, lab, val in facts:
+        merge(4, c1, c2, lab, fnt(8.5, color=MUTE), Alignment(horizontal="left", indent=1 if c1 == 1 else 0))
+        merge(5, c1, c2, val, fnt(12, True, GREEN), Alignment(horizontal="left", indent=1 if c1 == 1 else 0))
+    ws.row_dimensions[5].height = 20
+    for cc in range(1, NCOL + 1):
+        ws.cell(5, cc).border = Border(bottom=thin)
+    if not m["has_data"]:
+        merge(6, 1, NCOL, "No Sugar Process Data found for this date. The Day column will be blank.",
+              fnt(9.5, italic=True, color=AMBER), Alignment(indent=1))
+
+    # ---- sections
+    r = 8
+    since_break = 0
+    PAGE_ROWS = 44
+    for sec in secs:
+        rows = _visible_rows(sec, with_empty)
+        proc = sec["type"] == "process"
+        span = NCOL if proc else 6
+        need = max(len(rows), 1) + (4 if proc else 3)
+        if since_break and since_break + need > PAGE_ROWS:
+            ws.row_breaks.append(Break(id=r - 1))
+            since_break = 0
+
+        merge(r, 1, span, sec["title"], fnt(11, True, "FFFFFF"),
+              Alignment(vertical="center", indent=1), F_BAND)
+        ws.row_dimensions[r].height = 20
+        r += 1
+
+        if proc:
+            # two-row header: Particulars | Day (Brix Pol Purity) | Period | To date
+            ws.merge_cells(start_row=r, start_column=1, end_row=r + 1, end_column=1)
+            c = ws.cell(r, 1, "Particulars")
+            c.font, c.alignment = fnt(10, True, MUTE), Alignment(horizontal="left", vertical="center", indent=1)
+            for g, name in enumerate(("Day", "Period", "To date")):
+                c1 = 2 + g * 3
+                merge(r, c1, c1 + 2, name, fnt(10, True, GREEN if g == 0 else MUTE),
+                      Alignment(horizontal="center"))
+                for j, sub in enumerate(("Brix", "Pol", "Purity")):
+                    cell = ws.cell(r + 1, c1 + j, sub)
+                    cell.font = fnt(9.5, True, GREEN if g == 0 else MUTE)
+                    cell.alignment = Alignment(horizontal="right")
+            for rr in (r, r + 1):
+                for cc in range(1, span + 1):
+                    cell = ws.cell(rr, cc)
+                    cell.fill = F_TINT if (2 <= cc <= 4) else F_HEAD
+                    left = thin if cc in (2, 5, 8) else None
+                    bottom = (amber_line if (2 <= cc <= 4) else thin) if rr == r + 1 else None
+                    cell.border = Border(left=left, bottom=bottom)
+            r += 2
+            for row in rows:
+                ca = ws.cell(r, 1, row["label"])
+                ca.font, ca.alignment = fnt(10), Alignment(horizontal="left", indent=1)
+                for i, col in enumerate(row["cols"]):
+                    for j, key in enumerate(("bx", "pol", "pty")):
+                        v = col[key]
+                        cell = ws.cell(r, 2 + i * 3 + j, v)
+                        cell.number_format = numfmt(2)
+                        cell.alignment = Alignment(horizontal="right")
+                        zero = _z(v)
+                        cell.font = fnt(10, bold=(key == "pty" or i == 0) and not zero,
+                                        color=MUTED_NUM if zero else (GREEN if i == 0 else INK))
+                        if i == 0:
+                            cell.fill = F_TINT
+                for cc in range(1, span + 1):
+                    ws.cell(r, cc).border = Border(bottom=hair, left=thin if cc in (2, 5, 8) else None)
+                r += 1
         else:
-            ws.append(["Particulars", "Unit", "Day", "Period", "To Date", "Target"])
-            hdr = ws.max_row
-            for r in sec["rows"]:
-                ws.append([r["label"], r["unit"]] + r["values"] + [r["target"]])
-        for c in ws[hdr]:
-            c.font, c.fill = bold, head_fill
-        ws.append([])
+            heads = ["Particulars", "Unit", "Day", "Period", "To Date", "Target"]
+            for cc, name in enumerate(heads, 1):
+                cell = ws.cell(r, cc, name)
+                day = cc == 3
+                cell.font = fnt(10, True, GREEN if day else MUTE)
+                cell.fill = F_TINT if day else F_HEAD
+                cell.alignment = Alignment(horizontal="left" if cc == 1 else ("center" if cc == 2 else "right"),
+                                           indent=1 if cc == 1 else 0)
+                cell.border = Border(bottom=amber_line if day else thin)
+            r += 1
+            if not rows:
+                merge(r, 1, span, "No values for this date", fnt(10, italic=True, color=MUTE),
+                      Alignment(horizontal="center"))
+                r += 1
+            for row in rows:
+                label = row["label"]
+                sub = label.startswith(" ")
+                ca = ws.cell(r, 1, label.strip())
+                ca.font = fnt(10)
+                ca.alignment = Alignment(horizontal="left", indent=3 if sub else 1, wrap_text=True, vertical="center")
+                cu = ws.cell(r, 2, row.get("unit") or "")
+                cu.font, cu.alignment = fnt(9, color=MUTE), Alignment(horizontal="center")
+                for i, v in enumerate(row["values"]):
+                    cell = ws.cell(r, 3 + i, v)
+                    cell.number_format = numfmt(row.get("dp", 2))
+                    cell.alignment = Alignment(horizontal="right")
+                    zero = _z(v)
+                    if i == 0:
+                        cell.fill = F_TINT
+                        cell.font = fnt(10, bold=not zero, color=MUTED_NUM if zero else GREEN)
+                    else:
+                        cell.font = fnt(10, color=MUTED_NUM if zero else INK)
+                t = row.get("target")
+                ct = ws.cell(r, 6, t)
+                ct.font = fnt(9, italic=True, color=AMBER)
+                ct.alignment = Alignment(horizontal="right")
+                if isinstance(t, (int, float)):
+                    ct.number_format = numfmt(row.get("dp", 2))
+                for cc in range(1, span + 1):
+                    ws.cell(r, cc).border = Border(bottom=hair)
+                r += 1
+        # closing rule + spacer
+        for cc in range(1, span + 1):
+            b = ws.cell(r - 1, cc).border
+            ws.cell(r - 1, cc).border = Border(left=b.left, bottom=thin)
+        since_break += need + 1
+        r += 1
 
-    if m["remarks"] or m["note"]:
-        ws.append(["Remarks", m["remarks"]])
-        ws.append(["Note", m["note"]])
-    ws.column_dimensions["A"].width = 58
-    for col in "BCDEFGHIJ":
-        ws.column_dimensions[col].width = 14
-    for row in ws.iter_rows(min_row=5):
-        for c in row[1:]:
-            if isinstance(c.value, (int, float)):
-                c.number_format = "#,##0.00"
-                c.alignment = Alignment(horizontal="right")
+    # ---- remarks / note
+    for lab, val in (("Remarks", m["remarks"]), ("Note", m["note"])):
+        if val:
+            c = ws.cell(r, 1, lab)
+            c.font, c.alignment = fnt(10, True, MUTE), Alignment(horizontal="left", vertical="top", indent=1)
+            merge(r, 2, NCOL, val, fnt(10), Alignment(wrap_text=True, vertical="top"))
+            ws.row_dimensions[r].height = max(15, 15 * (len(val) // 90 + 1))
+            r += 1
+
+    # ---- columns, print setup
+    ws.column_dimensions["A"].width = 46
+    for cc in range(2, NCOL + 1):
+        ws.column_dimensions[get_column_letter(cc)].width = 12.5
+    ws.page_setup.orientation = "landscape"
+    ws.page_setup.paperSize = 9                                  # A4
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    ws.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
+    ws.page_margins.left = ws.page_margins.right = 0.4
+    ws.page_margins.top, ws.page_margins.bottom = 0.5, 0.6
+    ws.print_options.horizontalCentered = True
+    ws.oddFooter.left.text = "DMR Sugar - " + formatdate(m["date"])
+    ws.oddFooter.right.text = "Page &P of &N"
+    ws.oddFooter.left.size = ws.oddFooter.right.size = 8
 
     buf = io.BytesIO()
     wb.save(buf)
     frappe.response["filename"] = "DMR_Sugar_%s.xlsx" % m["date"]
     frappe.response["filecontent"] = buf.getvalue()
     frappe.response["type"] = "binary"
+
+
+# ------------------------------------------------------------------------------- PDF
+_PDF_CSS = """
+body { font-family: Arial, Helvetica, sans-serif; font-size: 7.5pt; color: #2b3a33; margin: 0; }
+table { border-collapse: collapse; }
+.hero { width: 100%; background: #f1f8f4; border: 1px solid #d9eadf; }
+.hero td { padding: 8px 12px; vertical-align: bottom; }
+.hero td.hr { text-align: right; }
+.org { font-size: 8pt; color: #74837b; }
+.plant { border: 1px solid #c3dccd; background: #ffffff; color: #2f6b4f; padding: 0 6px; margin-left: 8px; }
+.h1 { font-size: 15pt; font-weight: bold; color: #2f6b4f; margin: 3px 0 1px 0; }
+.season { font-size: 8pt; color: #74837b; }
+.facts td { padding: 0 0 0 18px; text-align: left; }
+.fl { font-size: 6.5pt; color: #74837b; }
+.fv { font-size: 8.5pt; }
+.fv.big { font-size: 14pt; font-weight: bold; color: #2f6b4f; }
+.warn { margin-top: 6px; padding: 5px 10px; border: 1px solid #f0d9a4; background: #fff8e6; font-size: 7.5pt; }
+.kpis { width: 100%; border-collapse: separate; border-spacing: 5px 0; margin: 7px 0 8px 0; }
+.kpis td { width: 16.6%; border: 1px solid #e3ebe6; padding: 5px 8px; vertical-align: top; }
+.kl { font-size: 7pt; color: #74837b; }
+.kv { font-size: 13pt; font-weight: bold; color: #2f6b4f; margin: 1px 0 2px 0; }
+.kv.z { color: #74837b; font-weight: normal; }
+.ku { font-size: 7pt; font-weight: normal; color: #74837b; margin-left: 3px; }
+.ks { font-size: 6.5pt; color: #74837b; }
+.ks b { color: #2b3a33; }
+.card { width: 100%; border: 1px solid #e3ebe6; margin-bottom: 7px; page-break-inside: avoid; }
+.card td.ch { background: #f6faf8; color: #2f6b4f; font-weight: bold; font-size: 8pt; padding: 4px 7px; border-bottom: 1px solid #e3ebe6; }
+.card th { font-size: 6.5pt; color: #74837b; text-align: right; padding: 3px 4px; border-bottom: 1px solid #e3ebe6; }
+.card th.lbl { text-align: left; padding-left: 7px; }
+.card th.day { background: #eaf5ef; color: #2f6b4f; border-bottom: 2px solid #e0a15a; }
+.card th.grp { text-align: center; border-left: 1px solid #e3ebe6; }
+.card td { padding: 2px 4px; border-bottom: 1px solid #eef3f0; }
+.card td.lbl { text-align: left; padding-left: 7px; }
+.card td.sub { padding-left: 16px; }
+.card td.u { text-align: center; color: #74837b; font-size: 6.5pt; }
+.card td.n { text-align: right; white-space: nowrap; }
+.card td.day { background: #eaf5ef; font-weight: bold; color: #2f6b4f; }
+.card td.z { color: #a9b6af; }
+.card td.day.z { font-weight: normal; }
+.card td.gs, .card th.gs { border-left: 1px solid #e3ebe6; }
+.card td.pty { font-weight: bold; }
+.card td.none { text-align: center; color: #74837b; padding: 6px; }
+.tgt { font-size: 6pt; color: #a8691c; }
+.cols { width: 100%; }
+.cols td.col { width: 33.3%; vertical-align: top; padding: 0 3px; }
+.notes { width: 100%; border: 1px solid #e3ebe6; margin-top: 4px; }
+.notes td { padding: 4px 8px; font-size: 8pt; vertical-align: top; }
+.notes td.nl { width: 70px; color: #74837b; }
+.pb { page-break-before: always; }
+"""
+
+
+def _pdf_td(num, v, dp, cls=""):
+    z = " z" if _z(v) else ""
+    return '<td class="n %s%s">%s</td>' % (cls, z, num(v, dp))
+
+
+def _pdf_card(sec, with_empty, num):
+    e = escape_html
+    rows = _visible_rows(sec, with_empty)
+    if sec["type"] == "process":
+        h = ['<table class="card" cellspacing="0" cellpadding="0">',
+             '<tr><td class="ch" colspan="10">%s</td></tr>' % e(sec["title"]),
+             '<tr><th class="lbl" rowspan="2" style="width:22%">Particulars</th>'
+             '<th colspan="3" class="grp day">Day</th><th colspan="3" class="grp">Period</th>'
+             '<th colspan="3" class="grp">To date</th></tr>', "<tr>"]
+        for g in range(3):
+            for j, sub in enumerate(("Brix", "Pol", "Purity")):
+                h.append('<th class="%s%s">%s</th>' % ("day " if g == 0 else "", "gs" if j == 0 else "", sub))
+        h.append("</tr>")
+        for r in rows:
+            h.append('<tr><td class="lbl">%s</td>' % e(r["label"]))
+            for i, c in enumerate(r["cols"]):
+                cl = "day" if i == 0 else ""
+                h.append(_pdf_td(num, c["bx"], 2, cl + " gs"))
+                h.append(_pdf_td(num, c["pol"], 2, cl))
+                h.append(_pdf_td(num, c["pty"], 2, cl + " pty"))
+            h.append("</tr>")
+        if not rows:
+            h.append('<tr><td class="none" colspan="10">No values for this date</td></tr>')
+        h.append("</table>")
+        return "".join(h)
+
+    h = ['<table class="card" cellspacing="0" cellpadding="0">',
+         '<tr><td class="ch" colspan="5">%s</td></tr>' % e(sec["title"]),
+         '<tr><th class="lbl">Particulars</th><th style="width:7%"></th>'
+         '<th class="day" style="width:17%">Day</th><th style="width:17%">Period</th>'
+         '<th style="width:18%">To date</th></tr>']
+    for r in rows:
+        dp = r.get("dp", 2)
+        d, p, t = r["values"]
+        sub = r["label"].startswith(" ")
+        tgt = _target_text(r, num)
+        h.append('<tr><td class="lbl%s">%s%s</td><td class="u">%s</td>%s%s%s</tr>' % (
+            " sub" if sub else "", e(r["label"].strip()),
+            ('<div class="tgt">%s</div>' % e(tgt)) if tgt else "",
+            e(r.get("unit") or ""),
+            _pdf_td(num, d, dp, "day"), _pdf_td(num, p, dp), _pdf_td(num, t, dp)))
+    if not rows:
+        h.append('<tr><td class="none" colspan="5">No values for this date</td></tr>')
+    h.append("</table>")
+    return "".join(h)
+
+
+def _pdf_html(rep, with_empty):
+    e = escape_html
+    num = _Num()
+    m = rep["meta"]
+    wide = [s for s in rep["sections"] if s["type"] == "process"]
+    cards = [s for s in rep["sections"] if s["type"] != "process"]
+
+    h = ['<html><head><meta charset="utf-8"><style>%s</style></head><body>' % _PDF_CSS]
+    h.append(
+        '<table class="hero" cellspacing="0" cellpadding="0"><tr><td>'
+        '<div class="org">%s%s</div><div class="h1">Daily Manufacturing Report: Sugar</div>'
+        '<div class="season">%s</div></td><td class="hr">'
+        '<table class="facts" align="right" cellspacing="0" cellpadding="0"><tr>'
+        '<td><div class="fl">Report date</div><div class="fv big">%s</div></td>'
+        '<td><div class="fl">Crop day</div><div class="fv big">%s</div></td>'
+        '<td><div class="fl">Period</div><div class="fv">%s to %s</div></td>'
+        '<td><div class="fl">Season from</div><div class="fv">%s</div></td>'
+        '</tr></table></td></tr></table>' % (
+            e(m["company"] or ""), ('<span class="plant">%s</span>' % e(m["plant"])) if m["plant"] else "",
+            e(m["season"]), formatdate(m["date"]), m["crop_day"],
+            formatdate(m["period_from"]), formatdate(m["date"]), formatdate(m["season_from"])))
+    if not m["has_data"]:
+        h.append('<div class="warn">No Sugar Process Data found for this date. The Day column will be blank.</div>')
+
+    kp = _kpi_rows(rep)
+    if kp:
+        h.append('<table class="kpis"><tr>')
+        for title, r in kp:
+            dp = r.get("dp", 2)
+            d, p, t = r["values"]
+            h.append('<td><div class="kl">%s</div><div class="kv%s">%s<span class="ku">%s</span></div>'
+                     '<div class="ks">Period <b>%s</b> &nbsp; Season <b>%s</b></div></td>' % (
+                         e(title), "" if d else " z", num(d, dp) or "\u2013", e(r.get("unit") or ""),
+                         num(p, dp) or "\u2013", num(t, dp) or "\u2013"))
+        h.append("</tr></table>")
+
+    for s in wide:                                   # Process Analysis, full width, on top
+        h.append(_pdf_card(s, with_empty, num))
+
+    if m["remarks"] or m["note"]:
+        h.append('<table class="notes" cellspacing="0" cellpadding="0">')
+        if m["remarks"]:
+            h.append('<tr><td class="nl">Remarks</td><td>%s</td></tr>' % e(m["remarks"]))
+        if m["note"]:
+            h.append('<tr><td class="nl">Note</td><td>%s</td></tr>' % e(m["note"]))
+        h.append("</table>")
+
+    if cards:                                        # page 2: ordinary cards in 3 balanced columns
+        cols, heights = [[], [], []], [0, 0, 0]
+        for s in cards:
+            i = heights.index(min(heights))
+            cols[i].append(s)
+            heights[i] += len(_visible_rows(s, with_empty)) + 3
+        h.append('<div class="pb"></div><table class="cols" cellspacing="0" cellpadding="0"><tr>')
+        for col in cols:
+            h.append('<td class="col">%s</td>' % "".join(_pdf_card(s, with_empty, num) for s in col))
+        h.append("</tr></table>")
+    h.append("</body></html>")
+    return "".join(h)
+
+
+@frappe.whitelist()
+def export_dmr_pdf(company=None, plant=None, date=None, period_from=None, season_from=None,
+                   remarks="", note="", with_empty=0):
+    from frappe.utils.pdf import get_pdf
+
+    if not date:
+        frappe.throw("Date is required")
+    rep = _build(company, plant, date, period_from, season_from, remarks, note)
+    html = _pdf_html(rep, cint(with_empty))
+    pdf = get_pdf(html, {
+        "orientation": "Landscape",
+        "page-size": "A4",
+        "margin-top": "8mm", "margin-bottom": "10mm",
+        "margin-left": "8mm", "margin-right": "8mm",
+        "footer-right": "Page [page] of [topage]",
+        "footer-font-size": "7",
+    })
+    frappe.response["filename"] = "DMR_Sugar_%s.pdf" % rep["meta"]["date"]
+    frappe.response["filecontent"] = pdf
+    frappe.response["type"] = "pdf"
