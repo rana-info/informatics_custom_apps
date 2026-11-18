@@ -48,28 +48,66 @@ class DMRSugar {
 
 	make_filters() {
 		const p = this.page;
-		const f = (o) => p.add_field(Object.assign({ change: () => this.on_filter_change() }, o));
-		this.f_company = f({ fieldname: "company", label: __("Company"), fieldtype: "Link",
-			options: "Company", default: frappe.defaults.get_user_default("Company"), reqd: 1 });
-		this.f_plant = f({ fieldname: "plant", label: __("Plant"), fieldtype: "Link", options: "Branch" });
-		this.f_date = f({ fieldname: "date", label: __("Date"), fieldtype: "Date",
-			default: frappe.datetime.get_today(), reqd: 1 });
-		this.f_period = f({ fieldname: "period_from", label: __("Period From"), fieldtype: "Date",
-			description: __("blank = 1st of the month") });
-		this.f_season = f({ fieldname: "season_from", label: __("Season Start"), fieldtype: "Date",
-			description: __("blank = last Crop Day 1") });
-		this.f_remarks = p.add_field({ fieldname: "remarks", label: __("Remarks"), fieldtype: "Data" });
-		this.f_note = p.add_field({ fieldname: "note", label: __("Note"), fieldtype: "Data", hidden: 1 });
+		this.f_company = p.add_field({ fieldname: "company", label: __("Company"), fieldtype: "Link",
+			options: "Company", default: frappe.defaults.get_user_default("Company"), reqd: 1,
+			change: () => this.on_company_change() });
+		// plants are limited to the selected company
+		this.f_plant = p.add_field({ fieldname: "plant", label: __("Plant"), fieldtype: "Link",
+			options: "Branch", reqd: 1,
+			get_query: () => ({ query: `${DMR_API}.plant_query`, filters: { company: this.f_company.get_value() } }),
+			change: () => this.refresh_season() });
+		this.f_date = p.add_field({ fieldname: "date", label: __("Date"), fieldtype: "Date",
+			default: frappe.datetime.get_today(), reqd: 1, change: () => this.refresh_season() });
+		// fixed once per plant per season (Sugar DMR Season) - shown here, not typed
+		this.f_period = p.add_field({ fieldname: "period_from", label: __("Period From"), fieldtype: "Date",
+			read_only: 1, description: __("fixed for the season") });
+		this.f_season = p.add_field({ fieldname: "season_from", label: __("Season Start"), fieldtype: "Date",
+			read_only: 1, description: __("fixed for the season") });
+	}
+
+	on_company_change() {
+		if (!this.f_plant) return; // fires once while the page is being built
+		if (this.f_plant.get_value()) this.f_plant.set_value(""); // old plant may belong to another company
+		else this.refresh_season();
+	}
+
+	// Season Start and Period From come from the plant's Sugar DMR Season record
+	refresh_season() {
+		if (!this.f_plant || !this.f_date || !this.f_season || !this.f_period) return;
+		const company = this.f_company.get_value();
+		const plant = this.f_plant.get_value();
+		const date = this.f_date.get_value();
+		if (!company || !plant || !date) {
+			this.f_season.set_value("");
+			this.f_period.set_value("");
+			return;
+		}
+		const seq = (this._season_req = (this._season_req || 0) + 1);
+		frappe.call({
+			method: `${DMR_API}.get_season_setting`,
+			args: { company, plant, date },
+			callback: (r) => {
+				if (seq !== this._season_req) return; // a newer selection is already loading
+				const st = r.message;
+				this.f_season.set_value(st ? st.season_from : "");
+				this.f_period.set_value(st ? st.period_from : "");
+				if (!st) {
+					frappe.show_alert({
+						message: __("No season is set up for this plant and date, so default dates are used. Add one under Season Setup."),
+						indicator: "orange",
+					}, 7);
+				}
+			},
+		});
 	}
 
 	make_actions() {
 		this.page.set_primary_action(__("Show Data"), () => this.load(), "refresh");
 		// this.page.add_inner_button(__("Print"), () => window.print());
+		this.page.add_inner_button(__("Season Setup"), () => frappe.set_route("List", "Sugar DMR Season"));
 		this.page.add_inner_button(__("Export Excel"), () => this.export_excel());
 		this.page.add_inner_button(__("Export PDF"), () => this.export_pdf());
 	}
-
-	on_filter_change() { /* intentionally manual: user presses Show Data */ }
 
 	bind_events() {
 		const $b = this.$body;
@@ -133,16 +171,12 @@ class DMRSugar {
 			company: this.f_company.get_value(),
 			plant: this.f_plant.get_value(),
 			date: this.f_date.get_value(),
-			period_from: this.f_period.get_value(),
-			season_from: this.f_season.get_value(),
-			remarks: this.f_remarks.get_value(),
-			note: this.f_note.get_value(),
 		};
 	}
 
 	load() {
 		const a = this.args();
-		if (!a.date) return frappe.msgprint(__("Please select a Date"));
+		if (!a.date || !a.plant) return frappe.msgprint(__("Please select a Plant and a Date"));
 		frappe.call({
 			method: `${DMR_API}.get_dmr_data`,
 			args: a,
@@ -166,13 +200,13 @@ class DMRSugar {
 
 	export_excel() {
 		const a = this.export_args();
-		if (!a.date) return frappe.msgprint(__("Please select a Date"));
+		if (!a.date || !a.plant) return frappe.msgprint(__("Please select a Plant and a Date"));
 		open_url_post(`/api/method/${DMR_API}.export_dmr_excel`, a);
 	}
 
 	export_pdf() {
 		const a = this.export_args();
-		if (!a.date) return frappe.msgprint(__("Please select a Date"));
+		if (!a.date || !a.plant) return frappe.msgprint(__("Please select a Plant and a Date"));
 		open_url_post(`/api/method/${DMR_API}.export_dmr_pdf`, a);
 	}
 
@@ -259,12 +293,6 @@ class DMRSugar {
 
 		h += `<div class="dmrs-sections"></div>`;
 
-		if (m.remarks || m.note) {
-			h += `<section class="dmrs-card dmrs-notes"><dl>
-				${m.remarks ? `<div><dt>${__("Remarks")}</dt><dd>${e(m.remarks)}</dd></div>` : ""}
-				${m.note ? `<div><dt>${__("Note")}</dt><dd>${e(m.note)}</dd></div>` : ""}
-			</dl></section>`;
-		}
 		this.$body.html(h);
 		this.layout(true);
 	}
@@ -505,13 +533,6 @@ class DMRSugar {
 		.dmrs-t td.day.z { color: var(--faint); font-weight: 400; }
 		.dmrs-t.proc td.gs, .dmrs-t.proc th.gs { border-left: 1px solid var(--line); }
 		.dmrs-t.proc td.pty { font-weight: 600; }
-
-		/* remarks */
-		.dmrs-notes { margin-top: 14px; }
-		.dmrs-notes dl { margin: 0; padding: 10px 14px; display: grid; gap: 8px; }
-		.dmrs-notes dl > div { display: grid; grid-template-columns: 90px 1fr; gap: 10px; font-size: 13px; }
-		.dmrs-notes dt { color: var(--mute); font-weight: 500; }
-		.dmrs-notes dd { margin: 0; }
 
 		/* narrow containers */
 		.dmrs.narrow .dmrs-hero { padding: 14px 16px; }
