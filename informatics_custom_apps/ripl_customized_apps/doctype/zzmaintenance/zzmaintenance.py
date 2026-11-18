@@ -559,15 +559,24 @@ class ZZMaintenance(Document):
 		Absolute (not incremental), so it gives the right result whether or not a
 		Gate Entry hook already wrote to the PO - nothing is ever counted twice.
 		"""
-		po_base, rb_base = snapshot
 		qty_by_po = {}
 		for po_item, delta in deltas.items():
 			parent = frappe.db.get_value("Purchase Order Item", po_item, "parent")
 			if not parent:
 				continue
+			total = frappe.db.sql(
+				"""
+				SELECT IFNULL(SUM(accepted_quantity), 0)
+				FROM `tabPurchase Details`
+				WHERE parenttype = 'Gate Entry'
+					AND docstatus = 1
+					AND purchase_order_item = %s
+				""",
+				(po_item,),
+			)[0][0]
 			frappe.db.set_value(
 				"Purchase Order Item", po_item, "gate_entry_received_qty",
-				max(flt(po_base.get(po_item, 0)) + delta, 0), update_modified=False,
+				max(flt(total), 0), update_modified=False,
 			)
 			self._refresh_po_received_percentage(po_item)
 			qty_by_po[parent] = qty_by_po.get(parent, 0) + delta
@@ -636,7 +645,14 @@ class ZZMaintenance(Document):
 			qty_by_po[parent] = qty_by_po.get(parent, 0) + delta
 
 		for po_name, delta in qty_by_po.items():
-			self._update_rake_bill(po_name, delta)
+			rb = self._rake_bill(po_name)
+			if rb:
+				total = frappe.db.sql(
+					"SELECT IFNULL(SUM(gate_entry_received_qty), 0) "
+					"FROM `tabPurchase Order Item` WHERE parent=%s",
+					(po_name,),
+				)[0][0]
+				self._set_rake_bill_received(rb, total)
 			self._recalc_rake_bill_factory_qty(po_name)
 
 	# ============ END PO / RAKE BILL SYNC ============
