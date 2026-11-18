@@ -64,7 +64,7 @@ class DMRSugar {
 
 	make_actions() {
 		this.page.set_primary_action(__("Show Data"), () => this.load(), "refresh");
-		this.page.add_inner_button(__("Print"), () => window.print());
+		// this.page.add_inner_button(__("Print"), () => window.print());
 		this.page.add_inner_button(__("Export Excel"), () => this.export_excel());
 		this.page.add_inner_button(__("Export PDF"), () => this.export_pdf());
 	}
