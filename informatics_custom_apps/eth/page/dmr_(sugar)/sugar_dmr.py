@@ -16,6 +16,9 @@ Three columns are produced, exactly like the workbook:
     Period   -> Period From .. selected date             (row 8   of the sheet)
     To Date  -> Season start .. selected date            (row 7   of the sheet)
 
+Season Start / Period From are NOT typed on the page: they are set once per plant per season
+in the "Sugar DMR Season" doctype (see sugar_dmr_season/). Plant is filtered by Company.
+
 Exports (whitelisted):
     get_dmr_data      -> JSON for the page
     export_dmr_excel  -> formatted .xlsx (landscape A4, fit to width)
@@ -570,21 +573,72 @@ def _fmt(v):
     return None if v is None else round(flt(v), 6)
 
 
+def _season_setting(company, plant, to_date):
+    """Season Start / Period From are set once per plant per season in 'Sugar DMR Season'.
+    Returns the setting of the latest season that started on or before the report date."""
+    if not (company and plant) or not frappe.db.exists("DocType", "Sugar DMR Season"):
+        return None
+    rows = frappe.db.sql(
+        """select name, season_from, period_from from `tabSugar DMR Season`
+           where company = %(c)s and plant = %(p)s and season_from <= %(t)s
+           order by season_from desc limit 1""",
+        {"c": company, "p": plant, "t": to_date}, as_dict=True)
+    return rows[0] if rows else None
+
+
+@frappe.whitelist()
+def get_season_setting(company=None, plant=None, date=None):
+    """Used by the page to show the fixed Season Start / Period From of the chosen plant."""
+    company, plant, date = _arg(company), _arg(plant), _arg(date)
+    if not (company and plant and date):
+        return None
+    st = _season_setting(company, plant, getdate(date))
+    if not st:
+        return None
+    return {"season_from": str(st.season_from), "period_from": str(st.period_from)}
+
+
+@frappe.whitelist()
+def plant_query(doctype, txt, searchfield, start, page_len, filters):
+    """Link query for Plant (Branch): only plants of the selected company."""
+    company = _arg((filters or {}).get("company") if isinstance(filters, dict) else None)
+    like, start, page_len = "%%%s%%" % (txt or ""), cint(start), cint(page_len) or 20
+    if company and frappe.get_meta("Branch").has_field("company"):
+        return frappe.db.sql(
+            """select name from `tabBranch` where company = %(c)s and name like %(t)s
+               order by name limit %(s)s, %(l)s""",
+            {"c": company, "t": like, "s": start, "l": page_len})
+    if company:   # Branch has no company field: use the plants that have process data for the company
+        return frappe.db.sql(
+            """select distinct plant from `tabSugar Process Data`
+               where company = %(c)s and ifnull(plant, '') != '' and plant like %(t)s
+               order by plant limit %(s)s, %(l)s""",
+            {"c": company, "t": like, "s": start, "l": page_len})
+    return frappe.db.sql(
+        "select name from `tabBranch` where name like %(t)s order by name limit %(s)s, %(l)s",
+        {"t": like, "s": start, "l": page_len})
+
+
 def _arg(v):
     """open_url_post sends empty JS fields as the text 'undefined' / 'null' - treat them as blank."""
     return None if v in (None, "", "undefined", "null", "None") else v
 
 
-def _build(company, plant, date, period_from=None, season_from=None, remarks="", note=""):
+def _build(company, plant, date):
     frappe.has_permission(SPD, "read", throw=True)
     company, plant, date = _arg(company), _arg(plant), _arg(date)
-    period_from, season_from = _arg(period_from), _arg(season_from)
-    remarks, note = _arg(remarks) or "", _arg(note) or ""
     if not date:
         frappe.throw("Date is required")
+    if not plant:
+        frappe.throw("Plant is required")
     to = getdate(date)
-    sf = getdate(season_from) if season_from else _season_start(company, plant, to)
-    pf = max(getdate(period_from) if period_from else get_first_day(to), sf)
+    setting = _season_setting(company, plant, to)
+    if setting:                                   # fixed once per plant per season
+        sf = getdate(setting.season_from)
+        pf = min(max(getdate(setting.period_from), sf), to)
+    else:                                         # no setup yet: derive from the data
+        sf = _season_start(company, plant, to)
+        pf = max(get_first_day(to), sf)
 
     s_rows = _fetch(SPD, "date", company, plant, sf, to)
     p_rows = _fetch(STP, "posting_date", company, plant, sf, to)
@@ -645,7 +699,7 @@ def _build(company, plant, date, period_from=None, season_from=None, remarks="",
             "season_from": str(sf), "season": _season_label(sf),
             "crop_day": int(max(crop)) if crop else (to - sf).days + 1,
             "has_data": bool(aggs[0]["D"]),
-            "remarks": remarks or "", "note": note or "",
+            "season_setup": bool(setting),
         },
         "sections": sections,
     }
@@ -761,17 +815,15 @@ def _target_text(r, num):
 # WHITELISTED API
 # --------------------------------------------------------------------------------------
 @frappe.whitelist()
-def get_dmr_data(company=None, plant=None, date=None, period_from=None, season_from=None,
-                 remarks="", note=""):
+def get_dmr_data(company=None, plant=None, date=None):
     if not date:
         frappe.throw("Date is required")
-    return _build(company, plant, date, period_from, season_from, remarks, note)
+    return _build(company, plant, date)
 
 
 # ----------------------------------------------------------------------------- EXCEL
 @frappe.whitelist()
-def export_dmr_excel(company=None, plant=None, date=None, period_from=None, season_from=None,
-                     remarks="", note="", with_empty=0):
+def export_dmr_excel(company=None, plant=None, date=None, with_empty=0):
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
     from openpyxl.utils import get_column_letter
@@ -781,7 +833,7 @@ def export_dmr_excel(company=None, plant=None, date=None, period_from=None, seas
     if not date:
         frappe.throw("Date is required")
     with_empty = cint(with_empty)
-    rep = _build(company, plant, date, period_from, season_from, remarks, note)
+    rep = _build(company, plant, date)
     m = rep["meta"]
     secs = [_kpi_section(rep)] + rep["sections"]
 
@@ -950,15 +1002,6 @@ def export_dmr_excel(company=None, plant=None, date=None, period_from=None, seas
         since_break += need + 1
         r += 1
 
-    # ---- remarks / note
-    for lab, val in (("Remarks", m["remarks"]), ("Note", m["note"])):
-        if val:
-            c = ws.cell(r, 1, lab)
-            c.font, c.alignment = fnt(10, True, MUTE), Alignment(horizontal="left", vertical="top", indent=1)
-            merge(r, 2, NCOL, val, fnt(10), Alignment(wrap_text=True, vertical="top"))
-            ws.row_dimensions[r].height = max(15, 15 * (len(val) // 90 + 1))
-            r += 1
-
     # ---- columns, print setup
     ws.column_dimensions["A"].width = 46
     for cc in range(2, NCOL + 1):
@@ -1026,9 +1069,6 @@ table { border-collapse: collapse; }
 .tgt { font-size: 6pt; color: #a8691c; }
 .cols { width: 100%; }
 .cols td.col { width: 33.3%; vertical-align: top; padding: 0 3px; }
-.notes { width: 100%; border: 1px solid #e3ebe6; margin-top: 4px; }
-.notes td { padding: 4px 8px; font-size: 8pt; vertical-align: top; }
-.notes td.nl { width: 70px; color: #74837b; }
 .pb { page-break-before: always; }
 """
 
@@ -1124,14 +1164,6 @@ def _pdf_html(rep, with_empty):
     for s in wide:                                   # Process Analysis, full width, on top
         h.append(_pdf_card(s, with_empty, num))
 
-    if m["remarks"] or m["note"]:
-        h.append('<table class="notes" cellspacing="0" cellpadding="0">')
-        if m["remarks"]:
-            h.append('<tr><td class="nl">Remarks</td><td>%s</td></tr>' % e(m["remarks"]))
-        if m["note"]:
-            h.append('<tr><td class="nl">Note</td><td>%s</td></tr>' % e(m["note"]))
-        h.append("</table>")
-
     if cards:                                        # page 2: ordinary cards in 3 balanced columns
         cols, heights = [[], [], []], [0, 0, 0]
         for s in cards:
@@ -1147,13 +1179,12 @@ def _pdf_html(rep, with_empty):
 
 
 @frappe.whitelist()
-def export_dmr_pdf(company=None, plant=None, date=None, period_from=None, season_from=None,
-                   remarks="", note="", with_empty=0):
+def export_dmr_pdf(company=None, plant=None, date=None, with_empty=0):
     from frappe.utils.pdf import get_pdf
 
     if not date:
         frappe.throw("Date is required")
-    rep = _build(company, plant, date, period_from, season_from, remarks, note)
+    rep = _build(company, plant, date)
     html = _pdf_html(rep, cint(with_empty))
     pdf = get_pdf(html, {
         "orientation": "Landscape",
