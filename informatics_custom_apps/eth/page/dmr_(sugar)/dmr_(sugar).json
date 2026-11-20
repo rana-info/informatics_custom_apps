@@ -1,0 +1,29 @@
+{
+ "content": null,
+ "creation": "2026-11-16 10:31:42.218490",
+ "docstatus": 0,
+ "doctype": "Page",
+ "idx": 0,
+ "modified": "2026-11-16 10:32:04.934886",
+ "modified_by": "Administrator",
+ "module": "ETH",
+ "name": "dmr-(sugar)",
+ "owner": "Administrator",
+ "page_name": "dmr-(sugar)",
+ "roles": [
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "ETH Manager"
+  },
+  {
+   "role": "Master Admin"
+  }
+ ],
+ "script": null,
+ "standard": "Yes",
+ "style": null,
+ "system_page": 0,
+ "title": "Daily Manufacturing Report of Sugar"
+}

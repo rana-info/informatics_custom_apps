@@ -68,10 +68,11 @@ frappe.ui.form.on("ZZMaintenance", {
                 freeze: true,
                 freeze_message: __("Processing..."),
                 callback: function (r) {
-                    if (r.message) {
-                        frappe.show_alert({ message: __("Done ..."), indicator: "green" });
-                        frm.reload_doc();
-                    }
+                    if (!r.message) return;
+
+                    frappe.show_alert({ message: __("Done ..."), indicator: "green" });
+
+                    frm.events.reset_form(frm);
                 }
             });
         };
@@ -81,6 +82,32 @@ frappe.ui.form.on("ZZMaintenance", {
         } else if (frm.doc.maintenance_type === "Update") {
             frm.add_custom_button(__("Update"), () => run("update_transaction"));
         }
+    },
+
+
+    reset_form: function (frm) {
+        const skip_types = ["Section Break", "Column Break", "Tab Break", "Button", "HTML"];
+        const numeric_types = ["Float", "Int", "Currency", "Percent", "Check"];
+
+        frappe.get_meta(frm.doc.doctype).fields.forEach((df) => {
+            if (skip_types.includes(df.fieldtype)) return;
+
+            if (df.fieldtype === "Table") {
+                frm.doc[df.fieldname] = [];
+            } else if (numeric_types.includes(df.fieldtype)) {
+                frm.doc[df.fieldname] = 0;
+            } else {
+                frm.doc[df.fieldname] = null;
+            }
+        });
+
+        frm.doc.vehicle_owner = "Third Party";
+        frm.doc.is_weighment_required = "Yes";
+
+        frm.refresh();     
+        frm.dirty();
+        frm.page.clear_indicator && frm.page.clear_indicator();
+        window.scrollTo(0, 0);
     },
 
     maintenance_type: function (frm) {
@@ -95,7 +122,7 @@ frappe.ui.form.on("ZZMaintenance", {
     },
 
     set_default_weighment_required: function (frm) {
-        if (frm.doc.entry_type === "Outward" && !frm.doc.is_weighment_required) {
+        if (!frm.doc.is_weighment_required) {
             frm.set_value("is_weighment_required", "Yes");
         }
     },
@@ -198,7 +225,7 @@ frappe.ui.form.on("ZZMaintenance", {
 
     clear_fields: function (frm) {
         const skip_types = ["Section Break", "Column Break", "Tab Break", "Button"];
-        const skip_fields = ["maintenance_type", "vehicle_owner", "time", "entry_type"];
+        const skip_fields = ["maintenance_type", "vehicle_owner", "time", "entry_type", "is_weighment_required"];
 
         frappe.get_meta(frm.doc.doctype).fields.forEach((df) => {
             if (skip_types.includes(df.fieldtype) || skip_fields.includes(df.fieldname)) return;

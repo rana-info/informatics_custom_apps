@@ -1,7 +1,6 @@
 # Copyright (c) 2026, Dexciss and contributors
 # For license information, please see license.txt
 
-from math import ceil
 
 import frappe
 from frappe.model.document import Document
@@ -27,6 +26,53 @@ REQUIRED_FIELDS = [
 
 
 RELEASE_CARD_AFTER_COMPLETE = True
+
+# True  -> rename the re-created draft Purchase Receipt back to its old name with direct SQL (fast)
+# False -> use frappe.rename_doc (slow: scans every link field in the system)
+FAST_PR_RENAME = True
+
+# Set on frappe.flags while ZZMaintenance runs. Add this one-line guard at the top of the
+# Gate Entry / Weighment hook that auto-creates a Purchase Receipt:
+#     if frappe.flags.get("zz_maintenance"): return
+ZZ_FLAG = "zz_maintenance"
+
+# After Update, re-apply the original "Last Updated" stamps once more AFTER the request has
+# committed, to undo any background / after-commit job that re-saves the documents.
+MODIFIED_RESTORE_DEFERRED = True
+MODIFIED_RESTORE_DELAY = 6  # seconds the background job waits before restoring
+
+# PO incoterms for which a Rake Bill is maintained
+RAIL_INCOTERMS = ("Rail Rack", "RRB", "Rail Rake")
+
+
+def apply_modified_snaps(snaps, rebuilt=()):
+	"""Put remembered modified / modified_by back with direct SQL (no hooks, no new stamp).
+
+	rebuilt: doctypes whose child rows were deleted and re-created, so every current child row
+	gets the parent's original stamp instead of a per-row one.
+	"""
+	for s in snaps:
+		dt, name = s["dt"], s["name"]
+		frappe.db.sql(f"UPDATE `tab{dt}` SET modified=%s, modified_by=%s WHERE name=%s",
+			(s["m"], s["mb"], name))
+		for cdt, rows in s["children"].items():
+			if dt in rebuilt:
+				frappe.db.sql(
+					f"UPDATE `tab{cdt}` SET modified=%s, modified_by=%s "
+					"WHERE parent=%s AND parenttype=%s", (s["m"], s["mb"], name, dt))
+			else:
+				for rname, rm, rmb in rows:
+					frappe.db.sql(
+						f"UPDATE `tab{cdt}` SET modified=%s, modified_by=%s WHERE name=%s",
+						(rm, rmb, rname))
+
+
+def restore_modified_deferred(snaps, rebuilt=(), delay=MODIFIED_RESTORE_DELAY):
+	"""Background job (runs after the request commits): restore the stamps one more time."""
+	import time
+	time.sleep(delay)
+	apply_modified_snaps(snaps, rebuilt)
+	frappe.db.commit()
 
 
 @frappe.whitelist()
@@ -252,9 +298,9 @@ class ZZMaintenance(Document):
 			SELECT name, card_number
 			FROM `tabCard Details`
 			WHERE {' AND '.join(conditions)}
-			ORDER BY creation ASC
+			ORDER BY RAND()
 			LIMIT 1
-			FOR UPDATE
+			FOR UPDATE SKIP LOCKED
 			""",
 			values,
 			as_dict=True,
@@ -337,6 +383,316 @@ class ZZMaintenance(Document):
 				"Card Details", card_docname, "is_assigned", 0, update_modified=False
 			)
 
+	# ============ PO / RAKE BILL SYNC============
+
+	def _row_po_item(self, r):
+		"""Purchase Order Item name for a Purchase Details row.
+		Falls back to (purchase_order, item_code) when purchase_order_item is blank."""
+		po_item = r.get("purchase_order_item")
+		if po_item:
+			return po_item
+		po, code = r.get("purchase_order"), r.get("item_code")
+		if po and code:
+			return frappe.db.get_value(
+				"Purchase Order Item", {"parent": po, "item_code": code}, "name")
+		return None
+
+	def _po_item_qty_map(self, rows):
+		"""{purchase_order_item: total accepted_quantity} from Purchase Details rows."""
+		out = {}
+		for r in rows or []:
+			po_item = self._row_po_item(r)
+			if po_item:
+				out[po_item] = out.get(po_item, 0) + flt(r.get("accepted_quantity"))
+		return out
+
+	def _old_gate_entry_qty_map(self):
+		"""Accepted qty per PO item as currently saved on the Gate Entry (BEFORE update)."""
+		rows = frappe.get_all(
+			"Purchase Details",
+			filters={"parent": self.gate_entry, "parenttype": "Gate Entry"},
+			fields=["purchase_order_item", "purchase_order", "item_code", "accepted_quantity"],
+		)
+		return self._po_item_qty_map(rows)
+
+	def _qty_deltas(self, old_map, new_map):
+		"""new - old for every PO item that appears on either side.
+		Old PO item gets a negative delta, new PO item a positive one, so a PO
+		change is handled automatically."""
+		deltas = {}
+		for po_item in set(old_map) | set(new_map):
+			delta = flt(new_map.get(po_item, 0)) - flt(old_map.get(po_item, 0))
+			if abs(delta) > 0.000001:
+				deltas[po_item] = delta
+		return deltas
+
+	def _rake_bill(self, po_name):
+		"""Return the live Rake Bill row for a Rail PO, else None."""
+		if not po_name:
+			return None
+		incoterm = (frappe.db.get_value("Purchase Order", po_name, "incoterm") or "").strip().casefold()
+		if incoterm not in {i.casefold() for i in RAIL_INCOTERMS}:
+			return None
+		rb = frappe.db.get_value(
+			"Rake Bill",
+			{"purchase_order": po_name, "docstatus": ["<", 2]},
+			["name", "billed_qty", "gate_entry_received_qty", "tolerance_qty"],
+			as_dict=True,
+		)
+		if not rb:
+			warned = frappe.flags.setdefault("zz_rb_warned", set())
+			if po_name not in warned:
+				warned.add(po_name)
+				frappe.msgprint(
+					f"Purchase Order {frappe.bold(po_name)} is a Rail PO but has no Rake Bill. "
+					f"Rake Bill was not updated.", indicator="orange", alert=True)
+		return rb
+
+	def _validate_po_limits(self, deltas):
+		"""Throw if applying `deltas` pushes any PO item (or Rake Bill) over its limit.
+		Only increases are checked; decreases are always allowed.
+		Nothing is written here, so call it BEFORE touching any document."""
+		qty_by_po = {}
+
+		for po_item, delta in deltas.items():
+			d = frappe.db.get_value(
+				"Purchase Order Item", po_item,
+				["parent", "item_code", "qty", "gate_entry_received_qty"],
+				as_dict=True,
+			)
+			if not d:
+				frappe.throw(f"Purchase Order Item {frappe.bold(po_item)} not found")
+
+			qty_by_po[d.parent] = qty_by_po.get(d.parent, 0) + delta
+
+			if delta <= 0 or not flt(d.qty):
+				continue
+
+			allowance = flt(frappe.db.get_value(
+				"Item", d.item_code, "over_delivery_receipt_allowance"))
+			max_pct = 100 + allowance
+			max_qty = flt(d.qty) * max_pct / 100
+			new_received = flt(d.gate_entry_received_qty) + delta
+			new_pct = new_received / flt(d.qty) * 100
+
+			if new_received - max_qty > 0.0001:
+				frappe.throw(
+					f"Gate Entry received quantity ({flt(new_received, 3)}) for item "
+					f"{frappe.bold(d.item_code)} in {frappe.bold(d.parent)} exceeds the maximum "
+					f"allowed quantity ({flt(max_qty, 3)}), and received percentage "
+					f"({new_pct:.2f}%) exceeds the limit ({max_pct:.2f}%) set by Over "
+					f"Delivery/Receipt Allowance ({allowance}%)."
+				)
+
+		for po_name, delta in qty_by_po.items():
+			if delta <= 0:
+				continue
+			rb = self._rake_bill(po_name)
+			if rb and flt(rb.gate_entry_received_qty) + delta - flt(rb.billed_qty) > 0.0001:
+				frappe.throw(
+					f"Gate Entry Received Qty ({flt(flt(rb.gate_entry_received_qty) + delta, 3)}) "
+					f"cannot be greater than Billed Qty ({flt(rb.billed_qty, 3)}) on Rake Bill "
+					f"{frappe.bold(rb.name)} for Purchase Order {frappe.bold(po_name)}"
+				)
+
+	def _refresh_po_received_percentage(self, po_item_name):
+		"""Recalculate gate_entry_received_percentage on the parent PO (no validation)."""
+		d = frappe.db.get_value(
+			"Purchase Order Item", po_item_name,
+			["parent", "qty", "gate_entry_received_qty"], as_dict=True,
+		)
+		if d and flt(d.qty):
+			frappe.db.set_value(
+				"Purchase Order", d.parent, "gate_entry_received_percentage",
+				flt(d.gate_entry_received_qty) / flt(d.qty) * 100,
+				update_modified=False,
+			)
+
+	def _set_rake_bill_received(self, rb, new_received):
+		"""Write gate_entry_received_qty and the 3 fields derived from it on a Rake Bill."""
+		billed = flt(rb.billed_qty)
+		tolerance = flt(rb.tolerance_qty)
+		new_received = flt(new_received)
+
+		if new_received - billed > 0.0001:
+			frappe.throw(
+				f"Gate Entry Received Qty ({flt(new_received, 3)}) cannot be greater than "
+				f"Billed Qty ({billed}) on Rake Bill {rb.name}"
+			)
+
+		short_billed = billed - new_received
+		frappe.db.set_value("Rake Bill", rb.name, {
+			"gate_entry_received_qty": new_received,
+			"billed_to_after_tolerance": new_received + tolerance,
+			"short_billed_qty": short_billed,
+			"debit_note_qty": short_billed - tolerance,
+		}, update_modified=False)
+
+	def _update_rake_bill(self, po_name, qty_diff):
+		"""Adjust Rake Bill quantities by qty_diff (same formulas as PMS.update_rake_bill)."""
+		if not qty_diff:
+			return
+		rb = self._rake_bill(po_name)
+		if not rb:
+			return
+		self._set_rake_bill_received(rb, flt(rb.gate_entry_received_qty) + qty_diff)
+
+	def _snapshot_po_state(self, deltas):
+		"""Record PO item received qty and Rake Bill received qty BEFORE anything is created."""
+		po_base, parents = {}, set()
+		for po_item in deltas:
+			d = frappe.db.get_value(
+				"Purchase Order Item", po_item, ["parent", "gate_entry_received_qty"], as_dict=True)
+			if d:
+				po_base[po_item] = flt(d.gate_entry_received_qty)
+				parents.add(d.parent)
+		rb_base = {}
+		for po in parents:
+			rb = self._rake_bill(po)
+			if rb:
+				rb_base[po] = flt(rb.gate_entry_received_qty)
+		return po_base, rb_base
+
+	def _apply_baseline_sync(self, deltas, snapshot):
+		"""CREATE flow: set PO item qty and PO % to  baseline + delta; returns the PO names touched.
+
+		Absolute (not incremental), so it gives the right result whether or not a
+		Gate Entry hook already wrote to the PO - nothing is ever counted twice.
+		"""
+		qty_by_po = {}
+		for po_item, delta in deltas.items():
+			parent = frappe.db.get_value("Purchase Order Item", po_item, "parent")
+			if not parent:
+				continue
+			total = frappe.db.sql(
+				"""
+				SELECT IFNULL(SUM(accepted_quantity), 0)
+				FROM `tabPurchase Details`
+				WHERE parenttype = 'Gate Entry'
+					AND docstatus = 1
+					AND purchase_order_item = %s
+				""",
+				(po_item,),
+			)[0][0]
+			frappe.db.set_value(
+				"Purchase Order Item", po_item, "gate_entry_received_qty",
+				max(flt(total), 0), update_modified=False,
+			)
+			self._refresh_po_received_percentage(po_item)
+			qty_by_po[parent] = qty_by_po.get(parent, 0) + delta
+
+		return list(qty_by_po)
+
+	def _sync_rake_bills_from_po(self, po_names):
+		"""Set each Rake Bill's received qty (and the 3 fields derived from it) from the PO.
+
+		gate_entry_received_qty on a Rake Bill = sum of gate_entry_received_qty over the PO's
+		items. It is ABSOLUTE (recomputed from the PO, not added to the old Rake Bill value), so it
+		can never double, whatever else touched the Rake Bill earlier in the request.
+		Run as the very LAST data step of the transaction.
+		"""
+		for po_name in po_names:
+			rb = self._rake_bill(po_name)
+			if not rb:
+				continue
+			total = frappe.db.sql(
+				"SELECT IFNULL(SUM(gate_entry_received_qty), 0) FROM `tabPurchase Order Item` WHERE parent=%s",
+				(po_name,),
+			)[0][0]
+			self._set_rake_bill_received(rb, total)
+			self._recalc_rake_bill_factory_qty(po_name)
+
+	def _recalc_rake_bill_factory_qty(self, po_name):
+		"""factory_received_qty = sum of net_weight of submitted Weighments linked to the PO."""
+		rb = self._rake_bill(po_name)
+		if not rb:
+			return
+		total = frappe.db.sql(
+			"""
+			SELECT IFNULL(SUM(w.net_weight), 0)
+			FROM `tabWeighment` w
+			WHERE w.docstatus = 1
+			AND EXISTS (
+				SELECT 1 FROM `tabPurchase Orders`
+				WHERE parent = w.name AND parenttype = 'Weighment' AND purchase_orders = %s
+			)
+			""",
+			(po_name,),
+		)[0][0]
+		frappe.db.set_value("Rake Bill", rb.name, "factory_received_qty", total,
+			update_modified=False)
+
+	def _sync_po_and_rake_bill(self, deltas, update_po_items=True):
+		"""Apply qty deltas.
+
+		update_po_items=True  -> also write Purchase Order Item.gate_entry_received_qty
+		                         (needed on UPDATE; on CREATE the Gate Entry hook already does it)
+		Always refreshes PO percentage, Rake Bill received/short/debit qty and factory qty.
+		"""
+		qty_by_po = {}
+		for po_item, delta in deltas.items():
+			parent = frappe.db.get_value("Purchase Order Item", po_item, "parent")
+			if not parent:
+				continue
+			if update_po_items:
+				current = flt(frappe.db.get_value(
+					"Purchase Order Item", po_item, "gate_entry_received_qty"))
+				frappe.db.set_value(
+					"Purchase Order Item", po_item, "gate_entry_received_qty",
+					max(current + delta, 0), update_modified=False,
+				)
+			self._refresh_po_received_percentage(po_item)
+			qty_by_po[parent] = qty_by_po.get(parent, 0) + delta
+
+		for po_name, delta in qty_by_po.items():
+			rb = self._rake_bill(po_name)
+			if rb:
+				total = frappe.db.sql(
+					"SELECT IFNULL(SUM(gate_entry_received_qty), 0) "
+					"FROM `tabPurchase Order Item` WHERE parent=%s",
+					(po_name,),
+				)[0][0]
+				self._set_rake_bill_received(rb, total)
+			self._recalc_rake_bill_factory_qty(po_name)
+
+	# ============ END PO / RAKE BILL SYNC ============
+
+
+	def _snap_modified(self, refs):
+		"""Remember modified / modified_by of each (doctype, name) and of its child rows."""
+		snaps = []
+		for dt, name in refs:
+			if not name or not frappe.db.exists(dt, name):
+				continue
+			stamp = frappe.db.get_value(dt, name, ["modified", "modified_by"], as_dict=True)
+			children = {}
+			for df in frappe.get_meta(dt).get_table_fields():
+				children[df.options] = frappe.db.sql(
+					f"SELECT name, modified, modified_by FROM `tab{df.options}` "
+					"WHERE parent=%s AND parenttype=%s", (name, dt))
+			snaps.append({"dt": dt, "name": name, "m": stamp.modified,
+				"mb": stamp.modified_by, "children": children})
+		return snaps
+
+	def _restore_modified(self, snaps, rebuilt=()):
+		apply_modified_snaps(snaps, rebuilt)
+
+	def _inward_update_refs(self):
+		"""Every document an Inward update can touch: Gate Entry, Weighment, its POs, Rake Bills."""
+		pos = {r.purchase_orders for r in (self.purchase_orders or []) if r.purchase_orders}
+		for row in frappe.get_all("Purchase Details",
+				filters={"parent": self.gate_entry, "parenttype": "Gate Entry"},
+				fields=["purchase_order"]):
+			if row.purchase_order:
+				pos.add(row.purchase_order)
+		rbs = frappe.get_all("Rake Bill", filters={"purchase_order": ["in", list(pos)]},
+			pluck="name") if pos else []
+		weighment = frappe.db.get_value("Weighment", {"gate_entry_number": self.gate_entry}, "name")
+		refs = [("Gate Entry", self.gate_entry), ("Weighment", weighment)]
+		refs += [("Purchase Order", p) for p in sorted(pos)]
+		refs += [("Rake Bill", r) for r in rbs]
+		return refs
+
 	@frappe.whitelist()
 	def map_gate_entry_data(self):
 		if not self.gate_entry:
@@ -368,6 +724,7 @@ class ZZMaintenance(Document):
 
 	@frappe.whitelist()
 	def create_transaction(self):
+		frappe.flags[ZZ_FLAG] = True  # lets Gate Entry / Weighment hooks skip auto Purchase Receipt creation
 		if self.entry_type == "Inward":
 			for field in REQUIRED_FIELDS + ["segment", "company", "branch"]:
 				if not self.get(field):
@@ -378,6 +735,13 @@ class ZZMaintenance(Document):
 				if not k.accepted_quantity:
 					frappe.throw("Accepted qty in row {} can't be zero".format(k.idx))
 
+		# Validate over-delivery allowance and Rake Bill billed qty BEFORE anything is created
+		create_deltas = {}
+		if self.entry_type == "Inward":
+			create_deltas = self._qty_deltas({}, self._po_item_qty_map(self.items))
+			self._validate_po_limits(create_deltas)
+		create_snapshot = self._snapshot_po_state(create_deltas)
+
 		# Whole method runs in one DB transaction: any throw below rolls back
 		# the card assignment as well.
 		card_number = self._assign_card()
@@ -387,7 +751,7 @@ class ZZMaintenance(Document):
 		# ---- Gate Entry
 		gate_entry = frappe.new_doc("Gate Entry")
 		self._copy_to(gate_entry, scalars, child_tables)
-		if self.entry_type == "Outward":
+		if gate_entry.meta.has_field("is_weighment_required"):
 			gate_entry.is_weighment_required = self.is_weighment_required or "Yes"
 		self._populate_contact_and_location(gate_entry)
 		gate_entry.segment = self.segment
@@ -400,12 +764,13 @@ class ZZMaintenance(Document):
 		self._notify("Gate Entry Created", f"Gate Entry Created: {gate_entry.name}")
 
 		weighment = None
+		synced_pos = []
 		# ---- Weighment
 		if all([self.weighment_date, self.inward_date, self.outward_date,
 				self.tare_weight, self.gross_weight, self.net_weight]):
 			weighment = frappe.new_doc("Weighment")
 			self._copy_to(weighment, scalars, child_tables)
-			if self.entry_type == "Outward":
+			if weighment.meta.has_field("is_weighment_required"):
 				weighment.is_weighment_required = self.is_weighment_required or "Yes"
 			self._populate_contact_and_location(weighment)
 			self._populate_weighment_delivery_notes(weighment)
@@ -424,23 +789,25 @@ class ZZMaintenance(Document):
 			self._notify("Weighment Created", f"Weighment Created: {weighment.name}")
 
 			if self.entry_type == "Inward":
-				# Purchase Receipts are created only for inward transactions.
 				self._ensure_purchase_receipt(weighment, gate_entry.name)
 
-		# nothing after this point may flip the flag back
+				synced_pos = self._apply_baseline_sync(create_deltas, create_snapshot)
+
 		self._finalize_flags(gate_entry, weighment)
 
 		if RELEASE_CARD_AFTER_COMPLETE:
 			self._release_card(card_number)
 
-		# LAST step: force the ZZMaintenance transporter on Gate Entry, Weighment
-		# and Delivery Notes so no hook can overwrite it.
 		self._persist_transporter(gate_entry, weighment)
+
+		if self.entry_type == "Inward":
+			self._sync_rake_bills_from_po(synced_pos)
 
 		return True
 
 	@frappe.whitelist()
 	def update_transaction(self):
+		frappe.flags[ZZ_FLAG] = True
 		if not self.gate_entry:
 			frappe.throw("Gate Entry is mandatory for Update")
 
@@ -461,7 +828,14 @@ class ZZMaintenance(Document):
 		else:
 			frappe.throw("Entry Type must be Inward or Outward")
 
-		# only a draft Purchase Receipt may be replaced (no stock / GL entries exist yet)
+		update_deltas = {}
+		if self.entry_type == "Inward":
+			update_deltas = self._qty_deltas(
+				self._old_gate_entry_qty_map(),
+				self._po_item_qty_map(self.items),
+			)
+			self._validate_po_limits(update_deltas)
+
 		old_pr = None
 		if self.entry_type == "Inward":
 			old_pr = self._get_pr(self.gate_entry)
@@ -472,6 +846,12 @@ class ZZMaintenance(Document):
 				)
 
 		started = now_datetime()
+
+		# remember every "Last Updated" stamp BEFORE anything is changed (restored at the end)
+		modified_refs, modified_snaps = [], []
+		if self.entry_type == "Inward":
+			modified_refs = self._inward_update_refs()
+			modified_snaps = self._snap_modified(modified_refs)
 
 		pr_meta = None
 		if old_pr:
@@ -484,16 +864,21 @@ class ZZMaintenance(Document):
 			self._update_without_hooks(
 				gate_entry,
 				scalars,
-				skip_blank=("card_number", "segment", "transporter", "transporter_name"),
+				skip_blank=("card_number", "segment", "transporter", "transporter_name", "is_weighment_required"),
 			)
 			weighment = frappe.get_doc("Weighment", {"gate_entry_number": gate_entry.name})
 			self._update_without_hooks(
 				weighment,
 				scalars,
-				skip_blank=("card_number", "segment", "transporter", "transporter_name"),
+				skip_blank=("card_number", "segment", "transporter", "transporter_name", "is_weighment_required"),
 			)
 
+			dn_snaps = self._snap_modified([
+				("Delivery Note", n) for n in dict.fromkeys(
+					d.delivery_note for d in (weighment.delivery_note_details or []) if d.delivery_note)
+			])
 			self._update_outward_delivery_notes(weighment)
+			self._restore_modified(dn_snaps)
 			self._finalize_flags(gate_entry, weighment)
 			self._release_card(gate_entry.card_number)
 
@@ -508,7 +893,7 @@ class ZZMaintenance(Document):
 
 		modified_g, modified_by_g = gate_entry.modified, gate_entry.modified_by
 		self._copy_to(gate_entry, scalars, child_tables, only_changed=True,
-			skip_blank=("card_number", "segment"))
+			skip_blank=("card_number", "segment", "is_weighment_required"))
 		self._save_silently(gate_entry)
 		self._notify("Data Updated Successfully", f"Data Updated Successfully: {gate_entry.name}")
 
@@ -519,9 +904,13 @@ class ZZMaintenance(Document):
 			modified_w, modified_by_w = weighment.modified, weighment.modified_by
 
 			self._copy_to(weighment, scalars, child_tables, only_changed=True,
-				skip_blank=("card_number", "segment"))
+				skip_blank=("card_number", "segment", "is_weighment_required"))
 			self._save_silently(weighment)
 			self._notify("Data Updated Successfully", f"Data Updated Successfully: {weighment.name}")
+
+		# ---- 3b. Sync PO items (gate_entry_received_qty / %) and Rake Bills.
+		# Done after the Weighment is saved so factory_received_qty uses the new net weight.
+		self._sync_po_and_rake_bill(update_deltas, update_po_items=True)
 
 		# ---- 4. Re-create the inward Purchase Receipt with the same ID.
 		pr_name = old_pr
@@ -537,19 +926,25 @@ class ZZMaintenance(Document):
 		# LAST data step: force the ZZMaintenance transporter, replacing any existing value
 		self._persist_transporter(gate_entry, weighment)
 
-		# ---- 5. Put back original modified stamps
-		frappe.db.set_value("Gate Entry", gate_entry.name, "modified", modified_g, update_modified=False)
-		frappe.db.set_value("Gate Entry", gate_entry.name, "modified_by", modified_by_g, update_modified=False)
-		if weighment:
-			frappe.db.set_value("Weighment", weighment.name, "modified", modified_w, update_modified=False)
-			frappe.db.set_value("Weighment", weighment.name, "modified_by", modified_by_w, update_modified=False)
-
 		# ---- 6. Remove every Version / Comment / Deleted Document row this run created
 		self._purge_traces(started, [
 			("Gate Entry", gate_entry.name),
 			("Weighment", weighment.name if weighment else None),
 			("Purchase Receipt", pr_name),
-		])
+		] + [(dt, n) for dt, n in modified_refs if dt in ("Purchase Order", "Rake Bill")])
+
+		# ---- 7. LAST statements: original "Last Updated" on Gate Entry / Weighment (incl. child
+		# rows), PO (+items) and Rake Bill - now, and again after commit for background jobs.
+		self._restore_modified(modified_snaps, rebuilt=("Gate Entry", "Weighment"))
+		if MODIFIED_RESTORE_DEFERRED and modified_snaps:
+			frappe.enqueue(
+				f"{__name__}.restore_modified_deferred",
+				queue="short",
+				enqueue_after_commit=True,
+				snaps=modified_snaps,
+				rebuilt=["Gate Entry", "Weighment"],
+				delay=MODIFIED_RESTORE_DELAY,
+			)
 
 		return True
 
@@ -631,13 +1026,19 @@ class ZZMaintenance(Document):
 
 	def _qty_for_uom(self, net_weight, uom):
 		unit = (uom or "").strip().casefold()
+		net_weight = flt(net_weight)
+
 		if unit in {"quintal", "quintals"}:
-			return ceil(flt(net_weight) / 100)
+			return flt(net_weight / 100, 6)
+
 		if unit in {"klr", "kiloliter", "kilolitre", "kiloliters", "kilolitres"}:
-			return ceil(flt(net_weight) / 1000)
-		if unit in {"ltr", "liter", "litre", "liters", "litres","nos","NOS","meter","METER","case","CASE","box","BOX","bag","BAG","tonne","TONNE",}:
+			return flt(net_weight / 1000, 6)
+
+		if unit in {"ltr", "liter", "litre", "liters", "litres", "nos", "meter",
+					"case", "box", "bag", "tonne"}:
 			return None
-		return flt(net_weight)
+
+		return net_weight
 
 	@frappe.whitelist()
 	def get_delivery_note_items(self):
@@ -743,6 +1144,42 @@ class ZZMaintenance(Document):
 		self._notify("Purchase Receipt Deleted", f"Purchase Receipt Deleted: {pr_name}")
 		return meta
 
+	def _fast_rename_draft_pr(self, new_name, old_name):
+		"""Rename a DRAFT Purchase Receipt with a few direct UPDATEs.
+
+		frappe.rename_doc() walks every Link / Dynamic Link field in the whole
+		system (many full-table scans) and is the slowest step of the update.
+		A draft PR created seconds ago has no stock / GL entries, so only its own
+		child rows (and any Quality Inspection / Comment pointing at it) need to follow.
+		"""
+		if frappe.db.get_value("Purchase Receipt", new_name, "docstatus") != 0:
+			# never shortcut a submitted document
+			frappe.rename_doc("Purchase Receipt", new_name, old_name, force=True,
+				merge=False, show_alert=False)
+			return
+
+		if frappe.db.exists("Purchase Receipt", old_name):
+			frappe.throw(f"Purchase Receipt {frappe.bold(old_name)} already exists")
+
+		frappe.db.sql("UPDATE `tabPurchase Receipt` SET name=%s WHERE name=%s", (old_name, new_name))
+
+		for df in frappe.get_meta("Purchase Receipt").get_table_fields():
+			frappe.db.sql(
+				f"UPDATE `tab{df.options}` SET parent=%s WHERE parent=%s AND parenttype='Purchase Receipt'",
+				(old_name, new_name),
+			)
+
+		frappe.db.sql(
+			"UPDATE `tabQuality Inspection` SET reference_name=%s "
+			"WHERE reference_type='Purchase Receipt' AND reference_name=%s",
+			(old_name, new_name),
+		)
+		frappe.db.sql(
+			"UPDATE `tabComment` SET reference_name=%s "
+			"WHERE reference_doctype='Purchase Receipt' AND reference_name=%s",
+			(old_name, new_name),
+		)
+
 	def _restore_pr_name(self, gate_entry_name, old_name, pr_meta=None):
 		new_name = self._get_pr(gate_entry_name)
 		if not new_name:
@@ -750,7 +1187,11 @@ class ZZMaintenance(Document):
 				get_link_to_form("Gate Entry", gate_entry_name)))
 
 		if new_name != old_name:
-			frappe.rename_doc("Purchase Receipt", new_name, old_name, force=True, merge=False)
+			if FAST_PR_RENAME:
+				self._fast_rename_draft_pr(new_name, old_name)
+			else:
+				frappe.rename_doc("Purchase Receipt", new_name, old_name, force=True,
+					merge=False, show_alert=False)
 
 		if pr_meta:
 			# same creation / owner / modified as the PR that was replaced
