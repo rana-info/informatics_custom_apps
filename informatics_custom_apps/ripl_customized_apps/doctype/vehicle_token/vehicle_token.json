@@ -23,6 +23,7 @@
   "column_break_qrkq",
   "driver_name",
   "driver_contact",
+  "vehicle_status",
   "abbr",
   "section_break_rcie",
   "amended_from"
@@ -160,13 +161,22 @@
    "hidden": 1,
    "label": "Abbr",
    "read_only": 1
+  },
+  {
+   "fieldname": "vehicle_status",
+   "fieldtype": "Select",
+   "label": "Vehicle Status",
+   "no_copy": 1,
+   "non_negative": 1,
+   "options": "\nGross Weight Done\nTare Weight Done\nGate Entry Done",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-08-04 12:17:57.614401",
+ "modified": "2026-11-23 15:19:01.742894",
  "modified_by": "Administrator",
  "module": "RIPL Customized Apps",
  "name": "Vehicle Token",
