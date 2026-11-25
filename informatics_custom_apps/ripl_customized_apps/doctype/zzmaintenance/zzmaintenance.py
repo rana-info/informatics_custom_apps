@@ -361,7 +361,7 @@ class ZZMaintenance(Document):
 				ignore_permissions=True, delete_permanently=True)
 
 		weighment.reload()
-		weighment.create_purchase_receipt_manually()
+		weighment.create_purchase_receipt_manually(ignore_permissions=True)
 
 		pr = self._get_pr(gate_entry_name)
 		if not pr:
@@ -759,6 +759,7 @@ class ZZMaintenance(Document):
 		gate_entry.set("creation", creation)
 		gate_entry.set("modified", creation)
 		gate_entry.insert(ignore_permissions=True)
+		gate_entry.flags.ignore_permissions = True
 		gate_entry.submit()
 		self._stamp(gate_entry, creation)
 		self._notify("Gate Entry Created", f"Gate Entry Created: {gate_entry.name}")
@@ -782,6 +783,7 @@ class ZZMaintenance(Document):
 			weighment.set("creation", creation)
 			weighment.set("modified", creation)
 			weighment.insert(ignore_permissions=True)
+			weighment.flags.ignore_permissions = True
 			weighment.submit()
 			if self.entry_type == "Outward":
 				self._update_outward_delivery_notes(weighment)
@@ -1020,6 +1022,9 @@ class ZZMaintenance(Document):
 				for item in matching_items:
 					item.qty = qty
 
+			delivery_note.calculate_taxes_and_totals()
+			# Validation re-fetches tax templates and requires select permission.
+			delivery_note.flags.ignore_validate = True
 			self._save_silently(delivery_note)
 
 		return list(details_by_note)
@@ -1155,7 +1160,7 @@ class ZZMaintenance(Document):
 		if frappe.db.get_value("Purchase Receipt", new_name, "docstatus") != 0:
 			# never shortcut a submitted document
 			frappe.rename_doc("Purchase Receipt", new_name, old_name, force=True,
-				merge=False, show_alert=False)
+				merge=False, ignore_permissions=True, show_alert=False)
 			return
 
 		if frappe.db.exists("Purchase Receipt", old_name):
@@ -1191,7 +1196,7 @@ class ZZMaintenance(Document):
 				self._fast_rename_draft_pr(new_name, old_name)
 			else:
 				frappe.rename_doc("Purchase Receipt", new_name, old_name, force=True,
-					merge=False, show_alert=False)
+					merge=False, ignore_permissions=True, show_alert=False)
 
 		if pr_meta:
 			# same creation / owner / modified as the PR that was replaced
