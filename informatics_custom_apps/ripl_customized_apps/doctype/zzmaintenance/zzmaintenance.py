@@ -993,7 +993,7 @@ class ZZMaintenance(Document):
 			if delivery_note.meta.has_field("custom_weighment"):
 				delivery_note.custom_weighment = weighment.name
 			if delivery_note.meta.has_field("vehicle_no"):
-				delivery_note.vehicle_no = self.vehicle_number
+				delivery_note.vehicle_no = weighment.vehicle_number
 
 			for detail in details:
 				matching_items = [
