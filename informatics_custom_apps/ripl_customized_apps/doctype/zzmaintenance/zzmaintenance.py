@@ -993,7 +993,7 @@ class ZZMaintenance(Document):
 			if delivery_note.meta.has_field("custom_weighment"):
 				delivery_note.custom_weighment = weighment.name
 			if delivery_note.meta.has_field("vehicle_no"):
-				delivery_note.vehicle_no = weighment.vehicle_number
+				delivery_note.vehicle_no = self.vehicle_number
 
 			for detail in details:
 				matching_items = [
@@ -1028,6 +1028,14 @@ class ZZMaintenance(Document):
 			# Validation re-fetches tax templates and requires select permission.
 			delivery_note.flags.ignore_validate = True
 			self._save_silently(delivery_note)
+			if delivery_note.meta.has_field("vehicle_no"):
+				frappe.db.set_value(
+					"Delivery Note",
+					delivery_note.name,
+					"vehicle_no",
+					self.vehicle_number,
+					update_modified=False,
+				)
 
 		return list(details_by_note)
 
