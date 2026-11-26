@@ -8,6 +8,7 @@
  "field_order": [
   "company",
   "plant",
+  "segment",
   "log_date",
   "amended_from",
   "parameters"
@@ -49,11 +50,17 @@
    "in_list_view": 1,
    "label": "Plant",
    "options": "Branch"
+  },
+  {
+   "fieldname": "segment",
+   "fieldtype": "Link",
+   "label": "Segment",
+   "options": "Segment"
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-21 11:36:44.772893",
+ "modified": "2026-11-25 17:35:53.714527",
  "modified_by": "Administrator",
  "module": "ETH",
  "name": "CPU Plant Lab Log",

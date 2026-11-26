@@ -1,18 +1,23 @@
-from unittest import result
-import pprint
 import frappe
 
+
 @frappe.whitelist()
-def get_dashboard(date=None):
+def get_dashboard(date=None, segment=None):
 
     if not date:
         date = frappe.utils.today()
 
+    filters = {"log_date": date}
+
+    # optional segment filter ("" / None = all segments)
+    if segment:
+        filters["segment"] = segment
+
     logbooks = frappe.get_all(
         "Power Plant Log Book",
-        filters={"log_date": date},
-        fields=["name", "plant", "log_date"],
-        order_by="plant"
+        filters=filters,
+        fields=["name", "plant", "segment", "log_date"],
+        order_by="plant, segment"
     )
 
     norms = get_norms()
@@ -46,6 +51,7 @@ def get_dashboard(date=None):
         plants.append({
             "name": log.name,
             "plant": log.plant,
+            "segment": log.segment or "",
             "last_updated": log.log_date,
             "violations": violation_count
         })
@@ -53,6 +59,7 @@ def get_dashboard(date=None):
     return {
         "plants": plants
     }
+
 
 def get_norms():
 
@@ -74,6 +81,7 @@ def get_norms():
 
     return norms
 
+
 @frappe.whitelist()
 def get_parameters():
 
@@ -94,79 +102,6 @@ def get_parameters():
 
     return parameters
 
-# def calculate_plant_summary(norms, filters=None):
-
-#     logbooks = get_logs(filters or {})
-
-#     log_items = get_log_items([d.name for d in logbooks])
-
-#     plant_summary = {}
-
-#     for log in logbooks:
-
-#         if log.plant not in plant_summary:
-#             plant_summary[log.plant] = {
-#                 "plant": log.plant,
-#                 "normal": 0,
-#                 "low": 0,
-#                 "high": 0,
-#                 "last_updated": log.log_date,
-#             }
-
-#         summary = plant_summary[log.plant]
-
-#         # Keep latest log date
-#         if log.log_date > summary["last_updated"]:
-#             summary["last_updated"] = log.log_date
-
-#         rows = log_items.get(log.name, [])
-
-#         for row in rows:
-
-#             for fieldname, norm in norms.items():
-
-#                 value = row.get(fieldname)
-
-#                 if value in (None, "", 0, 0.0):
-#                     continue
-
-#                 status = get_status(
-#                     value,
-#                     norm["min"],
-#                     norm["max"]
-#                 )
-
-#                 if status == "Low":
-#                     summary["low"] += 1
-
-#                 elif status == "High":
-#                     summary["high"] += 1
-
-#                 else:
-#                     summary["normal"] += 1
-
-#     plants = []
-
-#     for summary in plant_summary.values():
-
-#         total = (
-#             summary["normal"]
-#             + summary["low"]
-#             + summary["high"]
-#         )
-
-#         summary["total"] = total
-
-#         summary["health"] = (
-#             round((summary["normal"] / total) * 100, 2)
-#             if total else 100
-#         )
-
-#         plants.append(summary)
-
-#     plants.sort(key=lambda x: x["health"])
-
-#     return plants
 
 def get_field_labels():
 
@@ -180,57 +115,6 @@ def get_field_labels():
 
     return labels
 
-# def get_logs(filters):
-
-#     conditions = {}
-
-#     if filters.get("from_date"):
-#         conditions["log_date"] = [">=", filters.from_date]
-
-#     if filters.get("to_date"):
-
-#         if "log_date" in conditions:
-#             conditions["log_date"] = [
-#                 "between",
-#                 [filters.from_date, filters.to_date]
-#             ]
-#         else:
-#             conditions["log_date"] = ["<=", filters.to_date]
-
-#     if filters.get("plant"):
-#         conditions["plant"] = filters.plant
-
-#     return frappe.get_all(
-#         "Power Plant Log Book",
-#         filters=conditions,
-#         fields=[
-#             "name",
-#             "plant",
-#             "log_date"
-#         ],
-#         order_by="log_date asc"
-#      )
-
-# def get_log_items(parents):
-
-#     if not parents: 
-#         return {}
-
-#     rows = frappe.get_all(
-#         "Power Plant Log Book Item",
-#         filters={
-#             "parent": ["in", parents]
-#         },
-#         fields=["*"],
-#         order_by="parent asc, idx asc"
-#     )
-
-#     grouped = {}
-
-#     for row in rows:
-#         grouped.setdefault(row.parent, []).append(row)
-
-#     return grouped
 
 def get_status(value, min_value=None, max_value=None):
 
@@ -253,20 +137,23 @@ def get_status(value, min_value=None, max_value=None):
 
     return "Normal"
 
+
 @frappe.whitelist()
-def get_plant_logbook(plant, date):
+def get_plant_logbook(plant, date, segment=None):
 
     norms = get_norms()
     labels = get_field_labels()
 
-    log = frappe.get_value(
-        "Power Plant Log Book",
-        {
-            "plant": plant,
-            "log_date": date
-        },
-        "name"
-    )
+    log_filters = {
+        "plant": plant,
+        "log_date": date
+    }
+
+    # segment is part of the log's identity now (company+plant+segment+date)
+    if segment:
+        log_filters["segment"] = segment
+
+    log = frappe.get_value("Power Plant Log Book", log_filters, "name")
 
     if not log:
         return []
@@ -302,7 +189,7 @@ def get_plant_logbook(plant, date):
 
         for df in meta.fields:
 
-            if df.fieldtype not in ("Float", "Int", "Currency","Small Text"):
+            if df.fieldtype not in ("Float", "Int", "Currency", "Small Text"):
                 continue
 
             fieldname = df.fieldname
@@ -349,16 +236,21 @@ def get_plant_logbook(plant, date):
 
 
 @frappe.whitelist()
-def get_parameter_trend(plant, parameter, from_date, to_date):
+def get_parameter_trend(plant, parameter, from_date, to_date, segment=None):
 
     norms = get_norms()
 
+    log_filters = {
+        "plant": plant,
+        "log_date": ["between", [from_date, to_date]]
+    }
+
+    if segment:
+        log_filters["segment"] = segment
+
     logs = frappe.get_all(
         "Power Plant Log Book",
-        filters={
-            "plant": plant,
-            "log_date": ["between", [from_date, to_date]]
-        },
+        filters=log_filters,
         fields=["name", "log_date"],
         order_by="log_date"
     )
