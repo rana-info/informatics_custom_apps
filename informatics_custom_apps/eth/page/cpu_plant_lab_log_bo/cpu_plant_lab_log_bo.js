@@ -13,6 +13,28 @@ const LOCATIONS = [
 
 const APP_METHOD_PATH = "informatics_custom_apps.eth.page.cpu_plant_lab_log_bo.cpu_plant_lab_log_bo";
 
+// Branch (Plant) -> allowed Segments. Same map as Material Request / Power Plant Log page.
+const BRANCH_SEGMENT_MAP = {
+	"Buttar Biofuels": ["Distillery"],
+	"RSL Buttar": ["Sugar", "Power", "Beet"],
+	"Lakshmiji Sugar": ["Sugar"],
+	"Rana Power": ["Power"],
+	"RSL Belwara": ["Sugar", "Power", "Distillery"],
+	"RSL Louhka": ["Distillery"],
+	"RSL Shahbad": ["Sugar", "Power"],
+	"RSLD Karnal": ["Distillery"],
+	"RSLD Biofuels-Chhattisgarh": ["Distillery"],
+	"Karimganj Biofuels": ["Distillery"],
+	"Superior Biofuels": ["Distillery"],
+	"ETH Louhka": ["Distillery"],
+	"Superior Unn": ["Sugar", "Power"],
+};
+const ALL_SEGMENTS = ["Beet", "Sugar", "Distillery", "Power"];
+
+function get_allowed_segments(branch) {
+	return BRANCH_SEGMENT_MAP[branch] || ALL_SEGMENTS;
+}
+
 frappe.pages["cpu-plant-lab-log-bo"].on_page_load = function (wrapper) {
 	const page = frappe.ui.make_app_page({
 		parent: wrapper,
@@ -60,6 +82,25 @@ class CPULabLog {
 			get_query: () => {
 				const company = this.company_field.get_value();
 				return company ? { filters: { company } } : {};
+			},
+			change: () => {
+				if (this.loading) return;
+				this.on_plant_change();
+			},
+		});
+
+		this.segment_field = this.page.add_field({
+			fieldname: "segment",
+			label: "Segment",
+			fieldtype: "Link",
+			options: "Segment", // change if your Segment DocType has a different name
+			reqd: 1,
+			get_query: () => {
+				return {
+					filters: {
+						name: ["in", get_allowed_segments(this.plant_field.get_value())],
+					},
+				};
 			},
 			change: () => {
 				if (this.loading) return;
@@ -130,7 +171,8 @@ class CPULabLog {
 					if (defaults.plant) this.plant_field.set_value(defaults.plant);
 					this.loading = false;
 					this.plant_field.refresh();
-					this.on_selection_change();
+					// auto-picks the segment if the plant has only one, then loads the log
+					this.on_plant_change();
 				});
 			},
 			error: () => {
@@ -143,6 +185,7 @@ class CPULabLog {
 		return {
 			company: this.company_field.get_value(),
 			plant: this.plant_field.get_value(),
+			segment: this.segment_field.get_value(),
 			log_date: this.date_field.get_value(),
 		};
 	}
@@ -151,19 +194,42 @@ class CPULabLog {
 		this.docname = null;
 		this.loading = true;
 		this.plant_field.set_value("");
+		this.segment_field.set_value("");
 		this.loading = false;
 		this.plant_field.refresh();
+		this.segment_field.refresh();
 		this.$table_holder.empty();
 	}
 
-	on_selection_change() {
-		const { company, plant, log_date } = this.get_selection();
+	on_plant_change() {
 		this.docname = null;
-		if (!company || !plant || !log_date) {
+		const plant = this.plant_field.get_value();
+		const allowed = get_allowed_segments(plant);
+
+		this.loading = true;
+		// clear a segment that is not valid for the new plant
+		const current = this.segment_field.get_value();
+		if (current && !allowed.includes(current)) {
+			this.segment_field.set_value("");
+		}
+		// auto-pick when the plant has only one allowed segment
+		if (plant && allowed.length === 1) {
+			this.segment_field.set_value(allowed[0]);
+		}
+		this.loading = false;
+		this.segment_field.refresh();
+
+		this.on_selection_change();
+	}
+
+	on_selection_change() {
+		const { company, plant, segment, log_date } = this.get_selection();
+		this.docname = null;
+		if (!company || !plant || !segment || !log_date) {
 			this.$table_holder.empty();
 			return;
 		}
-		this.load_log(log_date, company, plant);
+		this.load_log(log_date, company, plant, segment);
 	}
 
 	new_entry() {
@@ -174,12 +240,12 @@ class CPULabLog {
 		this.on_selection_change();
 	}
 
-	load_log(log_date, company, plant) {
+	load_log(log_date, company, plant, segment) {
 		const seq = ++this.request_seq;
 		this.set_status("Loading...");
 		frappe.call({
 			method: `${APP_METHOD_PATH}.get_lab_log`,
-			args: { log_date, company, plant },
+			args: { log_date, company, plant, segment },
 			callback: (r) => {
 				if (seq !== this.request_seq) return;
 				this.set_status("");
@@ -254,9 +320,13 @@ class CPULabLog {
 	}
 
 	save() {
-		const { company, plant, log_date } = this.get_selection();
-		if (!company || !plant || !log_date) {
-			frappe.msgprint("Select Company, Plant and Date first.");
+		const { company, plant, segment, log_date } = this.get_selection();
+		if (!company || !plant || !segment || !log_date) {
+			frappe.msgprint("Select Company, Plant, Segment and Date first.");
+			return;
+		}
+		if (!get_allowed_segments(plant).includes(segment)) {
+			frappe.msgprint(`Segment ${segment} is not allowed for plant ${plant}.`);
 			return;
 		}
 		if (!this.rows || !this.rows.length) {
@@ -271,6 +341,7 @@ class CPULabLog {
 				log_date,
 				company,
 				plant,
+				segment,
 				rows: this.rows,
 				docname: this.docname,
 			},

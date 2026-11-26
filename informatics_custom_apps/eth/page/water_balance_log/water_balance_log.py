@@ -52,6 +52,7 @@ def get_parameters():
         "idx",
         "company",
         "plant",
+        "segment",
         "date",
     } | HIDDEN_FIELDS
 
@@ -112,18 +113,24 @@ def attach_exceeds(entry, source_row, plant_norms):
 
 
 @frappe.whitelist()
-def get_daily_data(plant, date):
+def get_daily_data(plant, date, segment=None):
 
     parameters = get_parameters()
     plant_norms = get_plant_norms(plant)
     fetch_fields = get_fetch_fields(parameters)
 
+    log_filters = {
+        "plant": plant,
+        "date": date
+    }
+
+    # segment is part of the log's identity (plant + segment + date)
+    if segment:
+        log_filters["segment"] = segment
+
     logs = frappe.get_all(
         "Water Balance Log Book",
-        filters={
-            "plant": plant,
-            "date": date
-        },
+        filters=log_filters,
         fields=["name"] + fetch_fields,
         limit_page_length=1
     )
@@ -167,7 +174,8 @@ def get_parameter_trend(
     plant,
     parameter,
     from_date,
-    to_date
+    to_date,
+    segment=None
 ):
 
     meta = frappe.get_meta("Water Balance Log Book")
@@ -184,15 +192,20 @@ def get_parameter_trend(
     ):
         frappe.throw("Invalid parameter field")
 
+    log_filters = {
+        "plant": plant,
+        "date": [
+            "between",
+            [from_date, to_date]
+        ]
+    }
+
+    if segment:
+        log_filters["segment"] = segment
+
     logs = frappe.get_all(
         "Water Balance Log Book",
-        filters={
-            "plant": plant,
-            "date": [
-                "between",
-                [from_date, to_date]
-            ]
-        },
+        filters=log_filters,
         fields=[
             "name",
             "date",
@@ -217,27 +230,33 @@ def get_parameter_trend(
 
     return {
         "data": result,
-        "label": field.label or parameter
+        "label": field.label or parameter,
+        "segment": segment or ""
     }
 
 
 @frappe.whitelist()
-def get_daily_dashboard(date):
+def get_daily_dashboard(date, segment=None):
 
     parameters = get_parameters()
     fetch_fields = get_fetch_fields(parameters)
 
+    filters = {"date": date}
+
+    # optional segment filter ("" / None = all segments)
+    if segment:
+        filters["segment"] = segment
+
     logs = frappe.get_all(
         "Water Balance Log Book",
-        filters={
-            "date": date
-        },
+        filters=filters,
         fields=[
             "name",
             "plant",
+            "segment",
             "date"
         ],
-        order_by="plant asc"
+        order_by="plant asc, segment asc"
     )
 
     result = []
@@ -290,6 +309,9 @@ def get_daily_dashboard(date):
 
             "plant":
                 log.plant,
+
+            "segment":
+                log.segment or "",
 
             "date":
                 str(log.date),

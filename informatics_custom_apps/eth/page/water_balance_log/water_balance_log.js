@@ -6,6 +6,7 @@ frappe.pages['water-balance-log'].on_page_load = function(wrapper) {
         single_column: true
     });
 
+    const API = "informatics_custom_apps.eth.page.water_balance_log.water_balance_log";
 
     const plants = [
         "Buttar Biofuels",
@@ -17,6 +18,24 @@ frappe.pages['water-balance-log'].on_page_load = function(wrapper) {
         "Karimganj Biofuels"
     ];
 
+    // Branch (Plant) -> allowed Segments. Same map as Material Request / Power Plant Log / CPU / DM pages.
+    const branch_segment_map = {
+        "Buttar Biofuels": ["Distillery"],
+        "RSL Buttar": ["Sugar", "Power", "Beet"],
+        "Lakshmiji Sugar": ["Sugar"],
+        "Rana Power": ["Power"],
+        "RSL Belwara": ["Sugar", "Power", "Distillery"],
+        "RSL Louhka": ["Distillery"],
+        "RSL Shahbad": ["Sugar", "Power"],
+        "RSLD Karnal": ["Distillery"],
+        "RSLD Biofuels-Chhattisgarh": ["Distillery"],
+        "Karimganj Biofuels": ["Distillery"],
+        "Superior Biofuels": ["Distillery"],
+        "ETH Louhka": ["Distillery"],
+        "Superior Unn": ["Sugar", "Power"]
+    };
+    const all_segments = ["Beet", "Sugar", "Distillery", "Power"];
+
 
     $(wrapper).find(".layout-main-section").html(`
 
@@ -26,8 +45,7 @@ frappe.pages['water-balance-log'].on_page_load = function(wrapper) {
             <!-- SECTION A : DAILY DATA -->
             <!-- ================================================= -->
 
-            <div class="card"
-                 style="padding:20px; margin-bottom:30px;">
+            <div class="card" style="padding:20px; margin-bottom:30px;">
 
                 <h4 style="margin-bottom:20px;">
                     Daily Water Balance Data
@@ -36,24 +54,21 @@ frappe.pages['water-balance-log'].on_page_load = function(wrapper) {
                 <div class="row">
 
                     <div class="col-md-3">
-
-                        <label>
-                            <b>Date</b>
-                        </label>
-
-                        <input
-                            type="date"
-                            id="daily-date"
-                            class="form-control"
-                        >
-
+                        <label><b>Date</b></label>
+                        <input type="date" id="daily-date" class="form-control">
                     </div>
 
-                    <div
-                        class="col-md-2"
-                        style="margin-top:25px;"
-                    >
+                    <div class="col-md-3">
+                        <label><b>Segment</b></label>
+                        <select id="daily-segment" class="form-control">
+                            <option value="">All Segments</option>
+                            ${all_segments.map(
+                                s => `<option value="${s}">${s}</option>`
+                            ).join('')}
+                        </select>
+                    </div>
 
+                    <div class="col-md-2" style="margin-top:25px;">
                         <button
                             class="btn btn-primary"
                             id="load-daily-btn"
@@ -61,7 +76,6 @@ frappe.pages['water-balance-log'].on_page_load = function(wrapper) {
                         >
                             Show Data
                         </button>
-
                     </div>
 
                 </div>
@@ -91,96 +105,56 @@ frappe.pages['water-balance-log'].on_page_load = function(wrapper) {
 
                     <!-- PLANT -->
 
-                    <div class="col-md-3">
-
-                        <label>
-                            <b>Plant</b>
-                        </label>
-
-                        <select
-                            id="trend-plant"
-                            class="form-control"
-                        >
-
-                            <option value="">
-                                Select Plant
-                            </option>
-
+                    <div class="col-md-2">
+                        <label><b>Plant</b></label>
+                        <select id="trend-plant" class="form-control">
+                            <option value="">Select Plant</option>
                             ${plants.map(
-                                plant =>
-                                `<option value="${plant}">
-                                    ${plant}
-                                </option>`
+                                plant => `<option value="${plant}">${plant}</option>`
                             ).join('')}
-
                         </select>
+                    </div>
 
+
+                    <!-- SEGMENT -->
+
+                    <div class="col-md-2">
+                        <label><b>Segment</b></label>
+                        <select id="trend-segment" class="form-control">
+                            <option value="">Select Segment</option>
+                        </select>
                     </div>
 
 
                     <!-- PARAMETER -->
 
-                    <div class="col-md-3">
-
-                        <label>
-                            <b>Parameter</b>
-                        </label>
-
-                        <select
-                            id="trend-parameter"
-                            class="form-control"
-                        >
-
-                            <option value="">
-                                Select Parameter
-                            </option>
-
+                    <div class="col-md-2">
+                        <label><b>Parameter</b></label>
+                        <select id="trend-parameter" class="form-control">
+                            <option value="">Select Parameter</option>
                         </select>
-
                     </div>
 
 
                     <!-- FROM DATE -->
 
                     <div class="col-md-2">
-
-                        <label>
-                            <b>From Date</b>
-                        </label>
-
-                        <input
-                            type="date"
-                            id="trend-from-date"
-                            class="form-control"
-                        >
-
+                        <label><b>From Date</b></label>
+                        <input type="date" id="trend-from-date" class="form-control">
                     </div>
 
 
                     <!-- TO DATE -->
 
                     <div class="col-md-2">
-
-                        <label>
-                            <b>To Date</b>
-                        </label>
-
-                        <input
-                            type="date"
-                            id="trend-to-date"
-                            class="form-control"
-                        >
-
+                        <label><b>To Date</b></label>
+                        <input type="date" id="trend-to-date" class="form-control">
                     </div>
 
 
                     <!-- SHOW TREND -->
 
-                    <div
-                        class="col-md-2"
-                        style="margin-top:25px;"
-                    >
-
+                    <div class="col-md-2" style="margin-top:25px;">
                         <button
                             class="btn btn-primary"
                             id="load-trend-btn"
@@ -188,7 +162,6 @@ frappe.pages['water-balance-log'].on_page_load = function(wrapper) {
                         >
                             Show Trend
                         </button>
-
                     </div>
 
                 </div>
@@ -205,64 +178,63 @@ frappe.pages['water-balance-log'].on_page_load = function(wrapper) {
     `);
 
 
+    function populateTrendSegments(plant) {
+
+        if (!plant) {
+            $("#trend-segment").html('<option value="">Select Segment</option>');
+            return;
+        }
+
+        const allowed = branch_segment_map[plant] || all_segments;
+
+        // a plant with a single segment is auto-selected
+        let options = allowed.length === 1
+            ? ""
+            : '<option value="">Select Segment</option>';
+
+        allowed.forEach(segment => {
+            options += `<option value="${segment}">${segment}</option>`;
+        });
+
+        $("#trend-segment").html(options);
+    }
+
 
     function loadDailyData() {
 
-        const date =
-            $("#daily-date").val();
-
+        const date = $("#daily-date").val();
+        const segment = $("#daily-segment").val();
 
         if (!date) {
-
-            frappe.msgprint(
-                "Please select Date."
-            );
-
+            frappe.msgprint("Please select Date.");
             return;
-
         }
-
 
         frappe.call({
 
-            method:
-            "informatics_custom_apps.eth.page.water_balance_log.water_balance_log.get_daily_dashboard",
+            method: `${API}.get_daily_dashboard`,
 
             args: {
-
-                date: date
-
+                date: date,
+                segment: segment
             },
 
             callback(r) {
 
-                const result =
-                    r.message;
+                const result = r.message;
 
-
-                if (
-                    !result ||
-                    !result.length
-                ) {
+                if (!result || !result.length) {
 
                     $("#daily-data").html(`
-
                         <div class="alert alert-warning">
-
-                            No Water Balance data found
-                            for ${date}.
-
+                            No Water Balance data found for ${date}${segment ? " (" + segment + ")" : ""}.
                         </div>
-
                     `);
 
                     return;
-
                 }
 
-
                 renderDailyDashboard(result);
-
             }
 
         });
@@ -274,289 +246,151 @@ frappe.pages['water-balance-log'].on_page_load = function(wrapper) {
 
         let html = `
 
-            <div
-                class="card"
-                style="padding:0; margin-bottom:30px;"
-            >
+            <div class="card" style="padding:0; margin-bottom:30px;">
 
-                <table
-                    class="table table-bordered"
-                    style="margin-bottom:0;"
-                >
+                <table class="table table-bordered" style="margin-bottom:0;">
 
                     <thead>
-
                         <tr>
-
-                            <th
-                                style="width:45px;"
-                            >
-                            </th>
-
-                            <th>
-                                Plant
-                            </th>
-
-                            <th>
-                                Date
-                            </th>
-
+                            <th style="width:45px;"></th>
+                            <th>Plant</th>
+                            <th>Segment</th>
+                            <th>Date</th>
                         </tr>
-
                     </thead>
 
                     <tbody>
-
         `;
 
+        data.forEach((plant, index) => {
 
-        data.forEach(
-            (plant, index) => {
+            const row_id = `water-plant-${index}`;
 
-                const row_id =
-                    `water-plant-${index}`;
+            const exceeded = plant.data.some(d => d.exceeds === true);
 
-                const exceeded =
-                    plant.data.some(d => d.exceeds === true);
+            html += `
 
+                <!-- PLANT HEADER -->
 
-                html += `
+                <tr class="plant-row" data-target="${row_id}" style="cursor:pointer;">
 
-                    <!-- ================================= -->
-                    <!-- PLANT HEADER -->
-                    <!-- ================================= -->
+                    <td>
+                        <span class="plant-toggle" id="${row_id}-icon">▶</span>
+                    </td>
 
-                    <tr
-                        class="plant-row"
-                        data-target="${row_id}"
-                        style="cursor:pointer;"
-                    >
+                    <td>
+                        <b>${plant.plant}</b>
 
-                        <td>
+                        ${exceeded
+                            ? '<span class="indicator-pill red" style="margin-left:8px;">Norm Exceeded</span>'
+                            : ''}
+                    </td>
 
-                            <span
-                                class="plant-toggle"
-                                id="${row_id}-icon"
-                            >
-                                ▶
-                            </span>
+                    <td>${plant.segment || ""}</td>
 
-                        </td>
+                    <td>${plant.date}</td>
+
+                </tr>
 
 
-                        <td>
+                <!-- PLANT DETAILS -->
 
-                            <b>
-                                ${plant.plant}
-                            </b>
+                <tr id="${row_id}" class="plant-details" style="display:none;">
 
-                            ${exceeded
-                                ? '<span class="indicator-pill red" style="margin-left:8px;">Norm Exceeded</span>'
-                                : ''}
+                    <td colspan="4" style="padding:0;">
 
-                        </td>
+                        <div style="padding:20px; background:#f8f9fa;">
+                            ${renderPlantData(plant)}
+                        </div>
 
+                    </td>
 
-                        <td>
+                </tr>
 
-                            ${plant.date}
+            `;
 
-                        </td>
-
-                    </tr>
-
-
-                    <!-- ================================= -->
-                    <!-- PLANT DETAILS -->
-                    <!-- ================================= -->
-
-                    <tr
-                        id="${row_id}"
-                        class="plant-details"
-                        style="display:none;"
-                    >
-
-                        <td
-                            colspan="3"
-                            style="padding:0;"
-                        >
-
-                            <div
-                                style="
-                                    padding:20px;
-                                    background:#f8f9fa;
-                                "
-                            >
-
-                                ${renderPlantData(plant)}
-
-                            </div>
-
-                        </td>
-
-                    </tr>
-
-                `;
-
-            }
-        );
-
+        });
 
         html += `
-
                     </tbody>
-
                 </table>
-
             </div>
-
         `;
 
+        $("#daily-data").html(html);
 
-        $("#daily-data").html(
-            html
-        );
+        $(".plant-row").on("click", function() {
 
+            const target = $(this).data("target");
 
-        $(".plant-row").on(
-            "click",
-            function() {
+            const details = $(`#${target}`);
 
-                const target =
-                    $(this).data(
-                        "target"
-                    );
+            const icon = $(`#${target}-icon`);
 
-
-                const details =
-                    $(`#${target}`);
-
-
-                const icon =
-                    $(`#${target}-icon`);
-
-
-                if (
-                    details.is(":visible")
-                ) {
-
-                    details.hide();
-
-                    icon.text("▶");
-
-                } else {
-
-                    details.show();
-
-                    icon.text("▼");
-
-                }
-
+            if (details.is(":visible")) {
+                details.hide();
+                icon.text("▶");
+            } else {
+                details.show();
+                icon.text("▼");
             }
-        );
+
+        });
 
     }
+
 
     function renderPlantData(plant) {
 
         let html = `
 
-            <table
-                class="table table-bordered"
-                style="margin-bottom:0;"
-            >
+            <table class="table table-bordered" style="margin-bottom:0;">
 
                 <thead>
-
                     <tr>
-
-                        <th
-                            style="width:55%;"
-                        >
-                            Parameter
-                        </th>
-
-                        <th>
-                            Value
-                        </th>
-
-                        <th>
-                            Norm (less than)
-                        </th>
-
+                        <th style="width:55%;">Parameter</th>
+                        <th>Value</th>
+                        <th>Norm (less than)</th>
                     </tr>
-
                 </thead>
 
                 <tbody>
-
         `;
 
+        plant.data.forEach(d => {
 
-        plant.data.forEach(
-            d => {
+            let display_name = d.label;
 
-                let display_name =
-                    d.label;
-
-
-                if (
-                    d.description
-                ) {
-
-                    display_name +=
-                        ` — ${d.description.replace(/\n/g, " ")}`;
-
-                }
-
-
-                const row_style =
-                    d.exceeds === true
-                        ? 'style="background:#fdecea;"'
-                        : '';
-
-
-                const norm_html =
-                    (d.norm !== null && d.norm !== undefined)
-                        ? d.norm
-                        : '—';
-
-
-                html += `
-
-                    <tr ${row_style}>
-
-                        <td>
-                            ${display_name}
-                        </td>
-
-                        <td>
-                            ${d.value}
-                        </td>
-
-                        <td>
-                            ${norm_html}
-                        </td>
-
-                    </tr>
-
-                `;
-
+            if (d.description) {
+                display_name += ` — ${d.description.replace(/\n/g, " ")}`;
             }
-        );
 
+            const row_style =
+                d.exceeds === true
+                    ? 'style="background:#fdecea;"'
+                    : '';
+
+            const norm_html =
+                (d.norm !== null && d.norm !== undefined)
+                    ? d.norm
+                    : '—';
+
+            html += `
+                <tr ${row_style}>
+                    <td>${display_name}</td>
+                    <td>${d.value}</td>
+                    <td>${norm_html}</td>
+                </tr>
+            `;
+
+        });
 
         html += `
-
                 </tbody>
-
             </table>
-
         `;
 
-
         return html;
-
     }
 
 
@@ -564,50 +398,29 @@ frappe.pages['water-balance-log'].on_page_load = function(wrapper) {
 
         frappe.call({
 
-            method:
-            "informatics_custom_apps.eth.page.water_balance_log.water_balance_log.get_parameters",
+            method: `${API}.get_parameters`,
 
             callback(r) {
 
-                let options =
-                    '<option value="">Select Parameter</option>';
+                let options = '<option value="">Select Parameter</option>';
 
+                (r.message || []).forEach(p => {
 
-                (r.message || []).forEach(
-                    p => {
+                    let display_name = p.label;
 
-                        let display_name =
-                            p.label;
-
-
-                        if (
-                            p.description
-                        ) {
-
-                            display_name +=
-                                ` — ${p.description.replace(/\n/g, " ")}`;
-
-                        }
-
-
-                        options += `
-
-                            <option
-                                value="${p.fieldname}"
-                            >
-                                ${display_name}
-                            </option>
-
-                        `;
-
+                    if (p.description) {
+                        display_name += ` — ${p.description.replace(/\n/g, " ")}`;
                     }
-                );
 
+                    options += `
+                        <option value="${p.fieldname}">
+                            ${display_name}
+                        </option>
+                    `;
 
-                $("#trend-parameter").html(
-                    options
-                );
+                });
 
+                $("#trend-parameter").html(options);
             }
 
         });
@@ -617,94 +430,49 @@ frappe.pages['water-balance-log'].on_page_load = function(wrapper) {
 
     function loadTrend() {
 
-        const plant =
-            $("#trend-plant").val();
+        const plant = $("#trend-plant").val();
+        const segment = $("#trend-segment").val();
+        const parameter = $("#trend-parameter").val();
+        const from_date = $("#trend-from-date").val();
+        const to_date = $("#trend-to-date").val();
 
-
-        const parameter =
-            $("#trend-parameter").val();
-
-
-        const from_date =
-            $("#trend-from-date").val();
-
-
-        const to_date =
-            $("#trend-to-date").val();
-
-
-        if (
-            !plant ||
-            !parameter ||
-            !from_date ||
-            !to_date
-        ) {
+        if (!plant || !segment || !parameter || !from_date || !to_date) {
 
             frappe.msgprint(
-                "Please select Plant, Parameter and Date Range."
+                "Please select Plant, Segment, Parameter and Date Range."
             );
 
             return;
-
         }
-
 
         frappe.call({
 
-            method:
-            "informatics_custom_apps.eth.page.water_balance_log.water_balance_log.get_parameter_trend",
+            method: `${API}.get_parameter_trend`,
 
             args: {
-
-                plant:
-                    plant,
-
-                parameter:
-                    parameter,
-
-                from_date:
-                    from_date,
-
-                to_date:
-                    to_date
-
+                plant: plant,
+                segment: segment,
+                parameter: parameter,
+                from_date: from_date,
+                to_date: to_date
             },
-
 
             callback(r) {
 
-                const result =
-                    r.message;
+                const result = r.message;
 
-
-                if (
-                    !result ||
-                    !result.data ||
-                    !result.data.length
-                ) {
+                if (!result || !result.data || !result.data.length) {
 
                     $("#trend-chart").html(`
-
-                        <div
-                            class="alert alert-warning"
-                        >
-
-                            No data found for
-                            the selected filters.
-
+                        <div class="alert alert-warning">
+                            No data found for the selected filters.
                         </div>
-
                     `);
 
                     return;
-
                 }
 
-
-                renderTrendChart(
-                    result
-                );
-
+                renderTrendChart(result);
             }
 
         });
@@ -718,59 +486,34 @@ frappe.pages['water-balance-log'].on_page_load = function(wrapper) {
 
         let values = [];
 
-        result.data.forEach(
-            d => {
+        result.data.forEach(d => {
 
-                if (
-                    d.value !== 0 &&
-                    d.value !== null &&
-                    d.value !== ""
-                ) {
-
-                    labels.push(
-                        d.date
-                    );
-
-                    values.push(
-                        d.value
-                    );
-
-                }
-
+            if (d.value !== 0 && d.value !== null && d.value !== "") {
+                labels.push(d.date);
+                values.push(d.value);
             }
-        );
 
+        });
 
         $("#trend-chart").html(`
 
-            <div
-                class="card"
-                style="padding:20px;"
-            >
+            <div class="card" style="padding:20px;">
 
-                <div
-                    style="margin-bottom:15px;"
-                >
+                <div style="margin-bottom:15px;">
 
                     <div>
-
-                        <b>
-                            Plant :
-                        </b>
-
+                        <b>Plant :</b>
                         ${$("#trend-plant").val()}
-
                     </div>
 
+                    <div>
+                        <b>Segment :</b>
+                        ${$("#trend-segment").val()}
+                    </div>
 
                     <div>
-
-                        <b>
-                            Parameter :
-                        </b>
-
+                        <b>Parameter :</b>
                         ${result.label}
-
                     </div>
 
                 </div>
@@ -779,17 +522,11 @@ frappe.pages['water-balance-log'].on_page_load = function(wrapper) {
                 <div id="trend-graph"></div>
 
 
-                <div
-                    style="margin-top:20px;"
-                >
+                <div style="margin-top:20px;">
 
-                    <h4>
-                        Recorded Values
-                    </h4>
+                    <h4>Recorded Values</h4>
 
-                    <div
-                        id="trend-values"
-                    ></div>
+                    <div id="trend-values"></div>
 
                 </div>
 
@@ -797,171 +534,96 @@ frappe.pages['water-balance-log'].on_page_load = function(wrapper) {
 
         `);
 
+        if (labels.length) {
 
-        if (
-            labels.length
-        ) {
+            new frappe.Chart("#trend-graph", {
 
-            new frappe.Chart(
-                "#trend-graph",
-                {
+                title: `${result.label} Trend`,
 
-                    title:
-                        `${result.label} Trend`,
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            name: "Actual",
+                            values: values
+                        }
+                    ]
+                },
 
-                    data: {
+                type: "line",
 
-                        labels:
-                            labels,
+                height: 350,
 
-                        datasets: [
+                lineOptions: {
+                    hideDots: false,
+                    regionFill: false
+                },
 
-                            {
-
-                                name:
-                                    "Actual",
-
-                                values:
-                                    values
-
-                            }
-
-                        ]
-
-                    },
-
-                    type:
-                        "line",
-
-                    height:
-                        350,
-
-                    lineOptions: {
-
-                        hideDots:
-                            false,
-
-                        regionFill:
-                            false
-
-                    },
-
-                    axisOptions: {
-
-                        min:
-                            0
-
-                    }
-
+                axisOptions: {
+                    min: 0
                 }
-            );
+
+            });
 
         } else {
 
             $("#trend-graph").html(`
-
-                <div
-                    class="alert alert-info"
-                >
-
-                    No non-zero values available
-                    for charting in the selected
-                    date range.
-
+                <div class="alert alert-info">
+                    No non-zero values available for charting in the selected date range.
                 </div>
-
             `);
 
         }
 
-
         let table = `
 
-            <table
-                class="table table-bordered"
-            >
+            <table class="table table-bordered">
 
                 <thead>
-
                     <tr>
-
-                        <th>
-                            Date
-                        </th>
-
-                        <th>
-                            ${result.label}
-                        </th>
-
+                        <th>Date</th>
+                        <th>${result.label}</th>
                     </tr>
-
                 </thead>
 
                 <tbody>
-
         `;
 
+        result.data.forEach(d => {
 
-        result.data.forEach(
-            d => {
+            table += `
+                <tr>
+                    <td>${d.date}</td>
+                    <td>${d.value}</td>
+                </tr>
+            `;
 
-                table += `
-
-                    <tr>
-
-                        <td>
-                            ${d.date}
-                        </td>
-
-                        <td>
-                            ${d.value}
-                        </td>
-
-                    </tr>
-
-                `;
-
-            }
-        );
-
+        });
 
         table += `
-
                 </tbody>
-
             </table>
-
         `;
 
-
-        $("#trend-values").html(
-            table
-        );
+        $("#trend-values").html(table);
 
     }
 
 
+    $("#daily-date").val(frappe.datetime.get_today());
 
+    $("#load-daily-btn").on("click", function() {
+        loadDailyData();
+    });
 
-    $("#load-daily-btn").on(
-        "click",
-        function() {
+    $("#load-trend-btn").on("click", function() {
+        loadTrend();
+    });
 
-            loadDailyData();
-
-        }
-    );
-
-
-    $("#load-trend-btn").on(
-        "click",
-        function() {
-
-            loadTrend();
-
-        }
-    );
-
+    // Plant change -> only that plant's allowed segments in the trend filter
+    $("#trend-plant").on("change", function() {
+        populateTrendSegments($(this).val());
+    });
 
     loadParameters();
 

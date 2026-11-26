@@ -9,6 +9,28 @@ frappe.pages['power-plant-log'].on_page_load = function(wrapper) {
         "9:30 AM", "1:30 PM", "5:30 PM", "9:30 PM", "1:30 AM", "5:30 AM"
     ];
 
+    // Branch (Plant) -> allowed Segments. Same map as the Material Request script.
+    const branch_segment_map = {
+        "Buttar Biofuels": ["Distillery"],
+        "RSL Buttar": ["Sugar", "Power", "Beet"],
+        "Lakshmiji Sugar": ["Sugar"],
+        "Rana Power": ["Power"],
+        "RSL Belwara": ["Sugar", "Power", "Distillery"],
+        "RSL Louhka": ["Distillery"],
+        "RSL Shahbad": ["Sugar", "Power"],
+        "RSLD Karnal": ["Distillery"],
+        "RSLD Biofuels-Chhattisgarh": ["Distillery"],
+        "Karimganj Biofuels": ["Distillery"],
+        "Superior Biofuels": ["Distillery"],
+        "ETH Louhka": ["Distillery"],
+        "Superior Unn": ["Sugar", "Power"]
+    };
+    const all_segments = ["Beet", "Sugar", "Distillery", "Power"];
+
+    function get_allowed_segments(branch) {
+        return branch_segment_map[branch] || all_segments;
+    }
+
     // each field: [fieldname, label, unit-or-null]
     let sections = [
         { title: "FEED WATERS", fields: [
@@ -135,6 +157,9 @@ frappe.pages['power-plant-log'].on_page_load = function(wrapper) {
     let ordered_fieldnames = [];
     let remarks_inputs = {};
 
+    // Declared up-front so onchange handlers can safely reference each other.
+    let company_field, plant_field, segment_field, date_field;
+
     // Frappe fires a control's onchange through more than one internal path
     // (e.g. the datepicker's own change event AND the model set_value cycle),
     // so a single user action can trigger the handler twice. Debouncing
@@ -187,7 +212,7 @@ frappe.pages['power-plant-log'].on_page_load = function(wrapper) {
     // ---------- header controls ----------
     let $filters = $(`<div class="log-header" style="display:flex; gap:10px; margin-bottom:15px;"></div>`).appendTo(page.body);
 
-    let company_field = frappe.ui.form.make_control({
+    company_field = frappe.ui.form.make_control({
         parent: $filters,
         df: {
             fieldtype: 'Link',
@@ -195,7 +220,9 @@ frappe.pages['power-plant-log'].on_page_load = function(wrapper) {
             label: 'Company',
             reqd: 1,
             onchange: function () {
+                if (!plant_field || !segment_field) return;
                 plant_field.set_value('');
+                segment_field.set_value('');
                 plant_field.df.get_query = () => {
                     return { filters: { company: company_field.get_value() } };
                 };
@@ -206,7 +233,7 @@ frappe.pages['power-plant-log'].on_page_load = function(wrapper) {
         render_input: true
     });
 
-    let plant_field = frappe.ui.form.make_control({
+    plant_field = frappe.ui.form.make_control({
         parent: $filters,
         df: {
             fieldtype: 'Link',
@@ -216,12 +243,46 @@ frappe.pages['power-plant-log'].on_page_load = function(wrapper) {
             get_query: () => {
                 return { filters: { company: company_field.get_value() } };
             },
+            onchange: function () {
+                if (!segment_field) return;
+                let plant = plant_field.get_value();
+                let allowed = get_allowed_segments(plant);
+
+                // clear a segment that is no longer valid for the new plant
+                let current = segment_field.get_value();
+                if (current && !allowed.includes(current)) {
+                    segment_field.set_value('');
+                }
+                // auto-pick when the plant has only one allowed segment
+                if (plant && allowed.length === 1) {
+                    segment_field.set_value(allowed[0]);
+                }
+                handle_filter_change();
+            }
+        },
+        render_input: true
+    });
+
+    segment_field = frappe.ui.form.make_control({
+        parent: $filters,
+        df: {
+            fieldtype: 'Link',
+            options: 'Segment',   // change if your Segment DocType has a different name
+            label: 'Segment',
+            reqd: 1,
+            get_query: () => {
+                return {
+                    filters: {
+                        name: ["in", get_allowed_segments(plant_field.get_value())]
+                    }
+                };
+            },
             onchange: function () { handle_filter_change(); }
         },
         render_input: true
     });
 
-    let date_field = frappe.ui.form.make_control({
+    date_field = frappe.ui.form.make_control({
         parent: $filters,
         df: {
             fieldtype: 'Date',
@@ -346,15 +407,16 @@ frappe.pages['power-plant-log'].on_page_load = function(wrapper) {
     function maybe_load() {
         let company = company_field.get_value();
         let plant = plant_field.get_value();
+        let segment = segment_field.get_value();
         let log_date = date_field.get_value();
-        if (!company || !plant || !log_date) {
+        if (!company || !plant || !segment || !log_date) {
             clear_grid();
             current_doc_name = null;
             return;
         }
         frappe.call({
             method: "informatics_custom_apps.api.get_power_plant_log",
-            args: { company, plant, log_date },
+            args: { company, plant, segment, log_date },
             callback: function (r) {
                 if (r.message) {
                     current_doc_name = r.message.name;
@@ -372,10 +434,16 @@ frappe.pages['power-plant-log'].on_page_load = function(wrapper) {
     page.set_primary_action('Save', function () {
         let company = company_field.get_value();
         let plant = plant_field.get_value();
+        let segment = segment_field.get_value();
         let log_date = date_field.get_value();
 
-        if (!company || !plant || !log_date) {
-            frappe.msgprint(__('Please select Company, Plant and Date before saving.'));
+        if (!company || !plant || !segment || !log_date) {
+            frappe.msgprint(__('Please select Company, Plant, Segment and Date before saving.'));
+            return;
+        }
+
+        if (!get_allowed_segments(plant).includes(segment)) {
+            frappe.msgprint(__('Segment {0} is not allowed for plant {1}.', [segment, plant]));
             return;
         }
 
@@ -404,7 +472,7 @@ frappe.pages['power-plant-log'].on_page_load = function(wrapper) {
 
         frappe.call({
             method: "informatics_custom_apps.api.save_power_plant_log",
-            args: { company, plant, log_date, rows },
+            args: { company, plant, segment, log_date, rows },
             freeze: true,
             callback: function (r) {
                 if (r.message) {
