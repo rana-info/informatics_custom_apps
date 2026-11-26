@@ -10,6 +10,7 @@
  "field_order": [
   "company",
   "plant",
+  "segment",
   "abbr",
   "log_date",
   "logs"
@@ -51,11 +52,17 @@
    "fieldtype": "Data",
    "hidden": 1,
    "label": "Abbr"
+  },
+  {
+   "fieldname": "segment",
+   "fieldtype": "Link",
+   "label": "Segment",
+   "options": "Segment"
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-13 16:06:53.811768",
+ "modified": "2026-11-25 17:08:38.564163",
  "modified_by": "Administrator",
  "module": "ETH",
  "name": "Power Plant Log Book",

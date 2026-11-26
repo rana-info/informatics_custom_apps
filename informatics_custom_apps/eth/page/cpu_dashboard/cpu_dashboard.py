@@ -6,46 +6,16 @@ CHILD_DOCTYPE = "CPU Plant Lab Log Detail"
 
 
 LOCATIONS = [
-    {
-        "fieldname": "eqt_tank",
-        "label": "EQT-Tank",
-    },
-    {
-        "fieldname": "ct_tank",
-        "label": "CT-Tank",
-    },
-    {
-        "fieldname": "reactor_inlet",
-        "label": "Reactor Inlet",
-    },
-    {
-        "fieldname": "reactor_outlet",
-        "label": "Reactor Outlet",
-    },
-    {
-        "fieldname": "aeration_tank",
-        "label": "Aeration Tank",
-    },
-    {
-        "fieldname": "sec_clarifier_outlet",
-        "label": "Sec. Clarifier Outlet",
-    },
-    {
-        "fieldname": "hrscc_outlet",
-        "label": "HRSCC Outlet",
-    },
-    {
-        "fieldname": "mgf_outlet",
-        "label": "MGF Outlet",
-    },
-    {
-        "fieldname": "acf_outlet",
-        "label": "ACF Outlet",
-    },
-    {
-        "fieldname": "uv_outlet",
-        "label": "UV Outlet",
-    },
+    {"fieldname": "eqt_tank", "label": "EQT-Tank"},
+    {"fieldname": "ct_tank", "label": "CT-Tank"},
+    {"fieldname": "reactor_inlet", "label": "Reactor Inlet"},
+    {"fieldname": "reactor_outlet", "label": "Reactor Outlet"},
+    {"fieldname": "aeration_tank", "label": "Aeration Tank"},
+    {"fieldname": "sec_clarifier_outlet", "label": "Sec. Clarifier Outlet"},
+    {"fieldname": "hrscc_outlet", "label": "HRSCC Outlet"},
+    {"fieldname": "mgf_outlet", "label": "MGF Outlet"},
+    {"fieldname": "acf_outlet", "label": "ACF Outlet"},
+    {"fieldname": "uv_outlet", "label": "UV Outlet"},
 ]
 
 
@@ -62,11 +32,7 @@ def get_parameters():
 
     for df in meta.fields:
 
-        if df.fieldtype not in (
-            "Float",
-            "Int",
-            "Currency"
-        ):
+        if df.fieldtype not in ("Float", "Int", "Currency"):
             continue
 
         parameters.append({
@@ -93,31 +59,36 @@ def get_locations():
 # =========================================================
 
 @frappe.whitelist()
-def get_plants_for_date(date):
+def get_plants_for_date(date, segment=None):
 
     if not date:
         frappe.throw("Date is required.")
 
+    filters = {"log_date": date}
+
+    if segment:
+        filters["segment"] = segment
+
     return frappe.get_all(
         PARENT_DOCTYPE,
-        filters={
-            "log_date": date
-        },
+        filters=filters,
         fields=[
             "name",
             "company",
             "plant",
+            "segment",
             "log_date"
         ],
-        order_by="plant asc"
+        order_by="plant asc, segment asc"
     )
 
 
 # =========================================================
 # GET CPU LOG
 # =========================================================
+
 @frappe.whitelist()
-def get_cpu_log(plant, date):
+def get_cpu_log(plant, date, segment=None):
 
     if not plant:
         frappe.throw("Plant is required.")
@@ -125,28 +96,29 @@ def get_cpu_log(plant, date):
     if not date:
         frappe.throw("Date is required.")
 
-    log_name = frappe.db.exists(
-        PARENT_DOCTYPE,
-        {
-            "plant": plant,
-            "log_date": date
-        }
-    )
+    log_filters = {
+        "plant": plant,
+        "log_date": date
+    }
+
+    # segment is part of the log's identity (company + plant + segment + date)
+    if segment:
+        log_filters["segment"] = segment
+
+    log_name = frappe.db.exists(PARENT_DOCTYPE, log_filters)
 
     if not log_name:
         return {
             "name": None,
             "plant": plant,
+            "segment": segment,
             "date": date,
             "rows": [],
             "violations": [],
             "violation_count": 0
         }
 
-    doc = frappe.get_doc(
-        PARENT_DOCTYPE,
-        log_name
-    )
+    doc = frappe.get_doc(PARENT_DOCTYPE, log_name)
 
     # ---------------------------------------------------------
     # Get norms
@@ -159,9 +131,7 @@ def get_cpu_log(plant, date):
 
     for row in doc.parameters:
 
-        parameter = str(
-            row.parameter or ""
-        ).strip()
+        parameter = str(row.parameter or "").strip()
 
         parameter_key = parameter.lower()
 
@@ -172,10 +142,7 @@ def get_cpu_log(plant, date):
             "unit": row.unit,
         }
 
-        parameter_norms = norms.get(
-            parameter_key,
-            {}
-        )
+        parameter_norms = norms.get(parameter_key, {})
 
         # -----------------------------------------------------
         # Check every location
@@ -185,9 +152,7 @@ def get_cpu_log(plant, date):
 
             fieldname = location["fieldname"]
 
-            value = row.get(
-                fieldname
-            )
+            value = row.get(fieldname)
 
             row_data[fieldname] = value
 
@@ -195,18 +160,10 @@ def get_cpu_log(plant, date):
             if value is None or value == "":
                 continue
 
-            location_norm = parameter_norms.get(
-                fieldname,
-                {}
-            )
+            location_norm = parameter_norms.get(fieldname, {})
 
-            min_value = location_norm.get(
-                "min"
-            )
-
-            max_value = location_norm.get(
-                "max"
-            )
+            min_value = location_norm.get("min")
+            max_value = location_norm.get("max")
 
             # No norm configured
             if min_value is None and max_value is None:
@@ -214,16 +171,10 @@ def get_cpu_log(plant, date):
 
             is_violation = False
 
-            if (
-                min_value is not None
-                and value < min_value
-            ):
+            if min_value is not None and value < min_value:
                 is_violation = True
 
-            if (
-                max_value is not None
-                and value > max_value
-            ):
+            if max_value is not None and value > max_value:
                 is_violation = True
 
             if is_violation:
@@ -244,6 +195,7 @@ def get_cpu_log(plant, date):
         "name": doc.name,
         "company": doc.company,
         "plant": doc.plant,
+        "segment": doc.segment,
         "date": str(doc.log_date),
         "rows": rows,
         "violations": violations,
@@ -258,9 +210,7 @@ def get_cpu_log(plant, date):
 @frappe.whitelist()
 def get_norms():
 
-    doc = frappe.get_single(
-        "ETH Logbook Norms"
-    )
+    doc = frappe.get_single("ETH Logbook Norms")
 
     norms = {}
 
@@ -269,9 +219,7 @@ def get_norms():
         if not row.description:
             continue
 
-        parameter = str(
-            row.description
-        ).strip()
+        parameter = str(row.description).strip()
 
         # Remove " NORMS"
         if parameter.upper().endswith(" NORMS"):
@@ -285,11 +233,8 @@ def get_norms():
 
             fieldname = location["fieldname"]
 
-            min_field = f"{fieldname}_min"
-            max_field = f"{fieldname}_max"
-
-            min_value = row.get(min_field)
-            max_value = row.get(max_field)
+            min_value = row.get(f"{fieldname}_min")
+            max_value = row.get(f"{fieldname}_max")
 
             # =================================================
             # Treat 0 as "Norm Not Defined"
@@ -307,30 +252,37 @@ def get_norms():
             }
 
     return norms
+
+
 # =========================================================
 # DASHBOARD
 # =========================================================
 
 @frappe.whitelist()
-def get_daily_dashboard(date):
+def get_daily_dashboard(date, segment=None):
 
     if not date:
         frappe.throw("Date is required.")
 
-    # Get all CPU logs for selected date
+    filters = {"log_date": date}
+
+    # optional segment filter ("" / None = all segments)
+    if segment:
+        filters["segment"] = segment
+
+    # Get all CPU logs for selected date (and segment)
     logs = frappe.get_all(
         PARENT_DOCTYPE,
-        filters={
-            "log_date": date
-        },
+        filters=filters,
         fields=[
             "name",
             "company",
             "plant",
+            "segment",
             "log_date",
             "modified"
         ],
-        order_by="plant asc"
+        order_by="plant asc, segment asc"
     )
 
     # Get norms
@@ -340,10 +292,7 @@ def get_daily_dashboard(date):
 
     for log in logs:
 
-        doc = frappe.get_doc(
-            PARENT_DOCTYPE,
-            log.name
-        )
+        doc = frappe.get_doc(PARENT_DOCTYPE, log.name)
 
         rows = []
         violation_count = 0
@@ -359,25 +308,16 @@ def get_daily_dashboard(date):
             }
 
             # Normalize parameter name
-            parameter_key = (
-                str(row.parameter or "")
-                .strip()
-                .lower()
-            )
+            parameter_key = str(row.parameter or "").strip().lower()
 
             # Get norms for this parameter
-            parameter_norm = norms.get(
-                parameter_key,
-                {}
-            )
+            parameter_norm = norms.get(parameter_key, {})
 
             for location in LOCATIONS:
 
                 fieldname = location["fieldname"]
 
-                value = row.get(
-                    fieldname
-                )
+                value = row.get(fieldname)
 
                 # Store actual value
                 row_data[fieldname] = value
@@ -387,55 +327,32 @@ def get_daily_dashboard(date):
                     continue
 
                 # Get norm for this parameter + location
-                location_norm = parameter_norm.get(
-                    fieldname,
-                    {}
-                )
+                location_norm = parameter_norm.get(fieldname, {})
 
-                min_value = location_norm.get(
-                    "min"
-                )
-
-                max_value = location_norm.get(
-                    "max"
-                )
+                min_value = location_norm.get("min")
+                max_value = location_norm.get("max")
 
                 # No norm configured
-                if (
-                    min_value is None
-                    and max_value is None
-                ):
+                if min_value is None and max_value is None:
                     continue
 
                 violation = None
 
                 # Check minimum
-                if (
-                    min_value is not None
-                    and value < min_value
-                ):
+                if min_value is not None and value < min_value:
 
                     violation = {
-                        "message": (
-                            f"Below minimum norm "
-                            f"({min_value})"
-                        ),
+                        "message": f"Below minimum norm ({min_value})",
                         "value": value,
                         "min": min_value,
                         "max": max_value
                     }
 
                 # Check maximum
-                elif (
-                    max_value is not None
-                    and value > max_value
-                ):
+                elif max_value is not None and value > max_value:
 
                     violation = {
-                        "message": (
-                            f"Above maximum norm "
-                            f"({max_value})"
-                        ),
+                        "message": f"Above maximum norm ({max_value})",
                         "value": value,
                         "min": min_value,
                         "max": max_value
@@ -444,54 +361,36 @@ def get_daily_dashboard(date):
                 # Store violation
                 if violation:
 
-                    row_data[
-                        "violations"
-                    ][fieldname] = violation
+                    row_data["violations"][fieldname] = violation
 
                     violation_count += 1
 
-            rows.append(
-                row_data
-            )
+            rows.append(row_data)
 
         plants.append({
-
             "name": doc.name,
-
             "company": doc.company,
-
             "plant": doc.plant,
-
-            "log_date": str(
-                doc.log_date
-            ),
-
-            "last_updated": str(
-                doc.modified
-            ),
-
-            "violation_count":
-                violation_count,
-
+            "segment": doc.segment or "",
+            "log_date": str(doc.log_date),
+            "last_updated": str(doc.modified),
+            "violation_count": violation_count,
             "rows": rows
-
         })
 
     return {
-
         "date": date,
-
+        "segment": segment or "",
         "plants": plants,
-
         "norms": norms,
-
         "locations": LOCATIONS
-
     }
 
+
 # =========================================================
-# TREND
+# TREND FILTERS
 # =========================================================
+
 @frappe.whitelist()
 def get_trend_filters():
 
@@ -501,38 +400,17 @@ def get_trend_filters():
 
     plants = frappe.get_all(
         PARENT_DOCTYPE,
-        fields=[
-            "plant"
-        ],
-        filters={
-            "plant": [
-                "is",
-                "set"
-            ]
-        },
+        fields=["plant"],
+        filters={"plant": ["is", "set"]},
         distinct=True,
         order_by="plant asc"
     )
 
-    plant_list = [
-        x.plant
-        for x in plants
-        if x.plant
-    ]
+    plant_list = [x.plant for x in plants if x.plant]
 
     # ---------------------------------------------------------
-    # Get parameters from child table metadata
+    # Parameters from existing CPU log rows
     # ---------------------------------------------------------
-
-    meta = frappe.get_meta(
-        CHILD_DOCTYPE
-    )
-
-    parameters = []
-
-    # We don't want every Float/Int field.
-    # Only parameter rows from existing CPU logs
-    # are used here.
 
     parameter_rows = frappe.db.sql(
         f"""
@@ -547,25 +425,31 @@ def get_trend_filters():
         as_dict=True
     )
 
-    parameters = [
-        x.parameter
-        for x in parameter_rows
-        if x.parameter
-    ]
+    parameters = [x.parameter for x in parameter_rows if x.parameter]
 
     # ---------------------------------------------------------
-    # Return locations
+    # Segments that actually have logs (the page filters these
+    # further by the plant -> allowed segments map)
     # ---------------------------------------------------------
+
+    segment_rows = frappe.get_all(
+        PARENT_DOCTYPE,
+        fields=["segment"],
+        filters={"segment": ["is", "set"]},
+        distinct=True,
+        order_by="segment asc"
+    )
+
+    segments = [x.segment for x in segment_rows if x.segment]
 
     return {
-
         "plants": plant_list,
-
+        "segments": segments,
         "parameters": parameters,
-
         "locations": LOCATIONS
-
     }
+
+
 # =========================================================
 # GET PARAMETER TREND
 # =========================================================
@@ -576,7 +460,8 @@ def get_parameter_trend(
     parameter,
     location,
     from_date,
-    to_date
+    to_date,
+    segment=None
 ):
 
     if not plant:
@@ -589,50 +474,36 @@ def get_parameter_trend(
         frappe.throw("Location is required.")
 
     if not from_date or not to_date:
-        frappe.throw(
-            "From Date and To Date are required."
-        )
+        frappe.throw("From Date and To Date are required.")
 
     if from_date > to_date:
-        frappe.throw(
-            "From Date cannot be greater than To Date."
-        )
+        frappe.throw("From Date cannot be greater than To Date.")
 
     # ---------------------------------------------------------
     # VALIDATE LOCATION
     # ---------------------------------------------------------
 
-    valid_locations = [
-        x["fieldname"]
-        for x in LOCATIONS
-    ]
+    valid_locations = [x["fieldname"] for x in LOCATIONS]
 
     if location not in valid_locations:
-
-        frappe.throw(
-            "Invalid location."
-        )
+        frappe.throw("Invalid location.")
 
     # ---------------------------------------------------------
     # GET LOGS
     # ---------------------------------------------------------
 
+    log_filters = {
+        "plant": plant,
+        "log_date": ["between", [from_date, to_date]]
+    }
+
+    if segment:
+        log_filters["segment"] = segment
+
     logs = frappe.get_all(
         PARENT_DOCTYPE,
-        filters={
-            "plant": plant,
-            "log_date": [
-                "between",
-                [
-                    from_date,
-                    to_date
-                ]
-            ]
-        },
-        fields=[
-            "name",
-            "log_date"
-        ],
+        filters=log_filters,
+        fields=["name", "log_date"],
         order_by="log_date asc"
     )
 
@@ -644,44 +515,24 @@ def get_parameter_trend(
 
     for log in logs:
 
-        doc = frappe.get_doc(
-            PARENT_DOCTYPE,
-            log.name
-        )
+        doc = frappe.get_doc(PARENT_DOCTYPE, log.name)
 
         for row in doc.parameters:
 
-            row_parameter = str(
-                row.parameter or ""
-            ).strip()
+            row_parameter = str(row.parameter or "").strip()
 
-            if (
-                row_parameter.lower()
-                != str(parameter).strip().lower()
-            ):
+            if row_parameter.lower() != str(parameter).strip().lower():
                 continue
 
-            value = row.get(
-                location
-            )
+            value = row.get(location)
 
-            # Treat 0 as not entered,
-            # same as Section A
-            if value in (
-                None,
-                "",
-                0
-            ):
+            # Treat 0 as not entered, same as Section A
+            if value in (None, "", 0):
                 continue
 
             data.append({
-
-                "date": str(
-                    log.log_date
-                ),
-
+                "date": str(log.log_date),
                 "value": value
-
             })
 
             break
@@ -692,23 +543,12 @@ def get_parameter_trend(
 
     norms = get_norms()
 
-    parameter_norm = norms.get(
-        str(parameter).strip().lower(),
-        {}
-    )
+    parameter_norm = norms.get(str(parameter).strip().lower(), {})
 
-    location_norm = parameter_norm.get(
-        location,
-        {}
-    )
+    location_norm = parameter_norm.get(location, {})
 
-    min_norm = location_norm.get(
-        "min"
-    )
-
-    max_norm = location_norm.get(
-        "max"
-    )
+    min_norm = location_norm.get("min")
+    max_norm = location_norm.get("max")
 
     # ---------------------------------------------------------
     # ADD STATUS TO EACH VALUE
@@ -718,22 +558,13 @@ def get_parameter_trend(
 
         value = record["value"]
 
-        if (
-            min_norm is not None
-            and value < min_norm
-        ):
-
+        if min_norm is not None and value < min_norm:
             record["status"] = "low"
 
-        elif (
-            max_norm is not None
-            and value > max_norm
-        ):
-
+        elif max_norm is not None and value > max_norm:
             record["status"] = "high"
 
         else:
-
             record["status"] = "normal"
 
     # ---------------------------------------------------------
@@ -741,17 +572,11 @@ def get_parameter_trend(
     # ---------------------------------------------------------
 
     return {
-
         "plant": plant,
-
+        "segment": segment or "",
         "parameter": parameter,
-
         "location": location,
-
         "data": data,
-
         "min_norm": min_norm,
-
         "max_norm": max_norm
-
     }

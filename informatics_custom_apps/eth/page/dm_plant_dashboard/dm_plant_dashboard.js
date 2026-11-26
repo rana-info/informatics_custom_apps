@@ -1,3 +1,23 @@
+const DMD_API = "informatics_custom_apps.eth.page.dm_plant_dashboard.dm_plant_dashboard";
+
+// Branch (Plant) -> allowed Segments. Same map as Material Request / Power Plant Log / CPU / DM pages.
+const DMD_BRANCH_SEGMENT_MAP = {
+    "Buttar Biofuels": ["Distillery"],
+    "RSL Buttar": ["Sugar", "Power", "Beet"],
+    "Lakshmiji Sugar": ["Sugar"],
+    "Rana Power": ["Power"],
+    "RSL Belwara": ["Sugar", "Power", "Distillery"],
+    "RSL Louhka": ["Distillery"],
+    "RSL Shahbad": ["Sugar", "Power"],
+    "RSLD Karnal": ["Distillery"],
+    "RSLD Biofuels-Chhattisgarh": ["Distillery"],
+    "Karimganj Biofuels": ["Distillery"],
+    "Superior Biofuels": ["Distillery"],
+    "ETH Louhka": ["Distillery"],
+    "Superior Unn": ["Sugar", "Power"]
+};
+const DMD_ALL_SEGMENTS = ["Beet", "Sugar", "Distillery", "Power"];
+
 frappe.pages["dm-plant-dashboard"].on_page_load = function (wrapper) {
 
     const page = frappe.ui.make_app_page({
@@ -16,6 +36,11 @@ frappe.pages["dm-plant-dashboard"].on_page_load = function (wrapper) {
             <div class="col-md-3">
                 <label><b>Date</b></label>
                 <input type="date" class="form-control" id="dashboard-date">
+            </div>
+
+            <div class="col-md-3">
+                <label><b>Segment</b></label>
+                <select class="form-control" id="dashboard-segment"></select>
             </div>
 
             <div class="col-md-2">
@@ -51,30 +76,35 @@ frappe.pages["dm-plant-dashboard"].on_page_load = function (wrapper) {
                     <input type="date" id="to-date" class="form-control">
                 </div>
 
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label>Plant</label>
                     <select id="trend-plant" class="form-control"></select>
                 </div>
 
-                <div class="col-md-3">
+                <div class="col-md-2">
+                    <label>Segment</label>
+                    <select id="trend-segment" class="form-control"></select>
+                </div>
+
+                <div class="col-md-2">
                     <label>Parameter</label>
                     <select id="trend-parameter" class="form-control"></select>
                 </div>
 
-                <div class="col-md-2">
-                <div class="form-check" style="margin-top:32px;">
-                    <input
-                        class="form-check-input"
-                        type="checkbox"
-                        id="show-limits"
-                    >
-                    <label class="form-check-label" for="show-limits">
-                        Show Limits
-                    </label>
-                </div>
+                <div class="col-md-1">
+                    <div class="form-check" style="margin-top:32px;">
+                        <input
+                            class="form-check-input"
+                            type="checkbox"
+                            id="show-limits"
+                        >
+                        <label class="form-check-label" for="show-limits">
+                            Limits
+                        </label>
+                    </div>
                 </div>
 
-                <div class="col-md-2">
+                <div class="col-md-1">
                     <br>
                     <button class="btn btn-primary" id="show-trend">
                         Show Trend
@@ -92,41 +122,60 @@ frappe.pages["dm-plant-dashboard"].on_page_load = function (wrapper) {
 
     $("#dashboard-date").val(frappe.datetime.get_today());
 
+    // Dashboard segment filter: "All Segments" + every segment
+    let seg_options = '<option value="">All Segments</option>';
+    DMD_ALL_SEGMENTS.forEach(s => {
+        seg_options += `<option value="${s}">${s}</option>`;
+    });
+    $("#dashboard-segment").html(seg_options);
+
+    // Trend filters are populated once, so a dashboard refresh doesn't reset them
+    populatePlants();
+    populateTrendSegments("");
+    loadParameters();
+
     loadDashboard();
 
     $("#refresh-dashboard").click(loadDashboard);
 
-$(page.body).on("click", "#show-trend", function () {
-    console.log("Show Trend Clicked");
+    $("#dashboard-segment").on("change", loadDashboard);
+    $("#dashboard-date").on("change", loadDashboard);
 
-    let from_date = $("#from-date").val();
-    let to_date = $("#to-date").val();
-    let plant = $("#trend-plant").val();
-    let parameter = $("#trend-parameter").val();
-
-    if (!from_date || !to_date || !plant || !parameter) {
-        frappe.msgprint("Please select all filters.");
-        return;
-    }
-
-    frappe.call({
-        method: "informatics_custom_apps.eth.page.dm_plant_dashboard.dm_plant_dashboard.get_parameter_trend",
-        args: {
-            from_date,
-            to_date,
-            plant,
-            parameter
-        },
-        callback(r) {
-            console.log("Trend Response");
-            console.log(r.message);
-
-            renderTrendChart(r.message);
-        }
+    // Plant change -> only that plant's allowed segments in the trend filter
+    $("#trend-plant").on("change", function () {
+        populateTrendSegments($(this).val());
     });
-});
+
+    $(page.body).on("click", "#show-trend", function () {
+
+        let from_date = $("#from-date").val();
+        let to_date = $("#to-date").val();
+        let plant = $("#trend-plant").val();
+        let segment = $("#trend-segment").val();
+        let parameter = $("#trend-parameter").val();
+
+        if (!from_date || !to_date || !plant || !segment || !parameter) {
+            frappe.msgprint("Please select all filters.");
+            return;
+        }
+
+        frappe.call({
+            method: DMD_API + ".get_parameter_trend",
+            args: {
+                from_date,
+                to_date,
+                plant,
+                segment,
+                parameter
+            },
+            callback(r) {
+                renderTrendChart(r.message);
+            }
+        });
+    });
 
 }
+
 function populatePlants() {
 
     const plants = [
@@ -140,18 +189,38 @@ function populatePlants() {
 
     let options = '<option value="">Select Plant</option>';
 
-    plants.forEach(function(plant) {
+    plants.forEach(function (plant) {
         options += `<option value="${plant}">${plant}</option>`;
     });
 
     $("#trend-plant").html(options);
 }
 
+function populateTrendSegments(plant) {
+
+    if (!plant) {
+        $("#trend-segment").html('<option value="">Select Segment</option>');
+        return;
+    }
+
+    const allowed = DMD_BRANCH_SEGMENT_MAP[plant] || DMD_ALL_SEGMENTS;
+
+    // a plant with a single segment is auto-selected
+    let options = allowed.length === 1
+        ? ""
+        : '<option value="">Select Segment</option>';
+
+    allowed.forEach(function (segment) {
+        options += `<option value="${segment}">${segment}</option>`;
+    });
+
+    $("#trend-segment").html(options);
+}
+
 function loadParameters() {
 
     frappe.call({
-        method:
-        "informatics_custom_apps.eth.page.dm_plant_dashboard.dm_plant_dashboard.get_parameters",
+        method: DMD_API + ".get_parameters",
 
         callback(r) {
 
@@ -176,29 +245,35 @@ function loadParameters() {
 function loadDashboard() {
 
     frappe.call({
-        method: "informatics_custom_apps.eth.page.dm_plant_dashboard.dm_plant_dashboard.get_dashboard",
+        method: DMD_API + ".get_dashboard",
 
         args: {
-            date: $("#dashboard-date").val()
+            date: $("#dashboard-date").val(),
+            segment: $("#dashboard-segment").val()
         },
 
         callback(r) {
-
-            console.log("========== DASHBOARD ==========");
-            console.table(r.message.plants);
-
             renderPlantSummary(r.message.plants);
-
-            // Populate trend filters
-            populatePlants();
-            loadParameters();
         }
     });
 
 }
+
+function plantRowId(plant, segment) {
+    return "details-" + frappe.scrub(plant + " " + (segment || "none"));
+}
+
 function renderPlantSummary(plants) {
-    console.log("Plants received by renderer:");
-    console.table(plants);
+
+    if (!plants || !plants.length) {
+        $("#plant-summary").html(`
+            <div class="alert alert-warning">
+                No logbooks found for the selected date / segment.
+            </div>
+        `);
+        return;
+    }
+
     let html = `
         <table class="table table-bordered table-hover">
 
@@ -207,6 +282,7 @@ function renderPlantSummary(plants) {
                 <tr>
                     <th width="40"></th>
                     <th>Plant</th>
+                    <th>Segment</th>
                     <th>Violations</th>
                     <th>Last Updated</th>
                 </tr>
@@ -226,11 +302,14 @@ function renderPlantSummary(plants) {
         html += `
 
             <tr class="plant-row"
-                data-plant="${p.plant}">
+                data-plant="${frappe.utils.escape_html(p.plant)}"
+                data-segment="${frappe.utils.escape_html(p.segment || "")}">
 
                 <td>▶</td>
 
                 <td><b>${p.plant}</b></td>
+
+                <td>${p.segment || ""}</td>
 
                 <td>
 
@@ -245,10 +324,10 @@ function renderPlantSummary(plants) {
             </tr>
 
             <tr
-                id="details-${frappe.scrub(p.plant)}"
+                id="${plantRowId(p.plant, p.segment)}"
                 style="display:none;">
 
-                <td colspan="4">
+                <td colspan="5">
 
                     <div class="plant-details">
                         Loading...
@@ -266,11 +345,13 @@ function renderPlantSummary(plants) {
     $("#plant-summary").html(html);
 
 }
+
 $(document).on("click", ".plant-row", function () {
 
     let plant = $(this).data("plant");
+    let segment = $(this).data("segment");
 
-    let id = "#details-" + frappe.scrub(plant);
+    let id = "#" + plantRowId(plant, segment);
 
     if ($(id).is(":visible")) {
 
@@ -285,39 +366,34 @@ $(document).on("click", ".plant-row", function () {
 
     loadPlantDetails(
         plant,
+        segment,
         id + " .plant-details"
     );
 
 });
-function loadPlantDetails(plant, target) {
+
+function loadPlantDetails(plant, segment, target) {
 
     $(target).html("Loading...");
 
     frappe.call({
 
-        method:
-        "informatics_custom_apps.eth.page.dm_plant_dashboard.dm_plant_dashboard.get_plant_logbook",
+        method: DMD_API + ".get_plant_logbook",
 
         args: {
-
             plant: plant,
-
+            segment: segment,
             date: $("#dashboard-date").val()
-
         },
 
         callback(r) {
-
-            console.log("Plant Logbook Response");
-    console.log(r.message);
-
-    renderPlantLogbook(target, r.message);
-
+            renderPlantLogbook(target, r.message);
         }
 
     });
 
 }
+
 function renderPlantLogbook(target, data) {
 
     if (!data || !data.length) {
@@ -365,22 +441,7 @@ function renderPlantLogbook(target, data) {
             <tbody>
     `;
 
-    let current_section = "";
-
     data.forEach(p => {
-
-        // if (p.section !== current_section) {
-
-        //     // current_section = p.section;
-
-        //     // html += `
-        //     //     <tr class="table-secondary">
-        //     //         <th colspan="${slots.length + 4}">
-        //     //             ${current_section || ""}
-        //     //         </th>
-        //     //     </tr>
-        //     // `;
-        // }
 
         html += `<tr>`;
 
@@ -436,6 +497,7 @@ function renderPlantLogbook(target, data) {
 
 
 function renderTrendChart(result) {
+
     if (!result.data.length) {
 
         $("#trend-chart").html(`
@@ -516,6 +578,8 @@ function renderTrendChart(result) {
 
             <div><b>Plant :</b> ${$("#trend-plant").val()}</div>
 
+            <div><b>Segment :</b> ${$("#trend-segment").val()}</div>
+
             <div>
                 <b>Parameter :</b>
                 ${$("#trend-parameter option:selected").text()}
@@ -538,7 +602,7 @@ function renderTrendChart(result) {
             </span>
 
         </div>
-    <div id="trend-graph"></div>
+        <div id="trend-graph"></div>
     `);
 
     const showLimits = $("#show-limits").is(":checked");
@@ -586,60 +650,61 @@ function renderTrendChart(result) {
         }
 
     });
+
     let table = `
-    <br>
-   <details style="margin-top:20px;">
-    <summary><b>Recorded Values (${result.data.length})</b></summary>
+        <br>
+        <details style="margin-top:20px;">
+            <summary><b>Recorded Values (${result.data.length})</b></summary>
 
-    <table class="table table-bordered table-sm table-hover">
-        <thead>
+            <table class="table table-bordered table-sm table-hover">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Time Slot</th>
+                        <th>Value</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+
+    result.data.forEach(d => {
+
+        let status = "Normal";
+        let badge = "success";
+
+        if (hasMin && d.value < result.norm.min) {
+            status = "Low";
+            badge = "warning";
+        }
+        else if (hasMax && d.value > result.norm.max) {
+            status = "High";
+            badge = "danger";
+        }
+
+        table += `
             <tr>
-                <th>Date</th>
-                <th>Time Slot</th>
-                <th>Value</th>
-                <th>Status</th>
+                <td>${d.date}</td>
+                <td>${d.time_slot}</td>
+                <td>
+                    <b>${d.value}</b>
+                    ${result.norm ? (result.norm.unit || "") : ""}
+                </td>
+                <td>
+                    <span class="badge badge-${badge}">
+                        ${status}
+                    </span>
+                </td>
             </tr>
-        </thead>
-        <tbody>
-        </details>
-`;
-
-result.data.forEach(d => {
-
-    let status = "Normal";
-    let badge = "success";
-
-    if (hasMin && d.value < result.norm.min) {
-        status = "Low";
-        badge = "warning";
-    }
-    else if (hasMax && d.value > result.norm.max) {
-        status = "High";
-        badge = "danger";
-    }
+        `;
+    });
 
     table += `
-        <tr>
-            <td>${d.date}</td>
-            <td>${d.time_slot}</td>
-            <td>
-                <b>${d.value}</b>
-                ${result.norm.unit || ""}
-            </td>
-            <td>
-                <span class="badge badge-${badge}">
-                    ${status}
-                </span>
-            </td>
-        </tr>
+                </tbody>
+            </table>
+        </details>
     `;
-});
 
-table += `
-        </tbody>
-    </table>
-`;
-
-$("#trend-chart").append(table);
+    $("#trend-chart").append(table);
 
 }

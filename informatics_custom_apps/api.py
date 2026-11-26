@@ -288,42 +288,65 @@ def save_ro_plant_log(company, plant, log_date, rows):
 
 
 # Power Plant Log Book Save Logic
+
+BRANCH_SEGMENT_MAP = {
+    "Buttar Biofuels": ["Distillery"],
+    "RSL Buttar": ["Sugar", "Power", "Beet"],
+    "Lakshmiji Sugar": ["Sugar"],
+    "Rana Power": ["Power"],
+    "RSL Belwara": ["Sugar", "Power", "Distillery"],
+    "RSL Louhka": ["Distillery"],
+    "RSL Shahbad": ["Sugar", "Power"],
+    "RSLD Karnal": ["Distillery"],
+    "RSLD Biofuels-Chhattisgarh": ["Distillery"],
+    "Karimganj Biofuels": ["Distillery"],
+    "Superior Biofuels": ["Distillery"],
+    "ETH Louhka": ["Distillery"],
+    "Superior Unn": ["Sugar", "Power"],
+}
+ALL_SEGMENTS = ["Beet", "Sugar", "Distillery", "Power"]
+
+
 @frappe.whitelist()
-def get_power_plant_log(company, plant, log_date):
-    """Fetch existing power plant log for this company+plant+date, if any."""
+def get_power_plant_log(company, plant, segment, log_date):
+    """Fetch existing power plant log for this company+plant+segment+date, if any."""
     name = frappe.db.get_value(
         "Power Plant Log Book",
-        {"company": company, "plant": plant, "log_date": log_date},
+        {"company": company, "plant": plant, "segment": segment, "log_date": log_date},
         "name"
     )
     if not name:
         return None
- 
+
     doc = frappe.get_doc("Power Plant Log Book", name)
     return {
         "name": doc.name,
         "rows": [row.as_dict() for row in doc.logs]
     }
- 
- 
+
+
 @frappe.whitelist()
-def save_power_plant_log(company, plant, log_date, rows):
+def save_power_plant_log(company, plant, segment, log_date, rows):
     if getdate(log_date) > getdate(today()):
         frappe.throw("Cannot save a log for a future date.")
- 
+
+    allowed = BRANCH_SEGMENT_MAP.get(plant, ALL_SEGMENTS)
+    if segment not in allowed:
+        frappe.throw(f"Segment {segment} is not allowed for plant {plant}.")
+
     if isinstance(rows, str):
         rows = json.loads(rows)
- 
+
     existing = frappe.db.get_value(
         "Power Plant Log Book",
-        {"company": company, "plant": plant, "log_date": log_date},
+        {"company": company, "plant": plant, "segment": segment, "log_date": log_date},
         "name"
     )
- 
+
     if existing:
         doc = frappe.get_doc("Power Plant Log Book", existing)
         existing_by_slot = {row.time_slot: row for row in doc.logs}
- 
+
         for row in rows:
             slot = row.get("time_slot")
             if slot in existing_by_slot:
@@ -336,12 +359,13 @@ def save_power_plant_log(company, plant, log_date, rows):
             "doctype": "Power Plant Log Book",
             "company": company,
             "plant": plant,
+            "segment": segment,
             "log_date": log_date,
         })
         for row in rows:
             doc.append("logs", row)
         doc.insert()
- 
+
     frappe.db.commit()
     return doc.name
 

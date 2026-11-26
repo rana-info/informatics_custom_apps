@@ -24,6 +24,30 @@ NUMERIC_FIELDS = [
 
 DATA_FIELDS = TEXT_FIELDS + NUMERIC_FIELDS
 
+# Branch (Plant) -> allowed Segments. Same map as Material Request / Power Plant Log / CPU Lab Log.
+BRANCH_SEGMENT_MAP = {
+	"Buttar Biofuels": ["Distillery"],
+	"RSL Buttar": ["Sugar", "Power", "Beet"],
+	"Lakshmiji Sugar": ["Sugar"],
+	"Rana Power": ["Power"],
+	"RSL Belwara": ["Sugar", "Power", "Distillery"],
+	"RSL Louhka": ["Distillery"],
+	"RSL Shahbad": ["Sugar", "Power"],
+	"RSLD Karnal": ["Distillery"],
+	"RSLD Biofuels-Chhattisgarh": ["Distillery"],
+	"Karimganj Biofuels": ["Distillery"],
+	"Superior Biofuels": ["Distillery"],
+	"ETH Louhka": ["Distillery"],
+	"Superior Unn": ["Sugar", "Power"],
+}
+ALL_SEGMENTS = ["Beet", "Sugar", "Distillery", "Power"]
+
+
+def _validate_segment(plant, segment):
+	allowed = BRANCH_SEGMENT_MAP.get(plant, ALL_SEGMENTS)
+	if segment not in allowed:
+		frappe.throw(f"Segment {segment} is not allowed for plant {plant}.")
+
 
 @frappe.whitelist()
 def get_user_default_company_plant():
@@ -34,12 +58,14 @@ def get_user_default_company_plant():
 
 
 @frappe.whitelist()
-def list_existing_logs(company=None, plant=None):
-	filters = {k: v for k, v in {"company": company, "plant": plant}.items() if v}
+def list_existing_logs(company=None, plant=None, segment=None):
+	filters = {
+		k: v for k, v in {"company": company, "plant": plant, "segment": segment}.items() if v
+	}
 	return frappe.get_all(
 		"DM Plant Logbook",
 		filters=filters,
-		fields=["name", "log_date", "company", "plant"],
+		fields=["name", "log_date", "company", "plant", "segment"],
 		order_by="log_date desc",
 		limit_page_length=0,
 	)
@@ -57,19 +83,19 @@ def _grid(existing_rows=None):
 	]
 
 
-def _find_existing(company, plant, log_date, exclude_name=None):
-	filters = {"company": company, "plant": plant, "log_date": log_date}
+def _find_existing(company, plant, segment, log_date, exclude_name=None):
+	filters = {"company": company, "plant": plant, "segment": segment, "log_date": log_date}
 	if exclude_name:
 		filters["name"] = ["!=", exclude_name]
 	return frappe.db.exists("DM Plant Logbook", filters)
 
 
 @frappe.whitelist()
-def get_dm_log(log_date, company, plant):
-	if not (log_date and company and plant):
-		frappe.throw("company, plant and log_date are all required.")
+def get_dm_log(log_date, company, plant, segment):
+	if not (log_date and company and plant and segment):
+		frappe.throw("company, plant, segment and log_date are all required.")
 
-	existing = _find_existing(company, plant, log_date)
+	existing = _find_existing(company, plant, segment, log_date)
 	doc = frappe.get_doc("DM Plant Logbook", existing) if existing else None
 
 	return {
@@ -77,6 +103,7 @@ def get_dm_log(log_date, company, plant):
 		"log_date": str(log_date),
 		"company": company,
 		"plant": plant,
+		"segment": segment,
 		"rows": _grid(doc.rows if doc else None),
 	}
 
@@ -89,29 +116,34 @@ def get_dm_log_by_name(docname):
 		"log_date": str(doc.log_date),
 		"company": doc.company,
 		"plant": doc.plant,
+		"segment": doc.segment,
 		"rows": _grid(doc.rows),
 	}
 
 
 @frappe.whitelist()
-def save_dm_log(log_date, company, plant, rows, docname=None):
+def save_dm_log(log_date, company, plant, segment, rows, docname=None):
 	if isinstance(rows, str):
 		rows = json.loads(rows)
 	if not rows:
 		frappe.throw("No rows to save.")
-	if not (log_date and company and plant):
-		frappe.throw("company, plant and log_date are all required.")
+	if not (log_date and company and plant and segment):
+		frappe.throw("company, plant, segment and log_date are all required.")
+
+	_validate_segment(plant, segment)
 
 	if docname:
 		doc = frappe.get_doc("DM Plant Logbook", docname)
-		clash = _find_existing(company, plant, log_date, exclude_name=doc.name)
+		clash = _find_existing(company, plant, segment, log_date, exclude_name=doc.name)
 		if clash:
-			frappe.throw(f"Another log ({clash}) already exists for this company, plant and date.")
+			frappe.throw(
+				f"Another log ({clash}) already exists for this company, plant, segment and date."
+			)
 	else:
-		existing = _find_existing(company, plant, log_date)
+		existing = _find_existing(company, plant, segment, log_date)
 		doc = frappe.get_doc("DM Plant Logbook", existing) if existing else frappe.new_doc("DM Plant Logbook")
 
-	doc.log_date, doc.company, doc.plant = log_date, company, plant
+	doc.log_date, doc.company, doc.plant, doc.segment = log_date, company, plant, segment
 	doc.set("rows", [])
 
 	for row in rows:
@@ -128,4 +160,10 @@ def save_dm_log(log_date, company, plant, rows, docname=None):
 		doc.append("rows", child)
 
 	doc.save()
-	return {"name": doc.name, "log_date": str(doc.log_date), "company": doc.company, "plant": doc.plant}
+	return {
+		"name": doc.name,
+		"log_date": str(doc.log_date),
+		"company": doc.company,
+		"plant": doc.plant,
+		"segment": doc.segment,
+	}
