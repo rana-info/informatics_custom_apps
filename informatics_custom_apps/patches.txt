@@ -6,3 +6,4 @@
 # Patches added in this section will be executed after doctypes are migrated
 
 informatics_custom_apps.patches.leave_allocation_oct_joiners #1
+informatics_custom_apps.patches.exclude_employer_pf_from_gross 
