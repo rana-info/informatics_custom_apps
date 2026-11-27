@@ -361,7 +361,7 @@ class ZZMaintenance(Document):
 				ignore_permissions=True, delete_permanently=True)
 
 		weighment.reload()
-		weighment.create_purchase_receipt_manually(ignore_permissions=True)
+		weighment.create_purchase_receipt_manually()
 
 		pr = self._get_pr(gate_entry_name)
 		if not pr:
